@@ -118,18 +118,16 @@ describe('Panel.setSeverity named image', () => {
 });
 
 describe('theme prepaint and first-visit applyStoredTheme', () => {
-  it('index.html prepaint falls through to prefers-color-scheme: light', () => {
+  it('index.html prepaint defaults to dark theme', () => {
     const prepaint = indexHtml.slice(
       indexHtml.indexOf('<script data-wm-prepaint>'),
       indexHtml.indexOf('</script>', indexHtml.indexOf('<script data-wm-prepaint>')),
     );
-    assert.match(prepaint, /matchMedia\('\(prefers-color-scheme: light\)'\)/);
-    assert.match(prepaint, /dataset\.theme='light'/);
+    assert.match(prepaint, /dataset\.theme='dark'/);
   });
 
-  it('applyStoredTheme no-preference branch uses resolveAutoTheme, not DEFAULT_THEME', () => {
-    assert.match(applyStoredTheme, /variant === 'happy' \? 'light' : resolveAutoTheme\(\)/);
-    assert.doesNotMatch(applyStoredTheme, /effective = variant === 'happy' \? 'light' : DEFAULT_THEME/);
+  it('applyStoredTheme no-preference branch defaults to dark (light for happy)', () => {
+    assert.match(applyStoredTheme, /effective = variant === 'happy' \? 'light' : 'dark'/);
   });
 });
 

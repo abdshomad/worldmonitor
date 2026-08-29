@@ -38,13 +38,14 @@ import {
 } from '@/services/analysis-framework-store';
 import { setTrustedHtml, trustedHtml } from '@/utils/dom-utils';
 
-
 const DESKTOP_RELEASES_URL = 'https://github.com/koala73/worldmonitor/releases';
 
 export interface PreferencesHost {
   isDesktopApp: boolean;
   onMapProviderChange?: (provider: MapProvider) => void;
   isSignedIn?: boolean;
+  closeModal?: () => void;
+  onStartTour?: () => void;
 }
 
 export interface PreferencesResult {
@@ -413,6 +414,7 @@ export function renderPreferences(host: PreferencesHost): PreferencesResult {
   html += `<div class="wm-pref-group-content">`;
   html += `
     <div class="us-data-mgmt">
+      <button type="button" class="btn btn-secondary" id="usStartTourBtn">🎯 Take Product Tour</button>
       <button type="button" class="btn btn-secondary" id="usExportBtn">${t('components.settings.exportSettings')}</button>
       <button type="button" class="btn btn-secondary" id="usImportBtn">${t('components.settings.importSettings')}</button>
       <input type="file" id="usImportInput" accept=".json" class="us-hidden-input" />
@@ -528,6 +530,11 @@ export function renderPreferences(host: PreferencesHost): PreferencesResult {
 
       container.addEventListener('click', (e) => {
         const target = e.target as HTMLElement;
+        if (target.closest('#usStartTourBtn')) {
+          host.closeModal?.();
+          host.onStartTour?.();
+          return;
+        }
         if (target.closest('#usExportBtn')) {
           try {
             exportSettings();

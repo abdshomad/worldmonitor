@@ -1,0 +1,146 @@
+/* Intelligent Command Center Product Tour */
+.icc-tour-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.78);
+  backdrop-filter: blur(2px);
+  z-index: 99998;
+  pointer-events: auto;
+  transition: clip-path 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.icc-tour-card {
+  position: fixed;
+  z-index: 99999;
+  width: 360px;
+  max-width: calc(100vw - 28px);
+  background: var(--bg-surface-elevated, #111813);
+  border: 1px solid var(--border-accent, #10b981);
+  border-radius: 8px;
+  box-shadow: 0 12px 36px rgba(0, 0, 0, 0.65), 0 0 16px rgba(16, 185, 129, 0.25);
+  padding: 16px 18px;
+  color: var(--text-primary, #ffffff);
+  font-family: var(--font-sans, system-ui, -apple-system, sans-serif);
+  animation: iccTourFadeIn 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes iccTourFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.icc-tour-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+
+.icc-tour-step-badge {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: #10b981;
+  background: rgba(16, 185, 129, 0.12);
+  border: 1px solid rgba(16, 185, 129, 0.3);
+  padding: 2px 8px;
+  border-radius: 4px;
+}
+
+.icc-tour-close {
+  background: transparent;
+  border: none;
+  color: #889988;
+  font-size: 20px;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0 4px;
+  transition: color 0.15s ease;
+}
+
+.icc-tour-close:hover {
+  color: #ffffff;
+}
+
+.icc-tour-title {
+  margin: 0 0 6px 0;
+  font-size: 15px;
+  font-weight: 700;
+  color: #f1f5f9;
+}
+
+.icc-tour-desc {
+  margin: 0 0 16px 0;
+  font-size: 12px;
+  line-height: 1.5;
+  color: #94a3b8;
+}
+
+.icc-tour-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-top: 10px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.icc-tour-dots {
+  display: flex;
+  gap: 5px;
+}
+
+.icc-tour-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.2);
+  transition: all 0.2s ease;
+}
+
+.icc-tour-dot.active {
+  background: #10b981;
+  width: 14px;
+  border-radius: 3px;
+}
+
+.icc-tour-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.icc-tour-btn {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 5px 12px;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.icc-tour-btn-secondary {
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  color: #cbd5e1;
+}
+
+.icc-tour-btn-secondary:hover {
+  background: rgba(255, 255, 255, 0.16);
+  color: #ffffff;
+}
+
+.icc-tour-btn-primary {
+  background: #10b981;
+  border: 1px solid #059669;
+  color: #052e16;
+  font-weight: 700;
+}
+
+.icc-tour-btn-primary:hover {
+  background: #34d399;
+}

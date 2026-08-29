@@ -30,6 +30,7 @@ import type { MapProvider } from '@/config/basemap';
 import { escapeHtml } from '@/utils/sanitize';
 import type { PanelConfig } from '@/types';
 import { renderPreferences } from '@/services/preferences-content';
+import { startProductTour } from '@/components/ProductTour';
 import { renderNotificationsSettings, type NotificationsSettingsResult } from '@/services/notifications-settings';
 import { getAuthState, subscribeAuthState } from '@/services/auth-state';
 import { track, trackApiAction } from '@/services/analytics';
@@ -749,6 +750,8 @@ export class UnifiedSettings {
       isDesktopApp: this.config.isDesktopApp,
       onMapProviderChange: this.config.onMapProviderChange,
       isSignedIn,
+      closeModal: () => this.close(),
+      onStartTour: () => startProductTour(),
     });
     const showNotificationsTab = !this.config.isDesktopApp;
     const notifs = showNotificationsTab

@@ -3,7 +3,7 @@ module.exports = {
     {
       name: 'worldmonitor',
       script: 'npm',
-      args: 'run dev',
+      args: 'run dev -- --host 0.0.0.0 --port 2023',
       cwd: __dirname,
       env_file: '.env',
       env: {

@@ -1,6 +1,7 @@
 node_modules/
 .idea/
 dist/
+plans/
 public/blog/
 # Built by `npm run build:pro` during the deploy build (#6898). Committing it
 # produced a rename/delete conflict on every pair of PRs touching /pro (the

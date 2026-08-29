@@ -18,6 +18,7 @@ export function guardBuiltOutput(
   rebuildHint = DEFAULT_REBUILD_HINT,
 ) {
   if (!existsSync(builtPath) && expectBuiltOutput) {
+    process.exitCode = 1;
     throw new Error(
       `${builtPath} is missing but ${EXPECT_BUILT_OUTPUT}=1 indicates CI expected a build. ` +
       `${rebuildHint}, or check that the build step still produces it.`,

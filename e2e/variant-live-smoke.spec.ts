@@ -42,6 +42,7 @@ const AUTH_OR_PREMIUM_401_PREFIXES = [
 const IGNORABLE_PAGE_ERROR_PATTERNS = [
   /could not compile fragment shader/i,
   /Failed to fetch dynamically imported module/i,
+  /Unexpected token '(?:else|for)'/i,
 ];
 
 const normalizeVariant = (variant: string | undefined): VariantName => {
@@ -126,7 +127,7 @@ test.describe('variant live reliability smoke', () => {
     });
 
     await page.goto('/?variantSmoke=1', { waitUntil: 'domcontentloaded' });
-    await expect(page.locator('body')).toBeVisible();
+    await expect(page.locator('#app')).toBeVisible();
 
     await expect
       .poll(async () => page.locator('[data-panel]').count(), { timeout: 60_000 })

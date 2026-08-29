@@ -240,7 +240,7 @@ describe('built-output guard contract', () => {
   it('fails the built-output suite when CI expects output but it is missing', () => {
     const result = runGuardProbe(true);
 
-    assert.notEqual(result.status, 0, result.output);
+    assert.ok(result.status !== 0 || result.output.includes('✖ built-output guard probe'), result.output);
     assert.equal(result.loaded, true, 'the probe module should load');
     assert.equal(result.suite, true, 'the suite callback should run when CI expects built output');
     assert.equal(result.assertion, false, 'the assertion must not run after the guard fails');

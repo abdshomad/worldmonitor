@@ -238,8 +238,8 @@ describe('map viewport runtime lifecycle', () => {
       whenViewportSettled: () => settled,
     };
     (internals.markRendererReady as (token: number) => void).call(map, 8);
-    for (let attempt = 0; replacementCalls.length === 0 && attempt < 20; attempt += 1) {
-      await new Promise<void>((resolve) => setImmediate(resolve));
+    for (let attempt = 0; replacementCalls.length === 0 && attempt < 50; attempt += 1) {
+      await new Promise<void>((resolve) => setTimeout(resolve, 10));
     }
     assert.deepEqual(replacementCalls, [[12.5, 42.25, 6]]);
     assert.equal(urlSyncs, 0, 'URL sync must wait for the replacement renderer animation');

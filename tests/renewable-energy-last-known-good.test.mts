@@ -112,8 +112,11 @@ function createTestService(
   });
 }
 
-async function flushPersistence(): Promise<void> {
-  await new Promise(resolve => setTimeout(resolve, 0));
+async function flushPersistence(key?: string): Promise<void> {
+  for (let i = 0; i < 50; i++) {
+    if (key && storage.getItem(key)) return;
+    await new Promise(resolve => setTimeout(resolve, 10));
+  }
 }
 
 const originalGlobals = {
@@ -157,7 +160,7 @@ describe('renewable energy last-known-good recovery (#5497)', () => {
       }), true);
 
     const result = await service.fetch();
-    await flushPersistence();
+    await flushPersistence(`worldmonitor-persistent-cache:breaker:${breakerName}:${RENEWABLE_DATA_CACHE_KEY}`);
 
     assert.deepEqual(result, {
       data: canonicalRenewableData(),

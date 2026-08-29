@@ -913,7 +913,7 @@ export default defineConfig(({ mode }) => {
   // Dev-server port: DEV_PORT overrides the 3000 default. Reject non-integer or
   // out-of-range values (fall back to 3000) so a typo can't crash Vite's listen()
   // with ERR_SOCKET_BAD_PORT. Not VITE_-prefixed, so it never reaches the client bundle.
-  const parsedDevPort = Number(env.DEV_PORT);
+  const parsedDevPort = Number(env.DEV_PORT || env.PORT);
   const devPort =
     Number.isInteger(parsedDevPort) && parsedDevPort >= 1 && parsedDevPort <= 65535
       ? parsedDevPort
@@ -1345,6 +1345,7 @@ export default defineConfig(({ mode }) => {
       },
     },
     server: {
+      host: env.HOST || undefined,
       port: devPort,
       open: !isE2E,
       hmr: isE2E ? false : undefined,

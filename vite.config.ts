@@ -1347,6 +1347,11 @@ export default defineConfig(({ mode }) => {
     server: {
       host: env.HOST || undefined,
       port: devPort,
+      allowedHosts: env.ALLOWED_HOSTS
+        ? (env.ALLOWED_HOSTS === 'all' || env.ALLOWED_HOSTS === 'true'
+            ? true
+            : env.ALLOWED_HOSTS.split(',').map((h) => h.trim()))
+        : true,
       open: !isE2E,
       hmr: isE2E ? false : undefined,
       watch: {

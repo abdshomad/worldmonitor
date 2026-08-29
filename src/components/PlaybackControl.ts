@@ -32,7 +32,7 @@ export class PlaybackControl {
           <button class="playback-btn" data-action="end">⏭</button>
         </div>
       </div>
-    `;
+    `, "legacy direct innerHTML migration"));
 
     this.setupEventListeners();
   }
@@ -56,7 +56,7 @@ export class PlaybackControl {
     });
 
     slider.addEventListener('input', () => {
-      const idx = parseInt(slider.value);
+      const idx = parseInt(slider.value, 10);
       this.currentIndex = idx;
       this.loadSnapshot(idx);
     });
@@ -71,6 +71,7 @@ export class PlaybackControl {
 
   private async loadTimestamps(): Promise<void> {
     this.timestamps = await getSnapshotTimestamps();
+    if (!this.element?.isConnected) return;
     this.timestamps.sort((a, b) => a - b);
 
     const slider = this.element.querySelector('.playback-slider') as HTMLInputElement;
@@ -97,6 +98,7 @@ export class PlaybackControl {
     this.updateTimeDisplay();
 
     const snapshot = await getSnapshotAt(timestamp);
+    if (!this.element?.isConnected) return;
     this.onSnapshotChange?.(snapshot);
 
     document.body.classList.add('playback-mode');
@@ -161,6 +163,24 @@ export class PlaybackControl {
       });
       display.classList.add('historical');
     }
+  }
+
+  /**
+   * Return to live data and close the panel — for the premium gate revoking
+   * access while a snapshot is being replayed (#5632). Hiding the control is
+   * not enough on its own: the "Live" button lives INSIDE the element being
+   * hidden, so the dashboard would be stranded on historical data with no way
+   * back.
+   *
+   * The `isPlaybackMode` guard is load-bearing. The gate evaluates to a
+   * non-visible verdict at least once on every page load ('pending' while
+   * Clerk hydrates), and an unguarded call would fire `onSnapshotChange(null)`
+   * — and therefore a full `loadAllData()` — on each of them.
+   */
+  public exitPlayback(): void {
+    if (!this.isPlaybackMode) return;
+    this.element.querySelector('.playback-panel')?.classList.add('hidden');
+    this.goLive();
   }
 
   public onSnapshot(callback: (snapshot: DashboardSnapshot | null) => void): void {

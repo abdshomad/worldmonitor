@@ -3,6 +3,8 @@ import 'maplibre-gl/dist/maplibre-gl.css';
 import * as Sentry from '@sentry/browser';
 import { inject } from '@vercel/analytics';
 import { App } from './App';
+import { installUtmInterceptor } from './utils/utm';
+import { captureContentAttributionFromUrl } from '../shared/content-attribution';
 
 const sentryDsn = import.meta.env.VITE_SENTRY_DSN?.trim();
 

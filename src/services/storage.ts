@@ -12,8 +12,24 @@ interface BaselineEntry {
 
 let db: IDBDatabase | null = null;
 
+// Environments where `indexedDB` is unavailable: Firefox/Brave private mode,
+// some embedded webviews, sandboxed iframes, and any non-browser context that
+// somehow loads this chunk. Pre-fix: `indexedDB.open(...)` threw
+// `ReferenceError: indexedDB is not defined` as an unhandled rejection
+// (Sentry WORLDMONITOR-7479081164). Now: probe up-front and reject with a
+// named error that `withTransaction` recognises and degrades gracefully.
+export class IndexedDBUnavailableError extends Error {
+  constructor() {
+    super('IndexedDB is not available in this environment');
+    this.name = 'IndexedDBUnavailableError';
+  }
+}
+
 export async function initDB(): Promise<IDBDatabase> {
   if (db) return db;
+  if (typeof indexedDB === 'undefined') {
+    throw new IndexedDBUnavailableError();
+  }
 
   return new Promise((resolve, reject) => {
     const request = indexedDB.open(DB_NAME, DB_VERSION);
@@ -142,7 +158,7 @@ export function calculateDeviation(current: number, baseline: BaselineEntry): {
     return { zScore: 0, percentChange: 0, level: 'normal' };
   }
 
-  const variance = counts.reduce((sum, c) => sum + Math.pow(c - avg, 2), 0) / counts.length;
+  const variance = counts.reduce((sum, c) => sum + (c - avg) ** 2, 0) / counts.length;
   const stdDev = Math.sqrt(variance) || 1;
 
   const zScore = (current - avg) / stdDev;

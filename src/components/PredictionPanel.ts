@@ -19,6 +19,12 @@ export class PredictionPanel extends Panel {
     return `$${volume.toFixed(0)}`;
   }
 
+  private convictionLabel(yes: number): { label: string; cls: string } {
+    if (yes >= 60) return { label: t('components.predictions.leanYes'), cls: 'conviction-yes' };
+    if (yes <= 40) return { label: t('components.predictions.leanNo'), cls: 'conviction-no' };
+    return { label: t('components.predictions.tossUp'), cls: 'conviction-neutral' };
+  }
+
   public renderPredictions(data: PredictionMarket[]): void {
     if (data.length === 0) {
       this.showError(t('common.failedPredictions'));
@@ -48,11 +54,10 @@ export class PredictionPanel extends Panel {
             <span class="prediction-label">${t('components.predictions.no')} ${noPercent}%</span>
           </div>
         </div>
-      </div>
-    `;
+      </div>`;
       })
       .join('');
 
-    this.setContent(html);
+    this.setSafeContent(unsafeRawHtml(html, 'legacy Panel.setContent() migration'));
   }
 }

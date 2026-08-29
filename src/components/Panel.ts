@@ -83,6 +83,10 @@ export class Panel {
     const title = document.createElement('span');
     title.className = 'panel-title';
     title.textContent = options.title;
+    // Panels are the dashboard's sections, but a real <h2> would drag along
+    // element styles; role/aria-level gives the outline with zero visual change.
+    title.setAttribute('role', 'heading');
+    title.setAttribute('aria-level', '2');
     headerLeft.appendChild(title);
 
     if (options.infoTooltip) {
@@ -317,7 +321,13 @@ export class Panel {
 
   public setCount(count: number): void {
     if (this.countEl) {
+      const prev = parseInt(this.countEl.textContent ?? '0', 10);
       this.countEl.textContent = count.toString();
+      if (count > prev && getAiFlowSettings().badgeAnimation) {
+        this.countEl.classList.remove('bump');
+        void this.countEl.offsetWidth;
+        this.countEl.classList.add('bump');
+      }
     }
   }
 

@@ -11,10 +11,11 @@ interface FeedStatus {
   errorMessage?: string;
 }
 
-interface ApiStatus {
+export interface ApiStatus {
   name: string;
   status: StatusLevel;
   latency?: number;
+  errorMessage?: string;
 }
 
 // Allowlists for each variant
@@ -125,8 +126,7 @@ export class StatusPanel extends Panel {
 
     const existing = this.feeds.get(name) || { name, lastUpdate: null, status: 'ok' as const, itemCount: 0 };
     this.feeds.set(name, { ...existing, ...status, lastUpdate: new Date() });
-    this.updateStatusIcon();
-    if (this.isOpen) this.updateDisplay();
+    this.onUpdate?.();
   }
 
   public updateApi(name: string, status: Partial<ApiStatus>): void {
@@ -135,8 +135,7 @@ export class StatusPanel extends Panel {
 
     const existing = this.apis.get(name) || { name, status: 'ok' as const };
     this.apis.set(name, { ...existing, ...status });
-    this.updateStatusIcon();
-    if (this.isOpen) this.updateDisplay();
+    this.onUpdate?.();
   }
 
   public setFeedDisabled(name: string): void {
@@ -232,7 +231,7 @@ export class StatusPanel extends Panel {
     }
   }
 
-  private formatTime(date: Date): string {
+  public formatTime(date: Date): string {
     const now = Date.now();
     const diff = now - date.getTime();
     if (diff < 60000) return 'just now';

@@ -854,5 +854,617 @@ export default defineConfig({
         },
       },
     },
-  },
+    worker: {
+      format: 'es',
+    },
+    build: {
+      // Vite's global threshold accommodates the known lazy GlobeMap bundle.
+      // wm-chunk-size-warning-policy keeps the 1200 kB default for every other
+      // chunk so unrelated regressions between 1200 and 2000 kB remain visible.
+      chunkSizeWarningLimit: 2000,
+      // Vite 6 hoists every dynamic chunk's STATIC deps into the entry HTML's
+      // modulepreload list to avoid latency on the first dynamic import. For the
+      // map stack that defeats the whole point of dynamic-importing MapContainer:
+      // ~3MB of WebGL deps would still download at parse time. Strip them here so
+      // they only load when MapContainer's `await import(...)` actually fires
+      // (still preloaded in parallel via __vitePreload at that moment).
+      modulePreload: {
+        resolveDependencies: (_filename, deps, { hostType }) => {
+          if (hostType !== 'html') return deps;
+          return deps.filter(d => !LAZY_HTML_PRELOAD_RE.test(d));
+        },
+      },
+      rollupOptions: {
+        onwarn(warning, warn) {
+          // onnxruntime-web ships a minified browser bundle that intentionally uses eval.
+          // Keep build logs focused by filtering this known third-party warning only.
+          if (
+            warning.code === 'EVAL'
+            && typeof warning.id === 'string'
+            && warning.id.includes('/onnxruntime-web/dist/ort-web.min.js')
+          ) {
+            return;
+          }
+
+          // The cyber client legitimately tree-shakes to nothing while its
+          // feature flag is off. Keep every other empty RPC chunk visible: an
+          // enabled client disappearing is a build regression, not noise.
+          if (isExpectedEmptyRpcClientWarning(
+            warning,
+            process.env.VITE_ENABLE_CYBER_LAYER === 'true',
+          )) {
+            return;
+          }
+
+          warn(warning);
+        },
+        input: {
+          main: resolve(__dirname, 'index.html'),
+          embed: resolve(__dirname, 'embed.html'),
+          settings: resolve(__dirname, 'settings.html'),
+          liveChannels: resolve(__dirname, 'live-channels.html'),
+          mcpGrant: resolve(__dirname, 'mcp-grant.html'),
+        },
+        output: {
+          // onlyExplicitManualChunks keeps the panel clusters from forming
+          // cross-chunk cycles. Its side effect: a manual chunk's unmatched
+          // static deps get pulled into the importer chunk — which created a
+          // circular DeckGLMap -> deck-stack -> DeckGLMap chunk (runtime TDZ
+          // "Cannot access 'X' before initialization" that crashed the WebGL map
+          // into the SVG fallback). Fixed by co-locating the DeckGLMap renderer
+          // into the 'deck-stack' chunk below so deck deps never split across the
+          // DeckGLMap boundary.
+          onlyExplicitManualChunks: true,
+          manualChunks(id) {
+            if (id.includes('node_modules')) {
+              if (id.includes('/@xenova/transformers/')) {
+                return 'transformers';
+              }
+              if (id.includes('/onnxruntime-web/')) {
+                return 'onnxruntime';
+              }
+              // NOTE: chunk names below MUST match entries in LAZY_HTML_PRELOAD_CHUNKS
+              // (top of file). The resolveDependencies filter relies on this string
+              // identity; renaming here without updating the constant silently
+              // re-eagerises the WebGL stack into the entry HTML's modulepreload list.
+              if (id.includes('/maplibre-gl/')) {
+                return 'maplibre';
+              }
+              if (id.includes('/pmtiles/') || id.includes('/@protomaps/basemaps/')) {
+                return 'protomaps';
+              }
+              if (id.includes('/h3-js/')) {
+                return 'h3-js';
+              }
+              if (
+                id.includes('/@deck.gl/')
+                || id.includes('/@luma.gl/')
+                || id.includes('/@loaders.gl/')
+                || id.includes('/@math.gl/')
+              ) {
+                return 'deck-stack';
+              }
+              if (id.includes('/d3/')) {
+                return 'd3';
+              }
+              if (id.includes('/topojson-client/')) {
+                return 'topojson';
+              }
+              if (id.includes('/i18next')) {
+                return 'i18n';
+              }
+              if (id.includes('/@sentry/') || id.includes('/@sentry-internal/')) {
+                return 'sentry';
+              }
+              if (id.includes('/@clerk/clerk-js/')) {
+                // Clerk remains a runtime dynamic import; the stable chunk name
+                // lets Workbox keep the large auth SDK out of precache.
+                return 'clerk';
+              }
+            }
+            // Large static config DATA TABLE (~62KB) with only lazy consumers
+            // (search/map/globe/tech-hub services). Isolating it keeps it off the
+            // eager entry now that the @/config barrel no longer re-exports its
+            // values and data-loader lazy-loads the tech-activity chain. Pure
+            // data (type-only imports) → no unmatched-static-dep circular risk. (#4404)
+            if (id.endsWith('/src/config/tech-geo.ts')) {
+              return 'tech-geo-data';
+            }
+            // airports table (~14KB) — only consumer is the lazy AviationCommandBar
+            // (imports directly); kept off the eager @/config barrel above. (#4404)
+            if (id.endsWith('/src/config/airports.ts')) {
+              return 'airports-data';
+            }
+            // ai-datacenters table (~86KB) — consumers (map/globe/search) import
+            // directly and are lazy; related-assets lazy-imports it. Kept off the
+            // eager @/config barrel above. (#4404)
+            if (id.endsWith('/src/config/ai-datacenters.ts')) {
+              return 'ai-datacenters-data';
+            }
+            // geo-map table bulk (~150KB: UNDERSEA_CABLES + NUCLEAR_FACILITIES +
+            // ECONOMIC_CENTERS/SPACEPORTS/CRITICAL_MINERALS/SANCTIONED_*/MAP_URLS).
+            // Map/globe/search consumers import directly (lazy); the eager
+            // related-assets/infrastructure-cascade/cable-activity chains
+            // lazy-cache it. Kept off the eager @/config barrel above. (#4404)
+            if (id.endsWith('/src/config/geo-map.ts')) {
+              return 'geo-map-data';
+            }
+            // Military-bases bulk (~48KB MILITARY_BASES_EXPANDED + merged
+            // MILITARY_BASES). geo.ts no longer imports it; eager consumers
+            // (country-intel, related-assets, data-loader→military-surge)
+            // lazy-load it via dynamic import. Kept off the eager @/config
+            // barrel. Co-chunk both files so the merged list and its raw data
+            // ship together off the entry chunk. (#4478)
+            if (id.endsWith('/src/config/military-bases.ts') || id.endsWith('/src/config/bases-expanded.ts')
+                || id.endsWith('/shared/military-bases-data.ts')) {
+              return 'military-bases-data';
+            }
+            // Correlation engine (engine + 4 adapters) is dynamic-imported at its
+            // post-loadAllData run site in App.ts (#4486), so it already forms a lazy
+            // chunk; this rule only gives that chunk a STABLE name — the dir-index
+            // would otherwise emit an ambiguous `index-*.js` the eager-chunk guard
+            // can't pin. Naming only; the deferral is the call-site import().
+            if (id.includes('/src/services/correlation-engine/')) {
+              return 'correlation-engine';
+            }
+            // Post-paint service tail split (#4487). These files are dynamic-imported
+            // from data-loader/country-intel/SignalModal; stable names let the
+            // dist guard prove they stay out of main rather than merely grepping src.
+            // Keep the product catalog independent from its shared cache and
+            // entitlement dependencies. Before this split, Rollup named the shared
+            // cache group `products`, making the post-hydration product task parse
+            // unrelated IndexedDB code alongside the tiny checkout catalog. (#5165)
+            if (id.endsWith('/src/config/products.ts') || id.endsWith('/src/config/products.generated.ts')) {
+              return 'products';
+            }
+            if (id.endsWith('/src/services/persistent-cache.ts')) {
+              return 'persistent-cache';
+            }
+            if (id.endsWith('/src/services/rss.ts')) {
+              return 'rss';
+            }
+            if (id.endsWith('/src/services/trending-keywords.ts')) {
+              return 'trending-keywords';
+            }
+            if (id.endsWith('/src/services/daily-market-brief.ts')) {
+              return 'daily-market-brief';
+            }
+            if (id.endsWith('/src/services/signal-aggregator.ts')) {
+              return 'signal-aggregator';
+            }
+            if (id.endsWith('/src/services/military-vessels.ts')) {
+              return 'military-vessels';
+            }
+            if (id.endsWith('/src/services/cross-module-integration.ts')) {
+              return 'cross-module-integration';
+            }
+            // Generated protobuf/RPC client modules are loaded through
+            // src/services/generated-rpc-clients.ts so real constructors parse only
+            // on first RPC use. Stable names let the eager-chunk guard prove they
+            // stay out of the dashboard entry and HTML modulepreload list. (#4493)
+            const rpcClientMatch = id.match(/\/src\/generated\/client\/worldmonitor\/(.+)\/service_client\.ts$/);
+            if (rpcClientMatch) {
+              return `rpc-client-${rpcClientMatch[1].replace(/_/g, '-').replace(/\//g, '-')}`;
+            }
+            // Co-locate the deck.gl renderer with the deck vendor chunk so
+            // onlyExplicitManualChunks cannot split deck's transitive deps
+            // across the DeckGLMap boundary (which formed a circular chunk →
+            // runtime TDZ that crashed the WebGL map into the SVG fallback).
+            if (id.endsWith('/src/components/DeckGLMap.ts')) {
+              return 'deck-stack';
+            }
+            // Co-locate ResilienceWidget with its only runtime importer
+            // (CountryDeepDivePanel, panels-intel). As a standalone chunk its
+            // import() was a second network hop on every deep-dive open, and
+            // filtering middleboxes that stub the *Widget*-named chunk URL with
+            // an empty 200 made the import resolve WITHOUT the export
+            // (Sentry WORLDMONITOR-T6). In-chunk resolution removes that
+            // surface and the waterfall hop; shared deps (resilience-widget-
+            // utils, services/resilience) already live in shared chunks.
+            if (id.endsWith('/src/components/ResilienceWidget.ts')) {
+              return 'panels-intel';
+            }
+            if (id.includes('/src/components/') && id.endsWith('.ts')) {
+              const panelChunk = panelChunkForComponentId(id);
+              if (panelChunk) return panelChunk;
+            }
+            // Give lazy-loaded locale chunks a recognizable prefix so the
+            // service worker can exclude them from precache (en.json is
+            // statically imported into the main bundle).
+            const localeMatch = id.match(/\/locales\/(\w+)\.json$/);
+            if (localeMatch && localeMatch[1] !== 'en') {
+              return `locale-${localeMatch[1]}`;
+            }
+            return undefined;
+          },
+        },
+      },
+    },
+    server: {
+      port: devPort,
+      open: !isE2E,
+      hmr: isE2E ? false : undefined,
+      watch: {
+        ignored: [
+          '**/test-results/**',
+          '**/playwright-report/**',
+          '**/.playwright-mcp/**',
+        ],
+      },
+      proxy: {
+        // Widget agent — forward to Railway relay for SSE streaming
+        '/widget-agent': {
+          target: 'https://proxy.worldmonitor.app',
+          changeOrigin: true,
+        },
+        // Yahoo Finance API
+        '/api/yahoo': {
+          target: 'https://query1.finance.yahoo.com',
+          changeOrigin: true,
+          rewrite: (path) => path.replace(/^\/api\/yahoo/, ''),
+        },
+        // Polymarket handled by polymarketPlugin() — no prod proxy needed
+        // USGS Earthquake API
+        '/api/earthquake': {
+          target: 'https://earthquake.usgs.gov',
+          changeOrigin: true,
+          timeout: 30000,
+          rewrite: (path) => path.replace(/^\/api\/earthquake/, ''),
+          configure: (proxy) => {
+            proxy.on('error', (err) => {
+              console.log('Earthquake proxy error:', err.message);
+            });
+          },
+        },
+        // PizzINT - Pentagon Pizza Index
+        '/api/pizzint': {
+          target: 'https://www.pizzint.watch',
+          changeOrigin: true,
+          rewrite: (path) => path.replace(/^\/api\/pizzint/, '/api'),
+          configure: (proxy) => {
+            proxy.on('error', (err) => {
+              console.log('PizzINT proxy error:', err.message);
+            });
+          },
+        },
+        // FRED Economic Data - handled by Vercel serverless function in prod
+        // In dev, we proxy to the API directly with the key from .env
+        '/api/fred-data': {
+          target: 'https://api.stlouisfed.org',
+          changeOrigin: true,
+          rewrite: (path) => {
+            const url = new URL(path, 'http://localhost');
+            const seriesId = url.searchParams.get('series_id');
+            const start = url.searchParams.get('observation_start');
+            const end = url.searchParams.get('observation_end');
+            const apiKey = process.env.FRED_API_KEY || '';
+            return `/fred/series/observations?series_id=${seriesId}&api_key=${apiKey}&file_type=json&sort_order=desc&limit=10${start ? `&observation_start=${start}` : ''}${end ? `&observation_end=${end}` : ''}`;
+          },
+        },
+        // RSS Feeds - BBC
+        '/rss/bbc': {
+          target: 'https://feeds.bbci.co.uk',
+          changeOrigin: true,
+          rewrite: (path) => path.replace(/^\/rss\/bbc/, ''),
+        },
+        // RSS Feeds - Guardian
+        '/rss/guardian': {
+          target: 'https://www.theguardian.com',
+          changeOrigin: true,
+          rewrite: (path) => path.replace(/^\/rss\/guardian/, ''),
+        },
+        // RSS Feeds - NPR
+        '/rss/npr': {
+          target: 'https://feeds.npr.org',
+          changeOrigin: true,
+          rewrite: (path) => path.replace(/^\/rss\/npr/, ''),
+        },
+        // RSS Feeds - Al Jazeera
+        '/rss/aljazeera': {
+          target: 'https://www.aljazeera.com',
+          changeOrigin: true,
+          rewrite: (path) => path.replace(/^\/rss\/aljazeera/, ''),
+        },
+        // RSS Feeds - CNN
+        '/rss/cnn': {
+          target: 'http://rss.cnn.com',
+          changeOrigin: true,
+          rewrite: (path) => path.replace(/^\/rss\/cnn/, ''),
+        },
+        // RSS Feeds - Hacker News
+        '/rss/hn': {
+          target: 'https://hnrss.org',
+          changeOrigin: true,
+          rewrite: (path) => path.replace(/^\/rss\/hn/, ''),
+        },
+        // RSS Feeds - Ars Technica
+        '/rss/arstechnica': {
+          target: 'https://feeds.arstechnica.com',
+          changeOrigin: true,
+          rewrite: (path) => path.replace(/^\/rss\/arstechnica/, ''),
+        },
+        // RSS Feeds - The Verge
+        '/rss/verge': {
+          target: 'https://www.theverge.com',
+          changeOrigin: true,
+          rewrite: (path) => path.replace(/^\/rss\/verge/, ''),
+        },
+        // RSS Feeds - CNBC
+        '/rss/cnbc': {
+          target: 'https://www.cnbc.com',
+          changeOrigin: true,
+          rewrite: (path) => path.replace(/^\/rss\/cnbc/, ''),
+        },
+        // RSS Feeds - MarketWatch
+        '/rss/marketwatch': {
+          target: 'https://feeds.marketwatch.com',
+          changeOrigin: true,
+          rewrite: (path) => path.replace(/^\/rss\/marketwatch/, ''),
+        },
+        // RSS Feeds - Defense/Intel sources
+        '/rss/defenseone': {
+          target: 'https://www.defenseone.com',
+          changeOrigin: true,
+          rewrite: (path) => path.replace(/^\/rss\/defenseone/, ''),
+        },
+        '/rss/warontherocks': {
+          target: 'https://warontherocks.com',
+          changeOrigin: true,
+          rewrite: (path) => path.replace(/^\/rss\/warontherocks/, ''),
+        },
+        '/rss/breakingdefense': {
+          target: 'https://breakingdefense.com',
+          changeOrigin: true,
+          rewrite: (path) => path.replace(/^\/rss\/breakingdefense/, ''),
+        },
+        '/rss/bellingcat': {
+          target: 'https://www.bellingcat.com',
+          changeOrigin: true,
+          rewrite: (path) => path.replace(/^\/rss\/bellingcat/, ''),
+        },
+        // RSS Feeds - TechCrunch (layoffs)
+        '/rss/techcrunch': {
+          target: 'https://techcrunch.com',
+          changeOrigin: true,
+          rewrite: (path) => path.replace(/^\/rss\/techcrunch/, ''),
+        },
+        // Google News RSS
+        '/rss/googlenews': {
+          target: 'https://news.google.com',
+          changeOrigin: true,
+          rewrite: (path) => path.replace(/^\/rss\/googlenews/, ''),
+        },
+        // AI Company Blogs
+        '/rss/openai': {
+          target: 'https://openai.com',
+          changeOrigin: true,
+          rewrite: (path) => path.replace(/^\/rss\/openai/, ''),
+        },
+        '/rss/anthropic': {
+          target: 'https://www.anthropic.com',
+          changeOrigin: true,
+          rewrite: (path) => path.replace(/^\/rss\/anthropic/, ''),
+        },
+        '/rss/googleai': {
+          target: 'https://blog.google',
+          changeOrigin: true,
+          rewrite: (path) => path.replace(/^\/rss\/googleai/, ''),
+        },
+        '/rss/deepmind': {
+          target: 'https://deepmind.google',
+          changeOrigin: true,
+          rewrite: (path) => path.replace(/^\/rss\/deepmind/, ''),
+        },
+        '/rss/huggingface': {
+          target: 'https://huggingface.co',
+          changeOrigin: true,
+          rewrite: (path) => path.replace(/^\/rss\/huggingface/, ''),
+        },
+        '/rss/techreview': {
+          target: 'https://www.technologyreview.com',
+          changeOrigin: true,
+          rewrite: (path) => path.replace(/^\/rss\/techreview/, ''),
+        },
+        '/rss/arxiv': {
+          target: 'https://rss.arxiv.org',
+          changeOrigin: true,
+          rewrite: (path) => path.replace(/^\/rss\/arxiv/, ''),
+        },
+        // Government
+        '/rss/whitehouse': {
+          target: 'https://www.whitehouse.gov',
+          changeOrigin: true,
+          rewrite: (path) => path.replace(/^\/rss\/whitehouse/, ''),
+        },
+        '/rss/statedept': {
+          target: 'https://www.state.gov',
+          changeOrigin: true,
+          rewrite: (path) => path.replace(/^\/rss\/statedept/, ''),
+        },
+        '/rss/state': {
+          target: 'https://www.state.gov',
+          changeOrigin: true,
+          rewrite: (path) => path.replace(/^\/rss\/state/, ''),
+        },
+        '/rss/defense': {
+          target: 'https://www.defense.gov',
+          changeOrigin: true,
+          rewrite: (path) => path.replace(/^\/rss\/defense/, ''),
+        },
+        '/rss/justice': {
+          target: 'https://www.justice.gov',
+          changeOrigin: true,
+          rewrite: (path) => path.replace(/^\/rss\/justice/, ''),
+        },
+        '/rss/cdc': {
+          target: 'https://tools.cdc.gov',
+          changeOrigin: true,
+          rewrite: (path) => path.replace(/^\/rss\/cdc/, ''),
+        },
+        '/rss/fema': {
+          target: 'https://www.fema.gov',
+          changeOrigin: true,
+          rewrite: (path) => path.replace(/^\/rss\/fema/, ''),
+        },
+        '/rss/dhs': {
+          target: 'https://www.dhs.gov',
+          changeOrigin: true,
+          rewrite: (path) => path.replace(/^\/rss\/dhs/, ''),
+        },
+        '/rss/fedreserve': {
+          target: 'https://www.federalreserve.gov',
+          changeOrigin: true,
+          rewrite: (path) => path.replace(/^\/rss\/fedreserve/, ''),
+        },
+        '/rss/sec': {
+          target: 'https://www.sec.gov',
+          changeOrigin: true,
+          rewrite: (path) => path.replace(/^\/rss\/sec/, ''),
+        },
+        '/rss/treasury': {
+          target: 'https://home.treasury.gov',
+          changeOrigin: true,
+          rewrite: (path) => path.replace(/^\/rss\/treasury/, ''),
+        },
+        '/rss/cisa': {
+          target: 'https://www.cisa.gov',
+          changeOrigin: true,
+          rewrite: (path) => path.replace(/^\/rss\/cisa/, ''),
+        },
+        // Think Tanks
+        '/rss/brookings': {
+          target: 'https://www.brookings.edu',
+          changeOrigin: true,
+          rewrite: (path) => path.replace(/^\/rss\/brookings/, ''),
+        },
+        '/rss/cfr': {
+          target: 'https://www.cfr.org',
+          changeOrigin: true,
+          rewrite: (path) => path.replace(/^\/rss\/cfr/, ''),
+        },
+        '/rss/csis': {
+          target: 'https://www.csis.org',
+          changeOrigin: true,
+          rewrite: (path) => path.replace(/^\/rss\/csis/, ''),
+        },
+        // Defense
+        '/rss/warzone': {
+          target: 'https://www.thedrive.com',
+          changeOrigin: true,
+          rewrite: (path) => path.replace(/^\/rss\/warzone/, ''),
+        },
+        '/rss/defensegov': {
+          target: 'https://www.defense.gov',
+          changeOrigin: true,
+          rewrite: (path) => path.replace(/^\/rss\/defensegov/, ''),
+        },
+        // Security
+        '/rss/krebs': {
+          target: 'https://krebsonsecurity.com',
+          changeOrigin: true,
+          rewrite: (path) => path.replace(/^\/rss\/krebs/, ''),
+        },
+        // Finance
+        '/rss/yahoonews': {
+          target: 'https://finance.yahoo.com',
+          changeOrigin: true,
+          rewrite: (path) => path.replace(/^\/rss\/yahoonews/, ''),
+        },
+        // Diplomat
+        '/rss/diplomat': {
+          target: 'https://thediplomat.com',
+          changeOrigin: true,
+          rewrite: (path) => path.replace(/^\/rss\/diplomat/, ''),
+        },
+        // VentureBeat
+        '/rss/venturebeat': {
+          target: 'https://venturebeat.com',
+          changeOrigin: true,
+          rewrite: (path) => path.replace(/^\/rss\/venturebeat/, ''),
+        },
+        // Foreign Policy
+        '/rss/foreignpolicy': {
+          target: 'https://foreignpolicy.com',
+          changeOrigin: true,
+          rewrite: (path) => path.replace(/^\/rss\/foreignpolicy/, ''),
+        },
+        // Financial Times
+        '/rss/ft': {
+          target: 'https://www.ft.com',
+          changeOrigin: true,
+          rewrite: (path) => path.replace(/^\/rss\/ft/, ''),
+        },
+        // Reuters
+        '/rss/reuters': {
+          target: 'https://www.reutersagency.com',
+          changeOrigin: true,
+          rewrite: (path) => path.replace(/^\/rss\/reuters/, ''),
+        },
+        // Cloudflare Radar - Internet outages
+        '/api/cloudflare-radar': {
+          target: 'https://api.cloudflare.com',
+          changeOrigin: true,
+          rewrite: (path) => path.replace(/^\/api\/cloudflare-radar/, ''),
+        },
+        // NGA Maritime Safety Information - Navigation Warnings
+        '/api/nga-msi': {
+          target: 'https://msi.nga.mil',
+          changeOrigin: true,
+          rewrite: (path) => path.replace(/^\/api\/nga-msi/, ''),
+        },
+        // GDELT GEO 2.0 API - Global event data
+        '/api/gdelt': {
+          target: 'https://api.gdeltproject.org',
+          changeOrigin: true,
+          rewrite: (path) => path.replace(/^\/api\/gdelt/, ''),
+        },
+        // AISStream WebSocket proxy for live vessel tracking
+        '/ws/aisstream': {
+          target: 'wss://stream.aisstream.io',
+          changeOrigin: true,
+          ws: true,
+          rewrite: (path) => path.replace(/^\/ws\/aisstream/, ''),
+        },
+        // FAA NASSTATUS - Airport delays and closures
+        '/api/faa': {
+          target: 'https://nasstatus.faa.gov',
+          changeOrigin: true,
+          secure: true,
+          rewrite: (path) => path.replace(/^\/api\/faa/, ''),
+          configure: (proxy) => {
+            proxy.on('error', (err) => {
+              console.log('FAA NASSTATUS proxy error:', err.message);
+            });
+          },
+        },
+        // OpenSky Network - Aircraft tracking (military flight detection).
+        // Prod routes /api/opensky through the relay (api/opensky.js), which calls
+        // OpenSky's states/all endpoint. Dev has no relay, so proxy straight to
+        // states/all — stripping the prefix to '' would hit the invalid /api root (404).
+        '/api/opensky': {
+          target: 'https://opensky-network.org/api',
+          changeOrigin: true,
+          secure: true,
+          rewrite: (path) => path.replace(/^\/api\/opensky/, '/states/all'),
+          configure: (proxy) => {
+            proxy.on('error', (err) => {
+              console.log('OpenSky proxy error:', err.message);
+            });
+          },
+        },
+        // ADS-B Exchange - Military aircraft tracking (backup/supplement)
+        '/api/adsb-exchange': {
+          target: 'https://adsbexchange.com/api',
+          changeOrigin: true,
+          secure: true,
+          rewrite: (path) => path.replace(/^\/api\/adsb-exchange/, ''),
+          configure: (proxy) => {
+            proxy.on('error', (err) => {
+              console.log('ADS-B Exchange proxy error:', err.message);
+            });
+          },
+        },
+      },
+    },
+  };
 });

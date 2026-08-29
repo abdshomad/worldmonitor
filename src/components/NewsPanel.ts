@@ -262,6 +262,49 @@ export class NewsPanel extends Panel {
     this.deviationEl.title = `z-score: ${zScore} (vs 7-day avg)`;
   }
 
+  public override showError(message?: string, onRetry?: () => void, autoRetrySeconds?: number): void {
+    this.lastRawClusters = null;
+    this.lastRawItems = null;
+    this.renderedBadgeState = 'unavailable';
+    super.showError(message, onRetry, autoRetrySeconds);
+  }
+
+  /**
+   * Declare how many of the category's enabled sources this panel is showing.
+   *
+   * Pass `null` for the normal case (digest-backed, or every source fetched) —
+   * the badge then reads plain `LIVE` as before. The value is stored rather
+   * than painted directly so it survives the re-renders that don't reload data
+   * (time-range filter changes, sort toggles).
+   */
+  public setSourceCoverage(coverage: SourceCoverage | null): void {
+    this.sourceCoverage = coverage;
+    if (this.renderedBadgeState === 'live' || this.renderedBadgeState === 'cached') {
+      this.renderCurrentDataBadge();
+    }
+  }
+
+  /**
+   * Retained headlines remain useful when a refresh window fails, but they
+   * must not be relabelled LIVE by time-range or sort re-renders.
+   */
+  public setRefreshDegraded(degraded: boolean): void {
+    this.refreshDegraded = degraded;
+    if (this.renderedBadgeState === 'live' || this.renderedBadgeState === 'cached') {
+      this.renderCurrentDataBadge();
+    }
+  }
+
+  private coverageString(key: CoverageStringKey): string | undefined {
+    return coverageBadgeString(this.sourceCoverage, key, (path, vars) => t(path, vars));
+  }
+
+  private renderCurrentDataBadge(): void {
+    const state = this.refreshDegraded ? 'cached' : 'live';
+    this.renderedBadgeState = state;
+    this.setDataBadge(state, this.coverageString('sourceCoverage'), this.coverageString('sourceCoverageHint'));
+  }
+
   public renderNews(items: NewsItem[]): void {
     if (items.length === 0) {
       this.renderRequestId += 1; // Cancel in-flight clustering from previous renders.
@@ -304,9 +347,33 @@ export class NewsPanel extends Panel {
   }
 
   private renderFlat(items: NewsItem[]): void {
-    this.setCount(items.length);
+    this.lastRawItems = items;
 
-    const html = items
+    let sorted: NewsItem[];
+    if (this.sortMode === 'newest') {
+      sorted = [...items].sort((a, b) => new Date(b.pubDate).getTime() - new Date(a.pubDate).getTime());
+    } else {
+      // Relevance: sort by importanceScore desc when available, fall back to pubDate
+      sorted = [...items].sort((a, b) => {
+        const sa = a.importanceScore ?? 0;
+        const sb = b.importanceScore ?? 0;
+        if (sb !== sa) return sb - sa;
+        return new Date(b.pubDate).getTime() - new Date(a.pubDate).getTime();
+      });
+    }
+
+    this.setCount(sorted.length);
+    const topItems = sorted
+      .slice(0, 5)
+      .filter((item) => typeof item.title === 'string' && item.title.trim().length > 0);
+    this.currentHeadlines = topItems.map((item) => item.title);
+    // Paired RSS descriptions for LLM grounding; empty string falls back to
+    // headline-only on the server (R6).
+    this.currentBodies = topItems.map((item) => typeof item.snippet === 'string' ? item.snippet : '');
+
+    this.updateHeadlineSignature();
+
+    const html = sorted
       .map(
         (item) => `
       <div class="item ${item.isAlert ? 'alert' : ''}" ${item.monitorColor ? `style="border-inline-start-color: ${escapeHtml(item.monitorColor)}"` : ''}>
@@ -325,7 +392,7 @@ export class NewsPanel extends Panel {
       )
       .join('');
 
-    this.setContent(html);
+    this.setSafeContent(unsafeRawHtml(html, 'legacy Panel.setContent() migration'));
   }
 
   private renderClusters(clusters: ClusteredEvent[]): void {
@@ -530,37 +597,47 @@ export class NewsPanel extends Panel {
     `;
   }
 
-  private bindRelatedAssetEvents(): void {
-    const containers = this.content.querySelectorAll<HTMLDivElement>('.related-assets');
-    containers.forEach((container) => {
-      const clusterId = container.dataset.clusterId;
-      if (!clusterId) return;
-      const context = this.relatedAssetContext.get(clusterId);
-      if (!context) return;
+  private setupContentDelegation(): void {
+    this.content.addEventListener('click', (e) => {
+      const target = e.target as HTMLElement;
 
-      container.addEventListener('mouseenter', () => {
-        this.onRelatedAssetsFocus?.(context.assets, context.origin.label);
-      });
-
-      container.addEventListener('mouseleave', () => {
-        this.onRelatedAssetsClear?.();
-      });
-    });
-
-    const assetButtons = this.content.querySelectorAll<HTMLButtonElement>('.related-asset');
-    assetButtons.forEach((button) => {
-      button.addEventListener('click', (event) => {
-        event.stopPropagation();
-        const clusterId = button.dataset.clusterId;
-        const assetId = button.dataset.assetId;
-        const assetType = button.dataset.assetType as RelatedAsset['type'] | undefined;
+      const assetBtn = target.closest<HTMLElement>('.related-asset');
+      if (assetBtn) {
+        e.stopPropagation();
+        const clusterId = assetBtn.dataset.clusterId;
+        const assetId = assetBtn.dataset.assetId;
+        const assetType = assetBtn.dataset.assetType as RelatedAsset['type'] | undefined;
         if (!clusterId || !assetId || !assetType) return;
         const context = this.relatedAssetContext.get(clusterId);
         const asset = context?.assets.find(item => item.id === assetId && item.type === assetType);
-        if (asset) {
-          this.onRelatedAssetClick?.(asset);
-        }
-      });
+        if (asset) this.onRelatedAssetClick?.(asset);
+        return;
+      }
+
+      const translateBtn = target.closest<HTMLElement>('.item-translate-btn');
+      if (translateBtn) {
+        e.stopPropagation();
+        const text = translateBtn.dataset.text;
+        if (text) this.handleTranslate(translateBtn, text);
+        return;
+      }
+    });
+
+    this.content.addEventListener('mouseover', (e) => {
+      const container = (e.target as HTMLElement).closest<HTMLElement>('.related-assets');
+      if (!container) return;
+      const related = (e as MouseEvent).relatedTarget as Node | null;
+      if (related && container.contains(related)) return;
+      const context = this.relatedAssetContext.get(container.dataset.clusterId ?? '');
+      if (context) this.onRelatedAssetsFocus?.(context.assets, context.origin.label);
+    });
+
+    this.content.addEventListener('mouseout', (e) => {
+      const container = (e.target as HTMLElement).closest<HTMLElement>('.related-assets');
+      if (!container) return;
+      const related = (e as MouseEvent).relatedTarget as Node | null;
+      if (related && container.contains(related)) return;
+      this.onRelatedAssetsClear?.();
     });
 
     // Translation buttons
@@ -583,6 +660,99 @@ export class NewsPanel extends Panel {
       nuclear: 'modals.countryBrief.infra.nuclear',
     };
     return t(keyMap[type]);
+  }
+
+  /**
+   * Clean up resources
+   */
+  public destroy(): void {
+    // Clean up windowed list
+    this.windowedList?.destroy();
+    this.windowedList = null;
+
+    // Remove activity tracking listeners
+    if (this.boundScrollHandler) {
+      this.content.removeEventListener('scroll', this.boundScrollHandler);
+      this.boundScrollHandler = null;
+    }
+    if (this.boundClickHandler) {
+      this.element.removeEventListener('click', this.boundClickHandler);
+      this.boundClickHandler = null;
+    }
+
+    // Unregister from activity tracker
+    activityTracker.unregister(this.panelId);
+
+    // Call parent destroy
+    super.destroy();
+  }
+
+  private bindRelatedAssetEvents(): void {
+    // Event delegation is set up in setupContentDelegation() — this is now a no-op
+    // kept for WindowedList callback compatibility
+  }
+
+  private getLocalizedAssetLabel(type: RelatedAsset['type']): string {
+    const keyMap: Record<RelatedAsset['type'], string> = {
+      pipeline: 'modals.countryBrief.infra.pipeline',
+      cable: 'modals.countryBrief.infra.cable',
+      datacenter: 'modals.countryBrief.infra.datacenter',
+      base: 'modals.countryBrief.infra.base',
+      nuclear: 'modals.countryBrief.infra.nuclear',
+    };
+    return t(keyMap[type]);
+  }
+
+  /**
+   * Returns true if this panel contains a news item with the given link
+   * (either as a cluster primary or secondary article).
+   */
+  public hasNewsItem(link: string): boolean {
+    if (this.lastRawClusters) {
+      return this.lastRawClusters.some(
+        c => c.primaryLink === link || c.allItems.some(i => i.link === link)
+      );
+    }
+    if (this.lastRawItems) {
+      return this.lastRawItems.some(i => i.link === link);
+    }
+    return false;
+  }
+
+  /**
+   * Scroll the panel to the item with the given link and flash-highlight it.
+   * For virtual-scrolled panels, renders the containing chunk first.
+   */
+  public scrollToNewsItem(link: string): void {
+    // In clustered mode, scroll via windowedList so off-screen chunks are rendered first
+    if (this.lastRawClusters && this.windowedList) {
+      const found = this.windowedList.scrollToItem(
+        (p: { cluster: ClusteredEvent }) =>
+          p.cluster.primaryLink === link || p.cluster.allItems.some((i: { link: string }) => i.link === link)
+      );
+      if (found) {
+        setTimeout(() => {
+          const el = this.content.querySelector(`[data-news-id="${CSS.escape(link)}"]`)
+            ?? this.content.querySelector(`a[href="${CSS.escape(link)}"]`);
+          if (el) this.flashHighlight(el);
+        }, 350);
+        return;
+      }
+    }
+    // Flat mode or small lists rendered directly in DOM
+    const el = this.content.querySelector(`[data-news-id="${CSS.escape(link)}"]`)
+      ?? this.content.querySelector(`a[href="${CSS.escape(link)}"]`);
+    if (el) {
+      el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      this.flashHighlight(el);
+    }
+  }
+
+  private flashHighlight(el: Element): void {
+    el.classList.remove('search-highlight');
+    void (el as HTMLElement).offsetWidth;
+    el.classList.add('search-highlight');
+    setTimeout(() => el.classList.remove('search-highlight'), 3100);
   }
 
   /**

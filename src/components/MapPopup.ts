@@ -343,6 +343,7 @@ export class MapPopup {
 
   private renderContent(data: PopupData): string {
     switch (data.type) {
+
       case 'conflict':
         return this.renderConflictPopup(data.data as ConflictZone);
       case 'hotspot':
@@ -623,7 +624,7 @@ export class MapPopup {
       <div class="popup-header hotspot">
         <span class="popup-title">${escapeHtml(hotspot.name.toUpperCase())}</span>
         <span class="popup-badge ${severityClass}">${severityLabel}</span>
-        <button class="popup-close">×</button>
+        <button class="popup-close" aria-label="Close">×</button>
       </div>
       <div class="popup-body">
         ${localizedSubtext ? `<div class="popup-subtitle">${escapeHtml(localizedSubtext)}</div>` : ''}
@@ -665,8 +666,8 @@ export class MapPopup {
                   <span class="news-source">${escapeHtml(n.source)}</span>
                   <a href="${sanitizeUrl(n.link)}" target="_blank" class="news-title">${escapeHtml(n.title)}</a>
                 </div>
-              `).join('')}
-            </div>
+              </div>
+            </details>
           </div>
         ` : ''}
         <div class="hotspot-gdelt-context" data-hotspot-id="${escapeHtml(hotspot.id)}">
@@ -731,13 +732,16 @@ export class MapPopup {
     const severity = earthquake.magnitude >= 6 ? 'high' : earthquake.magnitude >= 5 ? 'medium' : 'low';
     const severityLabel = earthquake.magnitude >= 6 ? t('popups.earthquake.levels.major') : earthquake.magnitude >= 5 ? t('popups.earthquake.levels.moderate') : t('popups.earthquake.levels.minor');
 
-    const timeAgo = this.getTimeAgo(earthquake.time);
+    const timeAgo = this.getTimeAgo(new Date(earthquake.occurredAt));
+    const isNrcan = earthquake.source === 'nrcan';
+    const sourceName = isNrcan ? 'Earthquakes Canada' : 'USGS';
+    const sourceLinkLabel = isNrcan ? t('popups.viewNRCan') : t('popups.viewUSGS');
 
     return `
       <div class="popup-header earthquake">
         <span class="popup-title magnitude">M${earthquake.magnitude.toFixed(1)}</span>
         <span class="popup-badge ${severity}">${severityLabel}</span>
-        <button class="popup-close">×</button>
+        <button class="popup-close" aria-label="Close">×</button>
       </div>
       <div class="popup-body">
         <p class="popup-location">${escapeHtml(earthquake.place)}</p>
@@ -753,6 +757,10 @@ export class MapPopup {
           <div class="popup-stat">
             <span class="stat-label">${t('popups.time')}</span>
             <span class="stat-value">${timeAgo}</span>
+          </div>
+          <div class="popup-stat">
+            <span class="stat-label">${t('popups.source')}</span>
+            <span class="stat-value">${sourceName}</span>
           </div>
         </div>
         <a href="${sanitizeUrl(earthquake.url)}" target="_blank" class="popup-link">${t('popups.viewUSGS')} →</a>
@@ -819,19 +827,31 @@ export class MapPopup {
       'russia': 'high',
     };
 
+    const enriched = base as MilitaryBase & { kind?: string; catAirforce?: boolean; catNaval?: boolean; catNuclear?: boolean; catSpace?: boolean; catTraining?: boolean };
+    const categories: string[] = [];
+    if (enriched.catAirforce) categories.push('Air Force');
+    if (enriched.catNaval) categories.push('Naval');
+    if (enriched.catNuclear) categories.push('Nuclear');
+    if (enriched.catSpace) categories.push('Space');
+    if (enriched.catTraining) categories.push('Training');
+
     return `
       <div class="popup-header base">
-        <span class="popup-title">${base.name.toUpperCase()}</span>
-        <span class="popup-badge ${typeColors[base.type] || 'low'}">${typeLabels[base.type] || base.type.toUpperCase()}</span>
-        <button class="popup-close">×</button>
+        <span class="popup-title">${escapeHtml(base.name.toUpperCase())}</span>
+        <span class="popup-badge ${typeColors[base.type] || 'low'}">${escapeHtml(typeLabels[base.type] || base.type.toUpperCase())}</span>
+        <button class="popup-close" aria-label="Close">×</button>
       </div>
       <div class="popup-body">
-        ${base.description ? `<p class="popup-description">${base.description}</p>` : ''}
+        ${base.description ? `<p class="popup-description">${escapeHtml(base.description)}</p>` : ''}
+        ${enriched.kind ? `<p class="popup-description" style="opacity:0.7;margin-top:2px">${escapeHtml(enriched.kind.replace(/_/g, ' '))}</p>` : ''}
         <div class="popup-stats">
           <div class="popup-stat">
             <span class="stat-label">${t('popups.type')}</span>
             <span class="stat-value">${typeLabels[base.type] || base.type}</span>
           </div>
+          ${base.arm ? `<div class="popup-stat"><span class="stat-label">Branch</span><span class="stat-value">${escapeHtml(base.arm)}</span></div>` : ''}
+          ${base.country ? `<div class="popup-stat"><span class="stat-label">Country</span><span class="stat-value">${escapeHtml(base.country)}</span></div>` : ''}
+          ${categories.length > 0 ? `<div class="popup-stat"><span class="stat-label">Categories</span><span class="stat-value">${escapeHtml(categories.join(', '))}</span></div>` : ''}
           <div class="popup-stat">
             <span class="stat-label">${t('popups.coordinates')}</span>
             <span class="stat-value">${base.lat.toFixed(2)}°, ${base.lon.toFixed(2)}°</span>
@@ -842,6 +862,59 @@ export class MapPopup {
   }
 
   private renderWaterwayPopup(waterway: StrategicWaterway): string {
+    const cp = this.chokepointData?.chokepoints?.find(
+      c => c.id === waterway.chokepointId,
+    );
+    // Chart is lazy-loaded via GetChokepointHistory on popup mount. Render the
+    // section only when the chokepoint is known AND upstream flagged data
+    // available — a zero-state fill (partial portwatch) means the per-id
+    // history key is also empty, so there's nothing to fetch.
+    const hasChart = !!cp && cp.transitSummary?.dataAvailable !== false;
+    const isPro = hasPremiumAccess(getAuthState());
+    const sectors = CHOKEPOINT_HS2_SECTORS[waterway.chokepointId];
+
+    // Sector mix: only show the compact SVG ring for free users (PRO users get the full HS2RingChart below)
+    const sectorSection = (sectors && !isPro)
+      ? `<div class="popup-section-title" style="margin-top:10px;font-size:calc(10px * var(--wm-panel-effective-scale, 1));text-transform:uppercase;opacity:.6;letter-spacing:.06em">Trade Sector Mix</div>
+         ${renderSectorRing(sectors)}`
+      : '';
+
+    // Transit chart is PRO-gated (real-time PortWatch data)
+    let chartSection = '';
+    if (hasChart) {
+      if (isPro) {
+        chartSection = `<div data-transit-chart="${escapeHtml(waterway.name)}" data-transit-chart-id="${escapeHtml(cp?.id ?? '')}" style="margin-top:10px;min-height:200px;display:flex;align-items:center;justify-content:center;color:var(--text-dim,#888);font-size:calc(12px * var(--wm-panel-effective-scale, 1))">${t('components.supplyChain.loadingHistory') || 'Loading transit history\u2026'}</div>`;
+      } else {
+        chartSection = `
+          <div class="sector-pro-gate" data-gate="chokepoint-transit-chart" style="position:relative;overflow:hidden;border-radius:6px;margin-top:10px;min-height:120px;background:var(--surface-elevated, #111)">
+            <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:4px">
+              <span style="font-size:calc(16px * var(--wm-panel-effective-scale, 1))">🔒</span>
+              <span style="font-size:calc(10px * var(--wm-panel-effective-scale, 1));font-weight:600;opacity:.8">PRO</span>
+              <span style="font-size:calc(9px * var(--wm-panel-effective-scale, 1));opacity:.5">Transit History</span>
+            </div>
+          </div>`;
+      }
+    }
+
+    // Sector exposure ring is PRO-gated (canvas donut with legend)
+    let ringSection = '';
+    if (sectors) {
+      if (isPro) {
+        ringSection = `
+          <div class="popup-section-title" style="margin-top:10px;font-size:calc(10px * var(--wm-panel-effective-scale, 1));text-transform:uppercase;opacity:.6;letter-spacing:.06em">Sector Exposure</div>
+          <div data-hs2-ring="${escapeHtml(waterway.chokepointId)}" class="popup-hs2-ring-container"></div>`;
+      } else {
+        ringSection = `
+          <div class="sector-pro-gate" data-gate="chokepoint-sector-ring" style="position:relative;overflow:hidden;border-radius:6px;margin-top:10px;min-height:80px;background:var(--surface-elevated, #111)">
+            <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:4px">
+              <span style="font-size:calc(16px * var(--wm-panel-effective-scale, 1))">🔒</span>
+              <span style="font-size:calc(10px * var(--wm-panel-effective-scale, 1));font-weight:600;opacity:.8">PRO</span>
+              <span style="font-size:calc(9px * var(--wm-panel-effective-scale, 1));opacity:.5">Sector Breakdown</span>
+            </div>
+          </div>`;
+      }
+    }
+
     return `
       <div class="popup-header waterway">
         <span class="popup-title">${waterway.name}</span>
@@ -849,13 +922,16 @@ export class MapPopup {
         <button class="popup-close">×</button>
       </div>
       <div class="popup-body">
-        ${waterway.description ? `<p class="popup-description">${waterway.description}</p>` : ''}
+        ${waterway.description ? `<p class="popup-description">${escapeHtml(waterway.description)}</p>` : ''}
         <div class="popup-stats">
           <div class="popup-stat">
             <span class="stat-label">${t('popups.coordinates')}</span>
             <span class="stat-value">${waterway.lat.toFixed(2)}°, ${waterway.lon.toFixed(2)}°</span>
           </div>
         </div>
+        ${sectorSection}
+        ${ringSection}
+        ${chartSection}
       </div>
     `;
   }
@@ -874,7 +950,7 @@ export class MapPopup {
       <div class="popup-header ais">
         <span class="popup-title">${escapeHtml(event.name.toUpperCase())}</span>
         <span class="popup-badge ${severityClass}">${severityLabel}</span>
-        <button class="popup-close">×</button>
+        <button class="popup-close" aria-label="Close">×</button>
       </div>
       <div class="popup-body">
         <div class="popup-subtitle">${typeLabel}</div>
@@ -914,6 +990,7 @@ export class MapPopup {
     const actorsSection = event.actors?.length
       ? `<div class="popup-stat"><span class="stat-label">${t('popups.actors')}</span><span class="stat-value">${event.actors.map(a => escapeHtml(a)).join(', ')}</span></div>`
       : '';
+    const sourceLinks = renderPopupSourceLinks(event.sourceUrls, { label: t('popups.source') });
     const tagsSection = event.tags?.length
       ? `<div class="popup-tags">${event.tags.map(t => `<span class="popup-tag">${escapeHtml(t)}</span>`).join('')}</div>`
       : '';
@@ -927,7 +1004,7 @@ export class MapPopup {
         <span class="popup-title">${eventTypeLabel}</span>
         <span class="popup-badge ${severityClass}">${severityLabel}</span>
         ${validatedBadge}
-        <button class="popup-close">×</button>
+        <button class="popup-close" aria-label="Close">×</button>
       </div>
       <div class="popup-body">
         <div class="popup-subtitle">${event.city ? `${escapeHtml(event.city)}, ` : ''}${escapeHtml(event.country)}</div>
@@ -1076,6 +1153,9 @@ export class MapPopup {
       <div class="popup-body">
         <div class="popup-subtitle">${t('popups.aka')}: ${apt.aka}</div>
         <div class="popup-stats">
+          ${avgDelaySection}
+          ${reasonSection}
+          ${cancelledSection}
           <div class="popup-stat">
             <span class="stat-label">${t('popups.sponsor')}</span>
             <span class="stat-value">${apt.sponsor}</span>
@@ -1157,9 +1237,9 @@ export class MapPopup {
 
     return `
       <div class="popup-header nuclear">
-        <span class="popup-title">${facility.name.toUpperCase()}</span>
-        <span class="popup-badge ${statusColors[facility.status] || 'low'}">${facility.status.toUpperCase()}</span>
-        <button class="popup-close">×</button>
+        <span class="popup-title">${escapeHtml(facility.name.toUpperCase())}</span>
+        <span class="popup-badge ${statusColors[facility.status] || 'low'}">${escapeHtml(facility.status.toUpperCase())}</span>
+        <button class="popup-close" aria-label="Close">×</button>
       </div>
       <div class="popup-body">
         <div class="popup-stats">
@@ -1209,7 +1289,7 @@ export class MapPopup {
         <button class="popup-close">×</button>
       </div>
       <div class="popup-body">
-        ${center.description ? `<p class="popup-description">${center.description}</p>` : ''}
+        ${center.description ? `<p class="popup-description">${escapeHtml(center.description)}</p>` : ''}
         <div class="popup-stats">
           <div class="popup-stat">
             <span class="stat-label">${t('popups.type')}</span>
@@ -1283,9 +1363,9 @@ export class MapPopup {
 
     return `
       <div class="popup-header pipeline ${pipeline.type}">
-        <span class="popup-title">${typeIcon} ${pipeline.name.toUpperCase()}</span>
-        <span class="popup-badge ${typeColors[pipeline.type] || 'low'}">${pipeline.type.toUpperCase()}</span>
-        <button class="popup-close">×</button>
+        <span class="popup-title">${typeIcon} ${escapeHtml(pipeline.name.toUpperCase())}</span>
+        <span class="popup-badge ${typeColors[pipeline.type] || 'low'}">${escapeHtml(pipeline.type.toUpperCase())}</span>
+        <button class="popup-close" aria-label="Close">×</button>
       </div>
       <div class="popup-body">
         <div class="popup-subtitle">${typeLabels[pipeline.type] || t('popups.pipeline.title')}</div>
@@ -1317,7 +1397,7 @@ export class MapPopup {
           <div class="popup-section">
             <span class="section-label">${t('popups.countries')}</span>
             <div class="popup-tags">
-              ${pipeline.countries.map(c => `<span class="popup-tag">${c}</span>`).join('')}
+              ${pipeline.countries.map(c => `<span class="popup-tag">${escapeHtml(c)}</span>`).join('')}
             </div>
           </div>
         ` : ''}
@@ -1409,7 +1489,7 @@ export class MapPopup {
       <div class="popup-header cable">
         <span class="popup-title">🚨 ${cableName}</span>
         <span class="popup-badge ${advisory.severity === 'fault' ? 'high' : 'elevated'}">${statusLabel}</span>
-        <button class="popup-close">×</button>
+        <button class="popup-close" aria-label="Close">×</button>
       </div>
       <div class="popup-body">
         <div class="popup-subtitle">${advisoryTitle}</div>
@@ -1561,7 +1641,7 @@ export class MapPopup {
         <button class="popup-close">×</button>
       </div>
       <div class="popup-body">
-        <div class="popup-subtitle">${dc.owner} • ${dc.country}</div>
+        <div class="popup-subtitle">${escapeHtml(dc.owner)} • ${escapeHtml(dc.country)}</div>
         <div class="popup-stats">
           <div class="popup-stat">
             <span class="stat-label">${t('popups.datacenter.gpuChipCount')}</span>

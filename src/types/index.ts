@@ -17,6 +17,15 @@ export interface NewsItem {
   title: string;
   link: string;
   pubDate: Date;
+  /**
+   * True when the upstream feed item had no parseable pubDate/published/
+   * updated timestamp. The `pubDate` field is still populated (synthesized
+   * stamp) for display, but ranking/recency consumers MUST route through
+   * `effectivePubDateMs` from feed-date.ts so these items don't claim
+   * false freshness. Optional so synthesized items from non-RSS producers
+   * don't need to set it explicitly — `undefined` is treated as `false`.
+   */
+  pubDateMissing?: boolean;
   isAlert: boolean;
   monitorColor?: string;
   tier?: number;
@@ -44,7 +53,14 @@ export interface ClusteredEvent {
   primaryTitle: string;
   primarySource: string;
   primaryLink: string;
+  /** Articles in the cluster — a volume signal, not a corroboration signal. */
   sourceCount: number;
+  /**
+   * Distinct PUBLISHERS behind those articles (#6428). Any "N sources"
+   * corroboration claim shown to a user reads this, never sourceCount:
+   * one newsroom's editions are one publisher.
+   */
+  uniquePublisherCount: number;
   topSources: Array<{ name: string; tier: number; url: string }>;
   allItems: NewsItem[];
   firstSeen: Date;
@@ -156,6 +172,8 @@ export interface Hotspot {
 
 export interface StrategicWaterway {
   id: string;
+  /** Canonical chokepoint ID from chokepoint-registry.ts — same as id. */
+  chokepointId: string;
   name: string;
   lat: number;
   lon: number;
@@ -197,6 +215,33 @@ export interface APTGroup {
   sponsor: string;
   lat: number;
   lon: number;
+  mitreId?: string;
+  mitreUrl?: string;
+  description?: string;
+  tactics?: string[];
+  targetSectors?: string[];
+  active?: boolean;
+}
+
+export type CyberThreatType = 'c2_server' | 'malware_host' | 'phishing' | 'malicious_url';
+export type CyberThreatSource = 'feodo' | 'urlhaus' | 'c2intel' | 'otx' | 'abuseipdb';
+export type CyberThreatSeverity = 'low' | 'medium' | 'high' | 'critical';
+export type CyberThreatIndicatorType = 'ip' | 'domain' | 'url';
+
+export interface CyberThreat {
+  id: string;
+  type: CyberThreatType;
+  source: CyberThreatSource;
+  indicator: string;
+  indicatorType: CyberThreatIndicatorType;
+  lat: number;
+  lon: number;
+  country?: string;
+  severity: CyberThreatSeverity;
+  malwareFamily?: string;
+  tags: string[];
+  firstSeen?: string;
+  lastSeen?: string;
 }
 
 export type CyberThreatType = 'c2_server' | 'malware_host' | 'phishing' | 'malicious_url';
@@ -234,6 +279,46 @@ export interface ConflictZone {
   location?: string;
   description?: string;
   keyDevelopments?: string[];
+  peaceAgreements?: string[];
+  totalFatalities?: string;
+}
+
+
+// UCDP Georeferenced Events
+export type UcdpEventType = 'state-based' | 'non-state' | 'one-sided';
+
+export interface UcdpGeoEvent {
+  id: string;
+  date_start: string;
+  date_end: string;
+  latitude: number;
+  longitude: number;
+  country: string;
+  side_a: string;
+  side_b: string;
+  deaths_best: number;
+  deaths_low: number;
+  deaths_high: number;
+  type_of_violence: UcdpEventType;
+  source_original: string;
+}
+
+// WorldPop Population Exposure
+export interface CountryPopulation {
+  code: string;
+  name: string;
+  population: number;
+  densityPerKm2: number;
+}
+
+export interface PopulationExposure {
+  eventId: string;
+  eventName: string;
+  eventType: string;
+  lat: number;
+  lon: number;
+  exposedPopulation: number;
+  exposureRadiusKm: number;
 }
 
 // UCDP Georeferenced Events
@@ -413,6 +498,28 @@ export interface RepairShip {
   note?: string;
 }
 
+// Cable health types (computed from NGA maritime warning signals)
+export type CableHealthStatus = 'ok' | 'degraded' | 'fault' | 'unknown';
+
+export interface CableHealthEvidence {
+  source: string;
+  summary: string;
+  ts: string;
+}
+
+export interface CableHealthRecord {
+  status: CableHealthStatus;
+  score: number;
+  confidence: number;
+  lastUpdated: string;
+  evidence: CableHealthEvidence[];
+}
+
+export interface CableHealthResponse {
+  generatedAt: string;
+  cables: Record<string, CableHealthRecord>;
+}
+
 export interface ShippingChokepoint {
   id: string;
   name: string;
@@ -447,6 +554,10 @@ export interface NuclearFacility {
   type: NuclearFacilityType;
   status: 'active' | 'contested' | 'inactive' | 'decommissioned' | 'construction';
   operator?: string;  // Operating country
+  operationalSince?: string;
+  treaties?: string[];
+  iaeaStatus?: string;
+  keyEvents?: string[];
 }
 
 export interface GammaIrradiator {
@@ -512,6 +623,17 @@ export interface PanelConfig {
   name: string;
   enabled: boolean;
   priority?: number;
+  premium?: 'locked' | 'enhanced';
+  /** Absolute panel text scale. When absent, the panel follows the global scale. */
+  fontScale?: 0.9 | 1 | 1.1 | 1.25 | 1.5 | 2;
+  /**
+   * Set by `enforceFreePanelLimit` when the free-tier pro gate — not the user —
+   * is what turned this panel off. Distinguishes "hidden because you aren't Pro"
+   * from "you hid it in settings", so the gate can be reversed on upgrade
+   * without overriding a deliberate choice. Used for both `cw-*` panels and
+   * ordinary panels disabled by the free panel-count cap.
+   */
+  proGated?: boolean;
 }
 
 export interface MapLayers {
@@ -523,8 +645,13 @@ export interface MapLayers {
   ais: boolean;
   nuclear: boolean;
   irradiators: boolean;
+  radiationWatch?: boolean;
   sanctions: boolean;
   weather: boolean;
+  /** Official Canada road events and conditions from Ontario, Alberta, Toronto, and British Columbia. */
+  canadaRoads: boolean;
+  /** Alberta, B.C., and Saskatchewan province-owned emergency alerts (#6610, #6659). */
+  canadaAlerts: boolean;
   economic: boolean;
   waterways: boolean;
   outages: boolean;
@@ -664,6 +791,7 @@ export interface SocialUnrestEvent {
   severity: ProtestSeverity;
   fatalities?: number;
   sources: string[];
+  sourceUrls?: string[];
   sourceType: ProtestSource;
   tags?: string[];
   actors?: string[];

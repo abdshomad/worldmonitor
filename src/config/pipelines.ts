@@ -1,9 +1,10 @@
 import type { Pipeline } from '@/types';
+import { getCSSColor } from '@/utils';
+import { PIPELINES as PIPELINES_DATA } from '../../shared/pipelines-data';
 
-// Major international oil and gas pipelines
-// Sources: Global Energy Monitor, EIA, public domain geographic data
-export const PIPELINES: Pipeline[] = [
-  // ===== MAJOR OIL PIPELINES =====
+// The table itself lives in shared/ so server-side analysis can import it
+// without pulling in the src/ alias graph.
+export const PIPELINES: Pipeline[] = PIPELINES_DATA;
 
   // North America
   {

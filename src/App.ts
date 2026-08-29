@@ -1,10 +1,5 @@
 import type { NewsItem, Monitor, PanelConfig, MapLayers, RelatedAsset, InternetOutage, SocialUnrestEvent, MilitaryFlight, MilitaryVessel, MilitaryFlightCluster, MilitaryVesselCluster, CyberThreat } from '@/types';
 import {
-  FEEDS,
-  INTEL_SOURCES,
-  SECTORS,
-  COMMODITIES,
-  MARKET_SYMBOLS,
   REFRESH_INTERVALS,
   DEFAULT_PANELS,
   DEFAULT_MAP_LAYERS,
@@ -199,7 +194,6 @@ export class App {
   constructor(containerId: string) {
     const el = document.getElementById(containerId);
     if (!el) throw new Error(`Container ${containerId} not found`);
-    this.container = el;
 
     this.isMobile = isMobileDevice();
     this.monitors = loadFromStorage<Monitor[]>(STORAGE_KEYS.monitors, []);
@@ -4026,7 +4020,6 @@ export class App {
       this.statusPanel?.updateApi('AISStream', { status: 'error' });
       dataFreshness.recordError('ais', String(error));
     }
-  }
 
   private waitForAisData(): void {
     const maxAttempts = 30;
@@ -4067,7 +4060,6 @@ export class App {
     } catch {
       this.statusPanel?.updateFeed('CableOps', { status: 'error' });
     }
-  }
 
   private async loadProtests(): Promise<void> {
     // Use cached data if available (from loadIntelligenceSignals)
@@ -4122,6 +4114,126 @@ export class App {
       this.statusPanel?.updateApi('GDELT Doc', { status: 'error' });
       dataFreshness.recordError('gdelt_doc', String(error));
     }
+
+    // Phase 4: MapLayerHandlers, CountryIntel. SearchManager is lazy-loaded
+    // on first CMD+K/search-button open so its modal catalog stays off startup.
+    this.eventHandlers.setupMapLayerHandlers();
+    await this.countryIntel.init();
+    // Unblock any WebMCP tool invocations that arrived during startup.
+    this.resolveUiReady();
+    markLcpDebug('wm:boot:webmcp-ui-ready');
+
+    // Phase 5: Event listeners + URL sync
+    this.eventHandlers.init();
+    // Capture deep link params BEFORE URL sync overwrites them
+    const initState = parseMapUrlState(window.location.search, this.state.mapLayers);
+    this.pendingDeepLinkCountry = initState.country ?? null;
+    this.pendingDeepLinkExpanded = initState.expanded === true;
+    this.pendingDeepLinkChokepoint = initState.chokepoint ?? null;
+    const earlyParams = new URLSearchParams(window.location.search);
+    this.pendingDeepLinkStoryCode = earlyParams.get('c') ?? null;
+    this.eventHandlers.setupUrlStateSync();
+    if (import.meta.env.VITE_E2E === '1') {
+      document.documentElement.dataset.wmEventHandlersReady = 'true';
+    }
+
+    this.state.countryBriefPage?.onStateChange?.(() => {
+      this.eventHandlers.syncUrlState();
+    });
+
+    // Start deep link handling early — its retry loop polls hasSufficientData()
+    // independently, so it must not be gated behind loadAllData() which can hang.
+    this.handleDeepLinks();
+
+    // Phase 6: Data loading
+    this.dataLoader.syncDataFreshnessWithLayers();
+    const slowTierReady = this.waitForSlowBootstrapCheckpoint();
+    if (this.state.isDestroyed) return;
+    // forceAll=false at bootstrap: data-loader's existing per-panel
+    // viewport gate (shouldLoad(id) = forceAll || isPanelNearViewport(id))
+    // now actually fires, cutting the ~80-request fan-out down to the
+    // panels currently above the fold. IntersectionObserver wiring in
+    // panel-layout.ts plus handleViewportPrime above re-trigger
+    // loadAllData() as below-fold panels enter the viewport. (#3990)
+    // Slow-tier hydration keys are consume-once (getHydratedData deletes on
+    // read) and the visible-data consumers in loadAllData read them at task
+    // start. If the fan-out runs before the slow tier settles, those reads miss
+    // and fall back to per-panel RPCs that never re-read the late payload —
+    // wasting the ~500 KB slow-tier bootstrap. The shell LCP element already
+    // painted back in panelLayout.init() (Phase 1), so awaiting here is OFF the
+    // LCP critical path; it stays bounded by waitForBootstrapSlowTier's timeout
+    // (3.5 s browser / 8.5 s desktop). (#4512)
+    await slowTierReady;
+    if (this.state.isDestroyed) return;
+    this.viewportHydrationReadyAt = typeof performance !== 'undefined' &&
+      typeof performance.now === 'function'
+      ? performance.now()
+      : Date.now();
+    this.viewportHydrationReady = true;
+    // Register viewport triggers only after the slow bootstrap tier settles.
+    // Scrolls before this point are covered by the initial fan-out below, which
+    // scans the current viewport after readiness. Registering earlier lets a
+    // captured descendant scroll consume hydration keys before they arrive.
+    window.addEventListener('scroll', this.handleViewportPrime, {
+      passive: true,
+      capture: true,
+    });
+    window.addEventListener('resize', this.handleViewportPrime);
+    // Prime panel-specific data concurrently with bulk loading.
+    // primeVisiblePanelData owns ETF, Stablecoins, Gulf Economies, etc. that
+    // are NOT part of loadAllData. Running them in parallel prevents those
+    // panels from being blocked when a loadAllData batch is slow.
+    // Snapshot whether precision geometry was already loaded BEFORE the fan-out
+    // (the map renderer triggers the memoized fetch early). If so, the fan-out's
+    // geometry-dependent CII ingests already attributed correctly and the
+    // post-LCP replay would just be a redundant second CII compute + choropleth
+    // repaint, so we skip it below. (#4512)
+    const geometryReadyBeforeFanout = isCountryGeometryLoaded();
+    markLcpDebug('wm:data:initial-fanout-start');
+    await Promise.all([
+      this.dataLoader.loadAllData(),
+      this.primeVisiblePanelData(),
+    ]);
+    markLcpDebug('wm:data:initial-fanout-complete');
+    if (import.meta.env.VITE_E2E === '1') {
+      document.documentElement.dataset.wmInitialDataReady = 'true';
+    }
+    const countryGeometryReady = this.preloadCountryGeometryForPostLcpWork();
+
+    // If bootstrap was served from cache but live data just loaded, promote the status indicator
+    markBootstrapAsLive();
+    this.bootstrapHydrationState = getBootstrapHydrationState();
+    this.updateConnectivityUi();
+
+    // Initial correlation engine run is post-LCP background work. Wait for
+    // precision country geometry there instead of before visible data fan-out.
+    this.startPostLcpIntelligence(countryGeometryReady, geometryReadyBeforeFanout);
+
+    // Hide unconfigured layers after first data load
+    if (!isAisConfigured()) {
+      this.state.map?.hideLayerToggle('ais');
+    }
+    if (isOutagesConfigured() === false) {
+      this.state.map?.hideLayerToggle('outages');
+    }
+    if (!CYBER_LAYER_ENABLED) {
+      this.state.map?.hideLayerToggle('cyberThreats');
+    }
+
+    // Phase 7: Refresh scheduling
+    this.setupRefreshIntervals();
+    this.eventHandlers.setupSnapshotSaving();
+    cleanOldSnapshots().catch((e) => console.warn('[Storage] Snapshot cleanup failed:', e));
+
+    // Phase 8: Update checks
+    this.desktopUpdater.init();
+
+    // Analytics
+    trackEvent('wm_app_loaded', {
+      load_time_ms: Math.round(performance.now() - initStart),
+      panel_count: Object.keys(this.state.panels).length,
+    });
+    this.eventHandlers.setupPanelViewTracking();
   }
 
   private async loadFlightDelays(): Promise<void> {
@@ -4332,10 +4444,20 @@ export class App {
     }
   }
 
-  private updateMonitorResults(): void {
-    const monitorPanel = this.panels['monitors'] as MonitorPanel;
-    monitorPanel.renderResults(this.allNews);
-  }
+  /**
+   * Grace-timer state for the free-tier gate. Lives in a collaborator so the
+   * backstop can be driven by tests; App itself is not importable from the
+   * node:test suites.
+   */
+  private readonly freeTierGate = new FreeTierGate(() => {
+    if (this.shouldDeferTierPreferenceReconciliation()) return;
+    this.enforceFreeTierLimits();
+    this.panelLayout.healStoredTabSnapshots();
+    // Clerk can remain pending forever when its script or key is unavailable.
+    // The gate's deadline is the explicit free-tier answer in that case, so
+    // heal stale locked map-layer state as well as panel/source state.
+    this.healLockedMapLayers(true);
+  });
 
   private async runCorrelationAnalysis(): Promise<void> {
     try {

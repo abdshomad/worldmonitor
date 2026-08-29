@@ -185,9 +185,16 @@ export async function fetchFeed(feed: Feed): Promise<NewsItem[]> {
 
     const response = await fetchWithProxy(url);
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    const noStoreResponse = hasNoStoreCacheDirective(response.headers);
     const text = await response.text();
-    const parser = new DOMParser();
-    const doc = parser.parseFromString(text, 'text/xml');
+    const isMobile = isMobileDevice();
+    const doc = await parseFeedXml(text, isMobile);
+
+    // XML parsing is synchronous. It is serialized behind a yield so several
+    // completed mobile feed requests cannot parse back-to-back in one
+    // post-hydration task; yield again before querying and mapping entries.
+    // (#5165)
+    if (isMobile) await yieldToMain();
 
     const parseError = doc.querySelector('parsererror');
     if (parseError) {

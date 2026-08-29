@@ -11,28 +11,34 @@ export interface WeatherAlert {
   expires: Date;
   coordinates: [number, number][];
   centroid?: [number, number];
+  countryCode?: string;
+  source?: string;
+  geometryPrecision?: 'polygon' | 'point' | 'country';
+  productKind?: string;
+  issuedBy?: string;
+  wind?: string;
+  visibility?: string;
+  seaState?: string;
+  sourceUrl?: string;
 }
 
-interface NWSAlert {
+interface BootstrapAlert {
   id: string;
-  properties: {
-    event: string;
-    severity: string;
-    headline: string;
-    description: string;
-    areaDesc: string;
-    onset: string;
-    expires: string;
-  };
-  geometry?: {
-    type: string;
-    coordinates: number[][][] | number[][];
-  };
+  event: string;
+  severity: string;
+  headline: string;
+  description: string;
+  areaDesc: string;
+  onset: string;
+  expires: string;
+  coordinates: [number, number][];
+  centroid?: [number, number];
+  countryCode?: string;
+  source?: string;
+  geometryPrecision?: 'polygon' | 'point' | 'country';
 }
 
-interface NWSResponse {
-  features: NWSAlert[];
-}
+const breaker = createCircuitBreaker<WeatherAlert[]>({ name: 'NWS + ECCC + WMO SWIC Weather', cacheTtlMs: 30 * 60 * 1000, persistCache: true });
 
 const NWS_API = 'https://api.weather.gov/alerts/active';
 const breaker = createCircuitBreaker<WeatherAlert[]>({ name: 'NWS Weather' });
@@ -72,33 +78,8 @@ export function getWeatherStatus(): string {
   return breaker.getStatus();
 }
 
-function extractCoordinates(geometry?: NWSAlert['geometry']): [number, number][] {
-  if (!geometry) return [];
-
-  try {
-    if (geometry.type === 'Polygon') {
-      const coords = geometry.coordinates as unknown as number[][][];
-      return coords[0]?.map(c => [c[0], c[1]] as [number, number]) || [];
-    }
-    if (geometry.type === 'MultiPolygon') {
-      const coords = geometry.coordinates as unknown as number[][][][];
-      return coords[0]?.[0]?.map(c => [c[0], c[1]] as [number, number]) || [];
-    }
-  } catch {
-    return [];
-  }
-  return [];
-}
-
-function calculateCentroid(coords: [number, number][]): [number, number] | undefined {
-  if (coords.length === 0) return undefined;
-
-  const sum = coords.reduce(
-    (acc, [lon, lat]) => [acc[0] + lon, acc[1] + lat],
-    [0, 0]
-  );
-
-  return [sum[0] / coords.length, sum[1] / coords.length];
+export function getWeatherStatus(): string {
+  return breaker.getStatus();
 }
 
 export function getSeverityColor(severity: WeatherAlert['severity']): string {

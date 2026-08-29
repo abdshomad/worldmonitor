@@ -12,6 +12,7 @@ const LAYER_KEYS: (keyof MapLayers)[] = [
   'irradiators',
   'sanctions',
   'weather',
+  'canadaRoads', 'canadaAlerts',
   'economic',
   'waterways',
   'outages',
@@ -50,29 +51,51 @@ export interface ParsedMapUrlState {
 const clamp = (value: number, min: number, max: number): number =>
   Math.min(max, Math.max(min, value));
 
+const parseEnumParam = <T extends string>(
+  params: URLSearchParams,
+  key: string,
+  allowed: readonly T[]
+): T | undefined => {
+  const value = params.get(key);
+  return value && allowed.includes(value as T) ? (value as T) : undefined;
+};
+
+const parseClampedFloatParam = (
+  params: URLSearchParams,
+  key: string,
+  min: number,
+  max: number
+): number | undefined => {
+  const rawValue = params.get(key);
+  const value = rawValue ? Number.parseFloat(rawValue) : NaN;
+  return Number.isFinite(value) ? clamp(value, min, max) : undefined;
+};
+
 export function parseMapUrlState(
   search: string,
   fallbackLayers: MapLayers
 ): ParsedMapUrlState {
   const params = new URLSearchParams(search);
 
-  const viewParam = params.get('view');
-  const view = VIEW_VALUES.includes(viewParam as MapView) ? (viewParam as MapView) : undefined;
+  const view = parseEnumParam(params, 'view', VIEW_VALUES);
+  const zoom = parseClampedFloatParam(params, 'zoom', 1, 10);
+  const lat = parseClampedFloatParam(params, 'lat', -90, 90);
+  const lon = parseClampedFloatParam(params, 'lon', -180, 180);
+  const timeRange = parseEnumParam(params, 'timeRange', TIME_RANGES);
 
-  const zoomParam = params.get('zoom');
-  const zoomValue = zoomParam ? Number.parseFloat(zoomParam) : NaN;
-  const zoom = Number.isFinite(zoomValue) ? clamp(zoomValue, 1, 10) : undefined;
+  const countryParam = params.get('country');
+  const country = countryParam && /^[A-Z]{2}$/i.test(countryParam.trim()) ? countryParam.trim().toUpperCase() : undefined;
 
-  const latParam = params.get('lat');
-  const lonParam = params.get('lon');
-  const latValue = latParam ? Number.parseFloat(latParam) : NaN;
-  const lonValue = lonParam ? Number.parseFloat(lonParam) : NaN;
-  const lat = Number.isFinite(latValue) ? clamp(latValue, -90, 90) : undefined;
-  const lon = Number.isFinite(lonValue) ? clamp(lonValue, -180, 180) : undefined;
+  const expandedParam = params.get('expanded');
+  const expanded = expandedParam === '1' ? true : undefined;
 
-  const timeRangeParam = params.get('timeRange');
-  const timeRange = TIME_RANGES.includes(timeRangeParam as TimeRange)
-    ? (timeRangeParam as TimeRange)
+  // Chokepoint deep-link (?chokepoint=bab_el_mandeb): opens the waterway popup on
+  // the live map. Value is a canonical chokepoint/waterway id (lowercase, snake).
+  // The map resolves it against STRATEGIC_WATERWAYS and no-ops on an unknown id,
+  // so this only needs to reject obviously malformed input.
+  const chokepointParam = params.get('chokepoint');
+  const chokepoint = chokepointParam && /^[a-z][a-z0-9_]{1,40}$/i.test(chokepointParam.trim())
+    ? chokepointParam.trim().toLowerCase()
     : undefined;
 
   const countryParam = params.get('country');
@@ -122,7 +145,13 @@ export function buildMapUrl(
     country?: string;
   }
 ): string {
-  const url = new URL(baseUrl);
+  let url: URL;
+  try {
+    url = new URL(baseUrl);
+  } catch {
+    // window.location.origin can be "null" string in some in-app browsers / WebViews
+    url = new URL(window.location.href);
+  }
   const params = new URLSearchParams();
 
   if (state.center) {

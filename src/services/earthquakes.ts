@@ -4,22 +4,15 @@ import { createCircuitBreaker } from '@/utils';
 import { getPersistentCache, setPersistentCache } from './persistent-cache';
 import { fetchWithProxy } from '@/utils';
 
-interface USGSFeature {
-  id: string;
-  properties: {
-    place: string;
-    mag: number;
-    time: number;
-    url: string;
-  };
-  geometry: {
-    coordinates: [number, number, number];
-  };
-}
+// Proto Earthquake.source / .category (fields 12 / 13) carry USGS vs NRCan
+// attribution. Keep the union so dashboard/MCP can narrow 'usgs' | 'nrcan'.
+export type Earthquake = ProtoEarthquake & {
+  source?: 'usgs' | 'nrcan' | string;
+  category?: string;
+};
 
-interface USGSResponse {
-  features: USGSFeature[];
-}
+const client = new SeismologyServiceClient(getRpcBaseUrl(), { fetch: (...args) => globalThis.fetch(...args) });
+const breaker = createCircuitBreaker<ListEarthquakesResponse>({ name: 'Seismology', cacheTtlMs: 30 * 60 * 1000, persistCache: true });
 
 const OVERLAY_CACHE_KEY = 'map-overlay:earthquakes';
 const breaker = createCircuitBreaker<Earthquake[]>({ name: 'USGS Earthquakes' });

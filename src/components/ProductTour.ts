@@ -55,6 +55,8 @@ export class ProductTour {
 
   start(stepIndex = 0): void {
     this.destroy();
+    // Safety cleanup: remove any lingering overlays or cards
+    document.querySelectorAll('.icc-tour-overlay, .icc-tour-card').forEach((el) => el.remove());
     this.currentStep = Math.max(0, Math.min(stepIndex, TOUR_STEPS.length - 1));
     this.render();
   }
@@ -183,10 +185,15 @@ export class ProductTour {
       window.removeEventListener('keydown', this.boundKeyHandler);
       this.boundKeyHandler = null;
     }
-    this.overlayEl?.remove();
-    this.cardEl?.remove();
-    this.overlayEl = null;
-    this.cardEl = null;
+    if (this.overlayEl) {
+      this.overlayEl.remove();
+      this.overlayEl = null;
+    }
+    if (this.cardEl) {
+      this.cardEl.remove();
+      this.cardEl = null;
+    }
+    document.querySelectorAll('.icc-tour-overlay, .icc-tour-card').forEach((el) => el.remove());
   }
 }
 

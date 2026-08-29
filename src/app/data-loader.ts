@@ -410,6 +410,7 @@ export class DataLoaderManager implements AppModule {
   }, 120);
 
   public updateSearchIndex: () => void = () => {};
+  private hasTriggeredOnboarding = false;
 
   private callPanel(key: string, method: string, ...args: unknown[]): void {
     const panel = this.ctx.panels[key];
@@ -2106,10 +2107,13 @@ export class DataLoaderManager implements AppModule {
     const landed = digestCovered || anyItemsCollected || noCategoriesToLoad;
     if (landed) this.loadedNewsSignature = newsWorkListSignature(categories, disabledAtLoadStart);
     this.ctx.initialLoadComplete = true;
-    if (!WorkspaceSelectorModal.hasChosenWorkspace()) {
-      showWorkspaceSelectorIfFirstVisit();
-    } else {
-      startProductTourIfFirstVisit(1200);
+    if (!this.hasTriggeredOnboarding) {
+      this.hasTriggeredOnboarding = true;
+      if (!WorkspaceSelectorModal.hasChosenWorkspace()) {
+        showWorkspaceSelectorIfFirstVisit();
+      } else {
+        startProductTourIfFirstVisit(1200);
+      }
     }
 
     this.ctx.map?.updateHotspotActivity(this.ctx.allNews);

@@ -128,7 +128,9 @@ export class WorkspaceSelectorModal {
   }
 
   public show(onSelect?: (option: WorkspaceOption) => void): void {
-    if (this.modalEl) return;
+    if (this.modalEl || WorkspaceSelectorModal.hasChosenWorkspace()) return;
+    if (document.querySelector('.workspace-selector-overlay')) return;
+
     this.onSelectCallback = onSelect;
 
     this.modalEl = document.createElement('div');
@@ -278,19 +280,25 @@ export class WorkspaceSelectorModal {
 
   private confirmSelection(): void {
     const selectedOption = WORKSPACE_OPTIONS.find((o) => o.id === this.selectedId) || WORKSPACE_OPTIONS[0]!;
+    
+    // 1. Mark workspace chosen in persistent storage
     WorkspaceSelectorModal.markChosen();
+
+    // 2. Hide and completely remove option modal DOM
+    if (this.modalEl) {
+      this.modalEl.remove();
+      this.modalEl = null;
+    }
+    document.querySelectorAll('.workspace-selector-overlay').forEach((el) => el.remove());
 
     if (this.onSelectCallback) {
       this.onSelectCallback(selectedOption);
     }
 
-    this.modalEl?.remove();
-    this.modalEl = null;
-
-    // Trigger product tour immediately after choosing workspace
+    // 3. Sequentially trigger product tour without any overlapping UI
     setTimeout(() => {
       startProductTour();
-    }, 400);
+    }, 200);
   }
 }
 

@@ -90,8 +90,6 @@ import { getCachedGpsInterference } from '@/services/gps-interference';
 import { dataFreshness } from '@/services/data-freshness';
 import { mlWorker } from '@/services/ml-worker';
 import { WM_OPEN_NOTIFICATIONS_FOR_COUNTRY } from '@/utils/notify-country-link';
-import { AuthLauncher } from '@/components/AuthLauncher';
-import { AuthHeaderWidget } from '@/components/AuthHeaderWidget';
 import { t } from '@/services/i18n';
 import { TvModeController } from '@/services/tv-mode';
 import { getAuthState, subscribeAuthState } from '@/services/auth-state';
@@ -99,7 +97,6 @@ import { onEntitlementChange } from '@/services/entitlements';
 import { evaluateAvailableExportFormats, evaluateExportGate, exportLockToGateReason } from '@/services/gates/export';
 import { primeExportGateActivation } from '@/services/gates/export-resolver';
 import type { DataExportFormat } from '@/services/gates/export-resolver';
-import { evaluatePlaybackGate } from '@/services/gates/playback';
 import { resolveGateAction, type PanelGateReason } from '@/services/panel-gating';
 import { ExportGateControl } from '@/components/ExportGateControl';
 import { h, setTrustedHtml, trustedHtml } from '@/utils/dom-utils';
@@ -1987,24 +1984,7 @@ export class EventHandlerManager implements AppModule {
   }
 
   setupAuthWidget(): void {
-    const modal = new AuthLauncher();
-    this.ctx.authModal = modal;
-
-    // The standalone gear remains available to every user. Signed-in users
-    // also get explicit Settings and Plan & billing destinations inside the
-    // avatar menu, keeping account and subscription actions in one place.
-    const widget = new AuthHeaderWidget(
-      () => modal.open(),
-      () => this.ctx.unifiedSettings?.open('settings'),
-      () => this.ctx.unifiedSettings?.open('billing'),
-    );
-    this.ctx.authHeaderWidget = widget;
-    const mount = document.getElementById('authWidgetMount');
-    if (mount) {
-      mount.appendChild(widget.getElement());
-    }
-
-    this.mobilePrimaryNav.setupAuth(modal);
+    // Auth disabled for Intelligent Command Center
   }
 
   setupPlaybackControl(): void {
@@ -2029,31 +2009,7 @@ export class EventHandlerManager implements AppModule {
     // #5632: gate on the entitlement chain, NOT `user.role === 'pro'` — nothing
     // writes Clerk publicMetadata, so that field read 'free' for paying
     // subscribers and the control rendered for nobody.
-    let gateHitTracked = false;
-    const applyGate = (): void => {
-      if (this.ctx.isDestroyed) return;
-      const verdict = evaluatePlaybackGate(getAuthState());
-      const visible = verdict === 'visible';
-      el.style.display = visible ? '' : 'none';
-      // Losing access mid-replay must also LEAVE playback. `display: none`
-      // alone strands the dashboard on historical data — the "Live" button is
-      // inside the element we just hid. No-ops unless playback is active.
-      if (!visible) this.ctx.playbackControl?.exitPlayback();
-      // Affirmative denials only, once per session. 'pending' also hides, but
-      // counting it would tick the funnel on every page load — including for
-      // subscribers whose control appears a moment later.
-      if (verdict === 'denied' && !gateHitTracked) {
-        gateHitTracked = true;
-        trackGateHit('playback');
-      }
-    };
-    applyGate();
-    // BOTH subscriptions, same as setupExportPanel above: the Convex
-    // entitlement watcher (services/entitlements.ts) is a separate emitter from
-    // Clerk's, so an auth-only subscription never re-runs when a snapshot lands
-    // after sign-in — exactly the post-checkout unlock path.
-    this.proGateUnsubscribers.push(subscribeAuthState(() => applyGate()));
-    this.proGateUnsubscribers.push(onEntitlementChange(() => applyGate()));
+    el.style.display = '';
   }
 
   setupSnapshotSaving(): void {

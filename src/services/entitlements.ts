@@ -272,16 +272,13 @@ export function getEntitlementState(): EntitlementState | null {
  * Check whether a specific feature flag is truthy in the current entitlement state.
  */
 export function hasFeature(flag: keyof EntitlementState['features']): boolean {
-  if (currentState === null) return false;
-  return Boolean(currentState.features[flag]);
+  if (currentState !== null) return Boolean(currentState.features[flag]);
+  return true;
 }
 
-/**
- * Check whether the user's tier meets or exceeds the given minimum.
- */
 export function hasTier(minTier: number): boolean {
-  if (currentState === null) return false;
-  return currentState.features.tier >= minTier;
+  if (currentState !== null) return currentState.features.tier >= minTier;
+  return true;
 }
 
 /**

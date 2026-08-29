@@ -1,17 +1,37 @@
 import { getRecentSignals, type CorrelationSignal } from '@/services/correlation';
-import { getRecentAlerts, type UnifiedAlert } from '@/services/cross-module-integration';
+import type { UnifiedAlert } from '@/services/cross-module-integration';
+import { getAlertSettings, updateAlertSettings } from '@/services/breaking-news-alerts';
 import { t } from '@/services/i18n';
 import { getSignalContext } from '@/utils/analysis-constants';
 import { escapeHtml } from '@/utils/sanitize';
+import { trackFindingClicked } from '@/services/analytics';
+import { setTrustedHtml, trustedHtml } from '@/utils/dom-utils';
+import { createFocusTrap, type FocusTrap } from '@/utils/focus-trap';
+import { bindActivationKeys } from '@/utils/activation';
+
 
 const LOW_COUNT_THRESHOLD = 3;
 const MAX_VISIBLE_FINDINGS = 10;
 const SORT_TIME_TOLERANCE_MS = 60000;
-const REFRESH_INTERVAL_MS = 10000;
+const REFRESH_INTERVAL_MS = 180000;
 const ALERT_HOURS = 6;
 const STORAGE_KEY = 'worldmonitor-intel-findings';
+const POPUP_STORAGE_KEY = 'wm-alert-popup-enabled';
 
 type FindingSource = 'signal' | 'alert';
+type GetRecentAlerts = typeof import('@/services/cross-module-integration').getRecentAlerts;
+
+let getRecentAlertsPromise: Promise<GetRecentAlerts> | null = null;
+
+function loadGetRecentAlerts(): Promise<GetRecentAlerts> {
+  getRecentAlertsPromise ??= import('@/services/cross-module-integration')
+    .then(module => module.getRecentAlerts)
+    .catch((err) => {
+      getRecentAlertsPromise = null;
+      throw err;
+    });
+  return getRecentAlertsPromise;
+}
 
 interface UnifiedFinding {
   id: string;
@@ -35,18 +55,34 @@ export class IntelligenceFindingsBadge {
   private onAlertClick: ((alert: UnifiedAlert) => void) | null = null;
   private findings: UnifiedFinding[] = [];
   private boundCloseDropdown = () => this.closeDropdown();
+  private pendingUpdateFrame = 0;
+  private boundUpdate = () => {
+    if (this.pendingUpdateFrame) return;
+    this.pendingUpdateFrame = requestAnimationFrame(() => {
+      this.pendingUpdateFrame = 0;
+      void this.update();
+    });
+  };
   private audio: HTMLAudioElement | null = null;
   private audioEnabled = true;
   private enabled: boolean;
+  private popupEnabled: boolean;
   private contextMenu: HTMLElement | null = null;
+  private contextMenuDismissListener: (() => void) | null = null;
+  private findingsModalOverlay: HTMLElement | null = null;
+  private findingsModalEscListener: ((e: KeyboardEvent) => void) | null = null;
+  private findingsModalTrap: FocusTrap | null = null;
+  private updateEpoch = 0;
+  private destroyed = false;
 
   constructor() {
     this.enabled = IntelligenceFindingsBadge.getStoredEnabledState();
+    this.popupEnabled = localStorage.getItem(POPUP_STORAGE_KEY) === '1';
 
     this.badge = document.createElement('button');
     this.badge.className = 'intel-findings-badge';
     this.badge.title = t('components.intelligenceFindings.badgeTitle');
-    this.badge.innerHTML = '<span class="findings-icon">🎯</span><span class="findings-count">0</span>';
+    setTrustedHtml(this.badge, trustedHtml('<span class="findings-icon">🎯</span><span class="findings-count">0</span>', "legacy direct innerHTML migration"));
 
     this.dropdown = document.createElement('div');
     this.dropdown.className = 'intel-findings-dropdown';
@@ -62,9 +98,30 @@ export class IntelligenceFindingsBadge {
       this.showContextMenu(e.clientX, e.clientY);
     });
 
-    // Event delegation for finding items and "more" link
+    // Event delegation for finding items, toggle, and "more" link
+    bindActivationKeys(this.dropdown, '.finding-item');
     this.dropdown.addEventListener('click', (e) => {
       const target = e.target as HTMLElement;
+
+      const toggleAttr = target.closest('[data-toggle]')?.getAttribute('data-toggle');
+      if (toggleAttr === 'popup') {
+        e.stopPropagation();
+        this.popupEnabled = !this.popupEnabled;
+        if (this.popupEnabled) {
+          localStorage.setItem(POPUP_STORAGE_KEY, '1');
+        } else {
+          localStorage.removeItem(POPUP_STORAGE_KEY);
+        }
+        this.renderDropdown();
+        return;
+      }
+      if (toggleAttr === 'breaking-alerts') {
+        e.stopPropagation();
+        const settings = getAlertSettings();
+        updateAlertSettings({ enabled: !settings.enabled });
+        this.renderDropdown();
+        return;
+      }
 
       // Handle "more findings" click - show all in modal
       if (target.closest('.findings-more')) {
@@ -82,6 +139,7 @@ export class IntelligenceFindingsBadge {
       const finding = this.findings.find(f => f.id === id);
       if (!finding) return;
 
+      trackFindingClicked(finding.id, finding.source, finding.type, finding.priority);
       if (finding.source === 'signal' && this.onSignalClick) {
         this.onSignalClick(finding.original as CorrelationSignal);
       } else if (finding.source === 'alert' && this.onAlertClick) {
@@ -94,7 +152,7 @@ export class IntelligenceFindingsBadge {
       document.addEventListener('click', this.boundCloseDropdown);
       this.mount();
       this.initAudio();
-      this.update();
+      void this.update();
       this.startRefresh();
     }
   }
@@ -107,7 +165,7 @@ export class IntelligenceFindingsBadge {
   private playSound(): void {
     if (this.audioEnabled && this.audio) {
       this.audio.currentTime = 0;
-      this.audio.play().catch(() => {});
+      this.audio.play()?.catch(() => {});
     }
   }
 
@@ -127,6 +185,10 @@ export class IntelligenceFindingsBadge {
     return this.enabled;
   }
 
+  public isPopupEnabled(): boolean {
+    return this.popupEnabled;
+  }
+
   public setEnabled(enabled: boolean): void {
     if (this.enabled === enabled) return;
     this.enabled = enabled;
@@ -136,11 +198,13 @@ export class IntelligenceFindingsBadge {
       document.addEventListener('click', this.boundCloseDropdown);
       this.mount();
       this.initAudio();
-      this.update();
+      void this.update();
       this.startRefresh();
     } else {
+      this.updateEpoch++;
       localStorage.setItem(STORAGE_KEY, 'hidden');
       document.removeEventListener('click', this.boundCloseDropdown);
+      document.removeEventListener('wm:intelligence-updated', this.boundUpdate);
       if (this.refreshInterval) {
         clearInterval(this.refreshInterval);
         this.refreshInterval = null;
@@ -158,7 +222,7 @@ export class IntelligenceFindingsBadge {
     menu.className = 'intel-findings-context-menu';
     menu.style.left = `${x}px`;
     menu.style.top = `${y}px`;
-    menu.innerHTML = `<div class="context-menu-item">${t('components.intelligenceFindings.hideFindings')}</div>`;
+    setTrustedHtml(menu, trustedHtml(`<div class="context-menu-item">${t('components.intelligenceFindings.hideFindings')}</div>`, "legacy direct innerHTML migration"));
 
     menu.querySelector('.context-menu-item')!.addEventListener('click', (e) => {
       e.stopPropagation();
@@ -167,6 +231,7 @@ export class IntelligenceFindingsBadge {
     });
 
     const dismiss = () => this.dismissContextMenu();
+    this.contextMenuDismissListener = dismiss;
     document.addEventListener('click', dismiss, { once: true });
 
     this.contextMenu = menu;
@@ -174,6 +239,10 @@ export class IntelligenceFindingsBadge {
   }
 
   private dismissContextMenu(): void {
+    if (this.contextMenuDismissListener) {
+      document.removeEventListener('click', this.contextMenuDismissListener);
+      this.contextMenuDismissListener = null;
+    }
     if (this.contextMenu) {
       this.contextMenu.remove();
       this.contextMenu = null;
@@ -189,11 +258,18 @@ export class IntelligenceFindingsBadge {
   }
 
   private startRefresh(): void {
-    this.refreshInterval = setInterval(() => this.update(), REFRESH_INTERVAL_MS);
+    document.addEventListener('wm:intelligence-updated', this.boundUpdate);
+    this.refreshInterval = setInterval(() => {
+      if (document.visibilityState === 'visible') this.boundUpdate();
+    }, REFRESH_INTERVAL_MS);
   }
 
-  public update(): void {
-    this.findings = this.mergeFindings();
+  public async update(): Promise<void> {
+    const epoch = ++this.updateEpoch;
+    const findings = await this.mergeFindings();
+    if (this.destroyed || !this.enabled || epoch !== this.updateEpoch) return;
+
+    this.findings = findings;
     const count = this.findings.length;
 
     const countEl = this.badge.querySelector('.findings-count');
@@ -205,7 +281,7 @@ export class IntelligenceFindingsBadge {
     if (count > this.lastFindingCount && this.lastFindingCount > 0) {
       this.badge.classList.add('pulse');
       setTimeout(() => this.badge.classList.remove('pulse'), 1000);
-      this.playSound();
+      if (this.popupEnabled) this.playSound();
     }
     this.lastFindingCount = count;
 
@@ -231,9 +307,15 @@ export class IntelligenceFindingsBadge {
     this.renderDropdown();
   }
 
-  private mergeFindings(): UnifiedFinding[] {
+  private async mergeFindings(): Promise<UnifiedFinding[]> {
     const signals = getRecentSignals();
-    const alerts = getRecentAlerts(ALERT_HOURS);
+    let alerts: UnifiedAlert[] = [];
+    try {
+      const getRecentAlerts = await loadGetRecentAlerts();
+      alerts = getRecentAlerts(ALERT_HOURS);
+    } catch (error) {
+      console.warn('[IntelligenceGapBadge] Alert findings unavailable:', error);
+    }
 
     const signalFindings: UnifiedFinding[] = signals.map(s => ({
       id: `signal-${s.id}`,
@@ -279,20 +361,38 @@ export class IntelligenceFindingsBadge {
     return map[priority] ?? 0;
   }
 
+  private renderPopupToggle(): string {
+    const label = t('components.intelligenceFindings.popupAlerts');
+    const checked = this.popupEnabled;
+    const breakingSettings = getAlertSettings();
+    const breakingLabel = t('components.intelligenceFindings.breakingAlerts');
+    return `<div class="popup-toggle-row" data-toggle="popup">
+        <span class="popup-toggle-label">🔔 ${escapeHtml(label)}</span>
+        <span class="popup-toggle-switch${checked ? ' on' : ''}"><span class="popup-toggle-knob"></span></span>
+      </div>
+      <div class="popup-toggle-row" data-toggle="breaking-alerts">
+        <span class="popup-toggle-label">🚨 ${escapeHtml(breakingLabel)}</span>
+        <span class="popup-toggle-switch${breakingSettings.enabled ? ' on' : ''}"><span class="popup-toggle-knob"></span></span>
+      </div>`;
+  }
+
   private renderDropdown(): void {
+    const toggleHtml = this.renderPopupToggle();
+
     if (this.findings.length === 0) {
-      this.dropdown.innerHTML = `
+      setTrustedHtml(this.dropdown, trustedHtml(`
         <div class="findings-header">
           <span class="header-title">${t('components.intelligenceFindings.title')}</span>
           <span class="findings-badge none">${t('components.intelligenceFindings.monitoring')}</span>
         </div>
+        ${toggleHtml}
         <div class="findings-content">
           <div class="findings-empty">
             <span class="empty-icon">📡</span>
             <span class="empty-text">${t('components.intelligenceFindings.scanning')}</span>
           </div>
         </div>
-      `;
+      `, "legacy direct innerHTML migration"));
       return;
     }
 
@@ -316,7 +416,7 @@ export class IntelligenceFindingsBadge {
       const insight = this.getInsight(finding);
 
       return `
-        <div class="finding-item ${priorityClass}" data-finding-id="${escapeHtml(finding.id)}">
+        <div class="finding-item ${priorityClass}" data-finding-id="${escapeHtml(finding.id)}" role="button" tabindex="0">
           <div class="finding-header">
             <span class="finding-type">${icon} ${escapeHtml(finding.title)}</span>
             <span class="finding-confidence ${priorityClass}">${t(`components.intelligenceFindings.priority.${finding.priority}`)}</span>
@@ -331,18 +431,19 @@ export class IntelligenceFindingsBadge {
     }).join('');
 
     const moreCount = this.findings.length - MAX_VISIBLE_FINDINGS;
-    this.dropdown.innerHTML = `
+    setTrustedHtml(this.dropdown, trustedHtml(`
       <div class="findings-header">
         <span class="header-title">${t('components.intelligenceFindings.title')}</span>
         <span class="findings-badge ${statusClass}">${statusText}</span>
       </div>
+      ${toggleHtml}
       <div class="findings-content">
         <div class="findings-list">
           ${findingsHtml}
         </div>
         ${moreCount > 0 ? `<div class="findings-more">${t('components.intelligenceFindings.more', { count: String(moreCount) })}</div>` : ''}
       </div>
-    `;
+    `, "legacy direct innerHTML migration"));
   }
 
   private getInsight(finding: UnifiedFinding): string {
@@ -360,6 +461,7 @@ export class IntelligenceFindingsBadge {
     }
     if (alert.type === 'convergence') return t('components.intelligenceFindings.insights.convergence');
     if (alert.type === 'cascade') return t('components.intelligenceFindings.insights.cascade');
+    if (alert.type === 'radiation') return 'Elevated radiation readings warrant validation against recent baseline and nearby industrial or environmental activity';
     return t('components.intelligenceFindings.insights.review');
   }
 
@@ -383,6 +485,7 @@ export class IntelligenceFindingsBadge {
       // Unified alerts
       cii_spike: '🔴',
       cascade: '⚡',
+      radiation: '☢️',
       composite: '🔗',
     };
     return icons[type] || '📌';
@@ -401,7 +504,7 @@ export class IntelligenceFindingsBadge {
     this.dropdown.classList.toggle('open', this.isOpen);
     this.badge.classList.toggle('active', this.isOpen);
     if (this.isOpen) {
-      this.update();
+      void this.update();
     }
   }
 
@@ -415,6 +518,9 @@ export class IntelligenceFindingsBadge {
     // Create modal overlay
     const overlay = document.createElement('div');
     overlay.className = 'findings-modal-overlay';
+    overlay.setAttribute('role', 'dialog');
+    overlay.setAttribute('aria-modal', 'true');
+    overlay.setAttribute('aria-label', t('components.intelligenceFindings.all', { count: String(this.findings.length) }));
 
     const findingsHtml = this.findings.map(finding => {
       const timeAgo = this.formatTimeAgo(finding.timestamp);
@@ -422,7 +528,7 @@ export class IntelligenceFindingsBadge {
       const insight = this.getInsight(finding);
 
       return `
-        <div class="findings-modal-item ${finding.priority}" data-finding-id="${escapeHtml(finding.id)}">
+        <div class="findings-modal-item ${finding.priority}" data-finding-id="${escapeHtml(finding.id)}" role="button" tabindex="0">
           <div class="findings-modal-item-header">
             <span class="findings-modal-item-type">${icon} ${escapeHtml(finding.title)}</span>
             <span class="findings-modal-item-priority ${finding.priority}">${t(`components.intelligenceFindings.priority.${finding.priority}`)}</span>
@@ -436,50 +542,91 @@ export class IntelligenceFindingsBadge {
       `;
     }).join('');
 
-    overlay.innerHTML = `
+    setTrustedHtml(overlay, trustedHtml(`
       <div class="findings-modal">
         <div class="findings-modal-header">
           <span class="findings-modal-title">🎯 ${t('components.intelligenceFindings.all', { count: String(this.findings.length) })}</span>
-          <button class="findings-modal-close">×</button>
+          <button class="findings-modal-close" aria-label="Close">×</button>
         </div>
         <div class="findings-modal-content">
           ${findingsHtml}
         </div>
       </div>
-    `;
+    `, "legacy direct innerHTML migration"));
 
-    // Add click handlers
-    overlay.querySelector('.findings-modal-close')?.addEventListener('click', () => overlay.remove());
+    // Replace any modal already open so we never leak more than one overlay
+    // or its document-level Esc listener.
+    this.dismissFindingsModal();
+    const closeOverlay = () => this.dismissFindingsModal();
+    const onEsc = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') closeOverlay();
+    };
+    overlay.querySelector('.findings-modal-close')?.addEventListener('click', closeOverlay);
     overlay.addEventListener('click', (e) => {
       if ((e.target as HTMLElement).classList.contains('findings-modal-overlay')) {
-        overlay.remove();
+        closeOverlay();
       }
     });
+    document.addEventListener('keydown', onEsc);
+    this.findingsModalOverlay = overlay;
+    this.findingsModalEscListener = onEsc;
 
     // Handle clicking individual items
     overlay.querySelectorAll('.findings-modal-item').forEach(item => {
+      item.addEventListener('keydown', (e) => {
+        const key = (e as KeyboardEvent).key;
+        if (key !== 'Enter' && key !== ' ') return;
+        e.preventDefault();
+        (item as HTMLElement).click();
+      });
       item.addEventListener('click', () => {
         const id = item.getAttribute('data-finding-id');
         const finding = this.findings.find(f => f.id === id);
         if (!finding) return;
 
+        trackFindingClicked(finding.id, finding.source, finding.type, finding.priority);
         if (finding.source === 'signal' && this.onSignalClick) {
           this.onSignalClick(finding.original as CorrelationSignal);
-          overlay.remove();
+          closeOverlay();
         } else if (finding.source === 'alert' && this.onAlertClick) {
           this.onAlertClick(finding.original as UnifiedAlert);
-          overlay.remove();
+          closeOverlay();
         }
       });
     });
 
     document.body.appendChild(overlay);
+    this.findingsModalTrap = createFocusTrap(overlay, {
+      onEscape: () => this.dismissFindingsModal(),
+    });
+    this.findingsModalTrap.activate();
+  }
+
+  private dismissFindingsModal(): void {
+    if (this.findingsModalEscListener) {
+      document.removeEventListener('keydown', this.findingsModalEscListener);
+      this.findingsModalEscListener = null;
+    }
+    this.findingsModalTrap?.deactivate();
+    this.findingsModalTrap = null;
+    if (this.findingsModalOverlay) {
+      this.findingsModalOverlay.remove();
+      this.findingsModalOverlay = null;
+    }
   }
 
   public destroy(): void {
+    this.destroyed = true;
+    this.updateEpoch++;
     if (this.refreshInterval) {
       clearInterval(this.refreshInterval);
     }
+    if (this.pendingUpdateFrame) {
+      cancelAnimationFrame(this.pendingUpdateFrame);
+    }
+    this.dismissContextMenu();
+    this.dismissFindingsModal();
+    document.removeEventListener('wm:intelligence-updated', this.boundUpdate);
     document.removeEventListener('click', this.boundCloseDropdown);
     this.badge.remove();
   }

@@ -1,7 +1,9 @@
 export function formatTime(date: Date): string {
   const now = new Date();
   const diff = Math.floor((now.getTime() - date.getTime()) / 1000);
-  const lang = getCurrentLanguage();
+  // Script-sensitive, so the full tag: Intl renders zh as Simplified, which put
+  // 分钟/小时/上周 in front of Traditional readers on every timestamped item.
+  const lang = getCurrentLanguageTag();
 
   // Safe fallback if Intl is not available (though it is in all modern browsers)
   try {
@@ -117,40 +119,6 @@ export function rafSchedule<T extends (...args: unknown[]) => void>(fn: T): ((..
   return wrapped;
 }
 
-export function throttle<T extends (...args: unknown[]) => void>(
-  fn: T,
-  limit: number
-): (...args: Parameters<T>) => void {
-  // Time-based throttling for non-visual work where a fixed minimum interval is desired.
-  let inThrottle = false;
-  return (...args: Parameters<T>) => {
-    if (!inThrottle) {
-      fn(...args);
-      inThrottle = true;
-      setTimeout(() => { inThrottle = false; }, limit);
-    }
-  };
-}
-
-export function rafSchedule<T extends (...args: unknown[]) => void>(fn: T): (...args: Parameters<T>) => void {
-  // Frame-synchronized scheduling for visual updates; batches repeated calls into one render frame.
-  let scheduled = false;
-  let lastArgs: Parameters<T> | null = null;
-  return (...args: Parameters<T>) => {
-    lastArgs = args;
-    if (!scheduled) {
-      scheduled = true;
-      requestAnimationFrame(() => {
-        scheduled = false;
-        if (lastArgs) {
-          fn(...lastArgs);
-          lastArgs = null;
-        }
-      });
-    }
-  };
-}
-
 export function loadFromStorage<T>(key: string, defaultValue: T): T {
   try {
     const stored = localStorage.getItem(key);
@@ -168,25 +136,7 @@ export function loadFromStorage<T>(key: string, defaultValue: T): T {
   return defaultValue;
 }
 
-let _storageQuotaExceeded = false;
-
-export function isStorageQuotaExceeded(): boolean {
-  return _storageQuotaExceeded;
-}
-
-export function isQuotaError(e: unknown): boolean {
-  return e instanceof DOMException && (e.name === 'QuotaExceededError' || e.code === 22);
-}
-
-export function markStorageQuotaExceeded(): void {
-  if (!_storageQuotaExceeded) {
-    _storageQuotaExceeded = true;
-    console.warn('[Storage] Quota exceeded — disabling further writes');
-  }
-}
-
 export function saveToStorage<T>(key: string, value: T): void {
-  if (_storageQuotaExceeded) return;
   try {
     localStorage.setItem(key, JSON.stringify(value));
   } catch (e) {
@@ -208,14 +158,6 @@ export const MOBILE_BREAKPOINT_PX = 768;
 /** True when viewport is below mobile breakpoint. Touch-capable notebooks keep desktop layout. */
 export function isMobileDevice(): boolean {
   return window.innerWidth <= MOBILE_BREAKPOINT_PX;
-}
-
-/** Breakpoint (px): below this width the app uses the simplified mobile layout. Must match CSS @media (max-width: …). */
-export const MOBILE_BREAKPOINT_PX = 768;
-
-/** True when viewport is below mobile breakpoint. Touch-capable notebooks keep desktop layout. */
-export function isMobileDevice(): boolean {
-  return window.innerWidth < MOBILE_BREAKPOINT_PX;
 }
 
 export function chunkArray<T>(items: T[], size: number): T[][] {
@@ -254,7 +196,11 @@ export { CircuitBreaker, createCircuitBreaker, getCircuitBreakerStatus, getCircu
 export type { CircuitBreakerOptions } from './circuit-breaker';
 export * from './analysis-constants';
 export { getCSSColor, invalidateColorCache } from './theme-colors';
-export { getStoredTheme, getCurrentTheme, setTheme, applyStoredTheme } from './theme-manager';
-export type { Theme } from './theme-manager';
+export { getStoredTheme, getCurrentTheme, setTheme, applyStoredTheme, getThemePreference, setThemePreference } from './theme-manager';
+export type { Theme, ThemePreference } from './theme-manager';
+export { toFlagEmoji } from './country-flag';
+export { showToast } from './toast';
 
-import { getCurrentLanguage } from '../services/i18n';
+import { getCurrentLanguageTag } from '../services/i18n';
+import { isQuotaError, markStorageQuotaExceeded } from './storage-quota';
+export { isStorageQuotaExceeded, isQuotaError, markStorageQuotaExceeded } from './storage-quota';

@@ -1,33 +1,47 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+mod cache_bounds;
+
+use std::collections::HashMap;
+use std::env;
 use std::fs::{self, File, OpenOptions};
 use std::io::Write;
-use std::path::{Path, PathBuf};
-use std::process::{Child, Command, Stdio};
-use std::collections::HashMap;
-use std::sync::Mutex;
-use std::time::{SystemTime, UNIX_EPOCH};
-use std::env;
 #[cfg(windows)]
 use std::os::windows::process::CommandExt;
+use std::path::{Path, PathBuf};
+use std::process::{Child, Command, Stdio};
+use std::sync::{Arc, Mutex};
+use std::time::{SystemTime, UNIX_EPOCH};
 
 use keyring::Entry;
 use reqwest::Url;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 use tauri::menu::{AboutMetadata, Menu, MenuItem, PredefinedMenuItem, Submenu};
-use tauri::{AppHandle, Manager, RunEvent, WindowEvent, WebviewUrl, WebviewWindowBuilder};
+use tauri::{AppHandle, Manager, RunEvent, Webview, WebviewUrl, WebviewWindowBuilder, WindowEvent};
 
-const LOCAL_API_PORT: &str = "46123";
+use cache_bounds::validate_cache_write_sizes;
+
+const DEFAULT_LOCAL_API_PORT: u16 = 46123;
+const SIDECAR_PORT_RECOVERY_TIMEOUT_MS: u64 = 30_000;
+const MAX_LOCAL_API_PROXY_BYTES: usize = 16 * 1024 * 1024;
 const KEYRING_SERVICE: &str = "world-monitor";
 const LOCAL_API_LOG_FILE: &str = "local-api.log";
 const DESKTOP_LOG_FILE: &str = "desktop.log";
 const MENU_FILE_SETTINGS_ID: &str = "file.settings";
 const MENU_HELP_GITHUB_ID: &str = "help.github";
+#[cfg(feature = "devtools")]
 const MENU_HELP_DEVTOOLS_ID: &str = "help.devtools";
-const SUPPORTED_SECRET_KEYS: [&str; 20] = [
+const TRUSTED_WINDOWS: [&str; 3] = ["main", "settings", "live-channels"];
+const SECRET_MANAGEMENT_WINDOWS: [&str; 2] = ["main", "settings"];
+const DESKTOP_SHARED_SECRET_KEY: &str = "WM_DESKTOP_SHARED_SECRET";
+const BUILD_TIME_SIDECAR_ENV_KEYS: [&str; 2] = ["CONVEX_URL", DESKTOP_SHARED_SECRET_KEY];
+const SUPPORTED_SECRET_KEYS: [&str; 30] = [
     "GROQ_API_KEY",
     "OPENROUTER_API_KEY",
+    "EXA_API_KEYS",
+    "BRAVE_API_KEYS",
+    "SERPAPI_API_KEYS",
     "FRED_API_KEY",
     "EIA_API_KEY",
     "CLOUDFLARE_API_TOKEN",
@@ -43,21 +57,55 @@ const SUPPORTED_SECRET_KEYS: [&str; 20] = [
     "AISSTREAM_API_KEY",
     "VITE_WS_RELAY_URL",
     "FINNHUB_API_KEY",
+    "ALPHA_VANTAGE_API_KEY",
     "NASA_FIRMS_API_KEY",
+    "UCDP_ACCESS_TOKEN",
     "OLLAMA_API_URL",
     "OLLAMA_MODEL",
+    "WORLDMONITOR_API_KEY",
+    "WTO_API_KEY",
+    "AVIATIONSTACK_API",
+    "ICAO_API_KEY",
+    DESKTOP_SHARED_SECRET_KEY,
 ];
 
-#[derive(Default)]
 struct LocalApiState {
-    child: Mutex<Option<Child>>,
+    child: Arc<Mutex<Option<Child>>>,
     token: Mutex<Option<String>>,
+    port: Arc<Mutex<Option<u16>>>,
+    http_client: reqwest::Client,
+}
+
+impl Default for LocalApiState {
+    fn default() -> Self {
+        Self {
+            child: Arc::new(Mutex::new(None)),
+            token: Mutex::new(None),
+            port: Arc::new(Mutex::new(None)),
+            http_client: reqwest::Client::builder()
+                .use_native_tls()
+                .pool_max_idle_per_host(2)
+                .build()
+                .unwrap_or_default(),
+        }
+    }
 }
 
 /// In-memory cache for keychain secrets. Populated once at startup to avoid
 /// repeated macOS Keychain prompts (each `Entry::get_password()` triggers one).
 struct SecretsCache {
     secrets: Mutex<HashMap<String, String>>,
+}
+
+/// In-memory mirror of persistent-cache.json. The file can grow to 10+ MB,
+/// so reading/parsing/writing it on every IPC call blocks the main thread.
+/// Instead, load once into RAM and serialize writes to preserve ordering.
+struct PersistentCache {
+    data: Mutex<Map<String, Value>>,
+    dirty: Mutex<bool>,
+    write_lock: Mutex<()>,
+    generation: Mutex<u64>,
+    flush_scheduled: Mutex<bool>,
 }
 
 impl SecretsCache {
@@ -73,7 +121,9 @@ impl SecretsCache {
                         })
                         .map(|(k, v)| (k, v.trim().to_string()))
                         .collect();
-                    return SecretsCache { secrets: Mutex::new(secrets) };
+                    return SecretsCache {
+                        secrets: Mutex::new(secrets),
+                    };
                 }
             }
         }
@@ -107,7 +157,64 @@ impl SecretsCache {
             }
         }
 
-        SecretsCache { secrets: Mutex::new(secrets) }
+        SecretsCache {
+            secrets: Mutex::new(secrets),
+        }
+    }
+}
+
+impl PersistentCache {
+    fn load(path: &Path) -> Self {
+        let data = if path.exists() {
+            std::fs::read_to_string(path)
+                .ok()
+                .and_then(|s| serde_json::from_str::<Value>(&s).ok())
+                .and_then(|v| v.as_object().cloned())
+                .unwrap_or_default()
+        } else {
+            Map::new()
+        };
+        PersistentCache {
+            data: Mutex::new(data),
+            dirty: Mutex::new(false),
+            write_lock: Mutex::new(()),
+            generation: Mutex::new(0),
+            flush_scheduled: Mutex::new(false),
+        }
+    }
+
+    fn get(&self, key: &str) -> Option<Value> {
+        let data = self.data.lock().unwrap_or_else(|e| e.into_inner());
+        data.get(key).cloned()
+    }
+
+    /// Flush to disk only if dirty. Returns Ok(true) if written.
+    /// Uses atomic write (temp file + rename) to prevent corruption on crash.
+    fn flush(&self, path: &Path) -> Result<bool, String> {
+        let _write_guard = self.write_lock.lock().unwrap_or_else(|e| e.into_inner());
+
+        let is_dirty = {
+            let dirty = self.dirty.lock().unwrap_or_else(|e| e.into_inner());
+            *dirty
+        };
+        if !is_dirty {
+            return Ok(false);
+        }
+
+        let data = self.data.lock().unwrap_or_else(|e| e.into_inner());
+        let serialized = serde_json::to_string(&Value::Object(data.clone()))
+            .map_err(|e| format!("Failed to serialize cache: {e}"))?;
+        drop(data);
+
+        let tmp = path.with_extension("tmp");
+        std::fs::write(&tmp, &serialized)
+            .map_err(|e| format!("Failed to write cache tmp {}: {e}", tmp.display()))?;
+        std::fs::rename(&tmp, path)
+            .map_err(|e| format!("Failed to rename cache {}: {e}", path.display()))?;
+
+        let mut dirty = self.dirty.lock().unwrap_or_else(|e| e.into_inner());
+        *dirty = false;
+        Ok(true)
     }
 }
 
@@ -115,101 +222,324 @@ impl SecretsCache {
 struct DesktopRuntimeInfo {
     os: String,
     arch: String,
+    local_api_port: Option<u16>,
+}
+
+#[derive(Deserialize)]
+struct LocalApiProxyRequest {
+    method: String,
+    path: String,
+    headers: HashMap<String, String>,
+    body: Option<Vec<u8>>,
+}
+
+#[derive(Serialize)]
+struct LocalApiProxyResponse {
+    status: u16,
+    headers: HashMap<String, String>,
+    body: Vec<u8>,
+}
+
+#[derive(Serialize)]
+struct SecretValidationResponse {
+    status: u16,
+    payload: Value,
 }
 
 fn save_vault(cache: &HashMap<String, String>) -> Result<(), String> {
-    let json = serde_json::to_string(cache)
-        .map_err(|e| format!("Failed to serialize vault: {e}"))?;
+    let json =
+        serde_json::to_string(cache).map_err(|e| format!("Failed to serialize vault: {e}"))?;
     let entry = Entry::new(KEYRING_SERVICE, "secrets-vault")
         .map_err(|e| format!("Keyring init failed: {e}"))?;
-    entry.set_password(&json)
+    entry
+        .set_password(&json)
         .map_err(|e| format!("Failed to write vault: {e}"))?;
     Ok(())
 }
 
 fn generate_local_token() -> String {
-    use std::collections::hash_map::RandomState;
-    use std::hash::{BuildHasher, Hasher};
-    let state = RandomState::new();
-    let mut h1 = state.build_hasher();
-    h1.write_u64(std::process::id() as u64);
-    let a = h1.finish();
-    let mut h2 = state.build_hasher();
-    let nanos = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map(|d| d.as_nanos())
-        .unwrap_or(0);
-    h2.write_u128(nanos);
-    let b = h2.finish();
-    format!("{a:016x}{b:016x}")
+    let mut buf = [0u8; 32];
+    getrandom::getrandom(&mut buf).expect("OS CSPRNG unavailable");
+    buf.iter().map(|b| format!("{b:02x}")).collect()
 }
 
-#[tauri::command]
-fn get_local_api_token(state: tauri::State<'_, LocalApiState>) -> Result<String, String> {
+fn require_trusted_window(label: &str) -> Result<(), String> {
+    if TRUSTED_WINDOWS.contains(&label) {
+        Ok(())
+    } else {
+        Err(format!("Command not allowed from window '{label}'"))
+    }
+}
+
+fn can_manage_renderer_secrets(label: &str) -> bool {
+    SECRET_MANAGEMENT_WINDOWS.contains(&label)
+}
+
+// The shared desktop secret is host-managed. All other supported vault keys
+// may be configured by the first-party main/settings renderers.
+fn is_renderer_managed_secret_key(key: &str) -> bool {
+    key != DESKTOP_SHARED_SECRET_KEY && SUPPORTED_SECRET_KEYS.contains(&key)
+}
+
+fn require_secret_management_window(label: &str) -> Result<(), String> {
+    if can_manage_renderer_secrets(label) {
+        Ok(())
+    } else {
+        Err(format!("Secret management not allowed from window '{label}'"))
+    }
+}
+
+fn configured_renderer_secret_keys(secrets: &HashMap<String, String>) -> Vec<String> {
+    secrets
+        .keys()
+        .filter(|key| is_renderer_managed_secret_key(key))
+        .cloned()
+        .collect()
+}
+
+fn normalized_local_api_proxy_path(path: &str) -> Result<String, String> {
+    let url = Url::parse(&format!("http://127.0.0.1{path}"))
+        .map_err(|_| "Invalid local API path".to_string())?;
+    if url.host_str() != Some("127.0.0.1") || url.fragment().is_some() {
+        return Err("Invalid local API path".to_string());
+    }
+    Ok(match url.query() {
+        Some(query) => format!("{}?{query}", url.path()),
+        None => url.path().to_string(),
+    })
+}
+
+fn normalized_local_api_proxy_path_is_allowed(normalized_path: &str) -> bool {
+    let route = normalized_path.split('?').next().unwrap_or(normalized_path);
+    route.starts_with("/api/")
+        && !route.starts_with("//")
+        && (!route.starts_with("/api/local-")
+            || matches!(route, "/api/local-debug-toggle" | "/api/local-traffic-log"))
+        // Keep the denylist explicit as a guard against accidentally widening
+        // the local-* exception above during future maintenance.
+        && route != "/api/local-env-update"
+        && route != "/api/local-env-update-batch"
+        && route != "/api/local-validate-secret"
+}
+
+#[cfg(test)]
+fn local_api_proxy_path_is_allowed(path: &str) -> bool {
+    normalized_local_api_proxy_path(path)
+        .is_ok_and(|normalized| normalized_local_api_proxy_path_is_allowed(&normalized))
+}
+
+async fn send_local_api_request(
+    state: &LocalApiState,
+    method: &str,
+    path: &str,
+    headers: &HashMap<String, String>,
+    body: Option<Vec<u8>>,
+) -> Result<LocalApiProxyResponse, String> {
+    if body.as_ref().is_some_and(|body| body.len() > MAX_LOCAL_API_PROXY_BYTES) {
+        return Err("Local API request body exceeds the proxy limit".to_string());
+    }
+    let port = state
+        .port
+        .lock()
+        .map_err(|_| "Failed to lock local API port".to_string())?
+        .ok_or_else(|| "Local API sidecar is not ready".to_string())?;
     let token = state
         .token
         .lock()
-        .map_err(|_| "Failed to lock local API token".to_string())?;
-    token.clone().ok_or_else(|| "Token not generated".to_string())
+        .map_err(|_| "Failed to lock local API token".to_string())?
+        .clone()
+        .ok_or_else(|| "Local API token is unavailable".to_string())?;
+    let method = reqwest::Method::from_bytes(method.as_bytes())
+        .map_err(|_| "Unsupported local API method".to_string())?;
+    let url = Url::parse(&format!("http://127.0.0.1:{port}{path}"))
+        .map_err(|_| "Invalid local API path".to_string())?;
+    let mut request = state.http_client.request(method, url).bearer_auth(token);
+    for (name, value) in headers {
+        if !name.eq_ignore_ascii_case("authorization")
+            && !name.eq_ignore_ascii_case("host")
+            && !name.eq_ignore_ascii_case("content-length")
+        {
+            request = request.header(name, value);
+        }
+    }
+    if let Some(body) = body {
+        request = request.body(body);
+    }
+    let response = request
+        .send()
+        .await
+        .map_err(|error| format!("Local API request failed: {error}"))?;
+    let status = response.status().as_u16();
+    let headers = response
+        .headers()
+        .iter()
+        .filter_map(|(name, value)| value.to_str().ok().map(|value| (name.to_string(), value.to_string())))
+        .collect();
+    let body = response
+        .bytes()
+        .await
+        .map_err(|error| format!("Failed to read local API response: {error}"))?
+        .to_vec();
+    if body.len() > MAX_LOCAL_API_PROXY_BYTES {
+        return Err("Local API response exceeds the proxy limit".to_string());
+    }
+    Ok(LocalApiProxyResponse { status, headers, body })
 }
 
 #[tauri::command]
-fn get_desktop_runtime_info() -> DesktopRuntimeInfo {
-    DesktopRuntimeInfo {
+async fn proxy_local_api_request(
+    webview: Webview,
+    request: LocalApiProxyRequest,
+    state: tauri::State<'_, LocalApiState>,
+) -> Result<LocalApiProxyResponse, String> {
+    require_secret_management_window(webview.label())?;
+    let normalized_path = normalized_local_api_proxy_path(&request.path)?;
+    let route = normalized_path.split('?').next().unwrap_or(&normalized_path);
+    if !normalized_local_api_proxy_path_is_allowed(&normalized_path) {
+        return Err(format!("Local API route is not proxyable: {route}"));
+    }
+    send_local_api_request(&state, &request.method, &normalized_path, &request.headers, request.body).await
+}
+
+#[tauri::command]
+fn get_desktop_runtime_info(webview: Webview, state: tauri::State<'_, LocalApiState>) -> Result<DesktopRuntimeInfo, String> {
+    require_trusted_window(webview.label())?;
+    let port = state.port.lock().ok().and_then(|g| *g);
+    Ok(DesktopRuntimeInfo {
         os: env::consts::OS.to_string(),
         arch: env::consts::ARCH.to_string(),
-    }
+        local_api_port: port,
+    })
 }
 
 #[tauri::command]
-fn list_supported_secret_keys() -> Vec<String> {
-    SUPPORTED_SECRET_KEYS.iter().map(|key| (*key).to_string()).collect()
+fn get_local_api_port(webview: Webview, state: tauri::State<'_, LocalApiState>) -> Result<u16, String> {
+    require_trusted_window(webview.label())?;
+    state.port.lock()
+        .map_err(|_| "Failed to lock port state".to_string())?
+        .ok_or_else(|| "Port not yet assigned".to_string())
 }
 
 #[tauri::command]
-fn get_secret(key: String, cache: tauri::State<'_, SecretsCache>) -> Result<Option<String>, String> {
-    if !SUPPORTED_SECRET_KEYS.contains(&key.as_str()) {
-        return Err(format!("Unsupported secret key: {key}"));
-    }
-    let secrets = cache.secrets.lock().map_err(|_| "Lock poisoned".to_string())?;
-    Ok(secrets.get(&key).cloned())
+fn list_configured_secret_keys(
+    webview: Webview,
+    cache: tauri::State<'_, SecretsCache>,
+) -> Result<Vec<String>, String> {
+    require_secret_management_window(webview.label())?;
+    let secrets = cache
+        .secrets
+        .lock()
+        .map_err(|_| "Lock poisoned".to_string())?;
+    Ok(configured_renderer_secret_keys(&secrets))
 }
 
-#[tauri::command]
-fn get_all_secrets(cache: tauri::State<'_, SecretsCache>) -> HashMap<String, String> {
-    cache.secrets.lock().unwrap_or_else(|e| e.into_inner()).clone()
-}
-
-#[tauri::command]
-fn set_secret(key: String, value: String, cache: tauri::State<'_, SecretsCache>) -> Result<(), String> {
-    if !SUPPORTED_SECRET_KEYS.contains(&key.as_str()) {
-        return Err(format!("Unsupported secret key: {key}"));
-    }
-    let mut secrets = cache.secrets.lock().map_err(|_| "Lock poisoned".to_string())?;
-    let trimmed = value.trim().to_string();
-    // Build proposed state, persist first, then commit to cache
+fn update_renderer_secret_cache(
+    cache: &SecretsCache,
+    key: &str,
+    value: Option<&str>,
+) -> Result<(), String> {
+    let mut secrets = cache
+        .secrets
+        .lock()
+        .map_err(|_| "Lock poisoned".to_string())?;
+    // Build proposed state, persist first, then commit to cache.
     let mut proposed = secrets.clone();
-    if trimmed.is_empty() {
-        proposed.remove(&key);
-    } else {
-        proposed.insert(key, trimmed);
+    match value {
+        Some(value) => {
+            proposed.insert(key.to_string(), value.to_string());
+        }
+        None => {
+            proposed.remove(key);
+        }
     }
     save_vault(&proposed)?;
     *secrets = proposed;
     Ok(())
 }
 
+async fn sync_renderer_secret_to_sidecar(
+    state: &LocalApiState,
+    key: &str,
+    value: Option<&str>,
+) {
+    let body = match serde_json::to_vec(&serde_json::json!({ "key": key, "value": value })) {
+        Ok(body) => body,
+        Err(error) => {
+            eprintln!("[tauri] failed to serialize local secret sync for {key}: {error}");
+            return;
+        }
+    };
+    let headers = HashMap::from([(String::from("Content-Type"), String::from("application/json"))]);
+    match send_local_api_request(state, "POST", "/api/local-env-update", &headers, Some(body)).await {
+        Ok(response) if (200..300).contains(&response.status) => {}
+        Ok(response) => eprintln!(
+            "[tauri] local secret sync for {key} returned HTTP {}",
+            response.status
+        ),
+        Err(error) => eprintln!("[tauri] local secret sync failed for {key}: {error}"),
+    }
+}
+
 #[tauri::command]
-fn delete_secret(key: String, cache: tauri::State<'_, SecretsCache>) -> Result<(), String> {
-    if !SUPPORTED_SECRET_KEYS.contains(&key.as_str()) {
+async fn set_secret(
+    webview: Webview,
+    key: String,
+    value: String,
+    cache: tauri::State<'_, SecretsCache>,
+    state: tauri::State<'_, LocalApiState>,
+) -> Result<(), String> {
+    require_secret_management_window(webview.label())?;
+    if !is_renderer_managed_secret_key(&key) {
         return Err(format!("Unsupported secret key: {key}"));
     }
-    let mut secrets = cache.secrets.lock().map_err(|_| "Lock poisoned".to_string())?;
-    let mut proposed = secrets.clone();
-    proposed.remove(&key);
-    save_vault(&proposed)?;
-    *secrets = proposed;
+    let value = (!value.trim().is_empty()).then(|| value.trim().to_string());
+    update_renderer_secret_cache(&cache, &key, value.as_deref())?;
+    sync_renderer_secret_to_sidecar(&state, &key, value.as_deref()).await;
     Ok(())
+}
+
+#[tauri::command]
+async fn delete_secret(
+    webview: Webview,
+    key: String,
+    cache: tauri::State<'_, SecretsCache>,
+    state: tauri::State<'_, LocalApiState>,
+) -> Result<(), String> {
+    require_secret_management_window(webview.label())?;
+    if !is_renderer_managed_secret_key(&key) {
+        return Err(format!("Unsupported secret key: {key}"));
+    }
+    update_renderer_secret_cache(&cache, &key, None)?;
+    sync_renderer_secret_to_sidecar(&state, &key, None).await;
+    Ok(())
+}
+
+#[tauri::command]
+async fn validate_secret_with_sidecar(
+    webview: Webview,
+    key: String,
+    value: String,
+    context: HashMap<String, String>,
+    state: tauri::State<'_, LocalApiState>,
+) -> Result<SecretValidationResponse, String> {
+    require_secret_management_window(webview.label())?;
+    if !is_renderer_managed_secret_key(&key) {
+        return Err(format!("Unsupported secret key: {key}"));
+    }
+    let body = serde_json::to_vec(&serde_json::json!({ "key": key, "value": value, "context": context }))
+        .map_err(|error| format!("Failed to serialize secret validation: {error}"))?;
+    let headers = HashMap::from([(String::from("Content-Type"), String::from("application/json"))]);
+    let response = send_local_api_request(&state, "POST", "/api/local-validate-secret", &headers, Some(body)).await?;
+    let payload = serde_json::from_slice(&response.body).unwrap_or_else(|_| {
+        serde_json::json!({
+            "valid": false,
+            "message": format!("Secret validation returned HTTP {} with an invalid response", response.status),
+        })
+    });
+    Ok(SecretValidationResponse {
+        status: response.status,
+        payload,
+    })
 }
 
 fn cache_file_path(app: &AppHandle) -> Result<PathBuf, String> {
@@ -223,45 +553,118 @@ fn cache_file_path(app: &AppHandle) -> Result<PathBuf, String> {
 }
 
 #[tauri::command]
-fn read_cache_entry(app: AppHandle, key: String) -> Result<Option<Value>, String> {
-    let path = cache_file_path(&app)?;
-    if !path.exists() {
-        return Ok(None);
+fn read_cache_entry(webview: Webview, cache: tauri::State<'_, PersistentCache>, key: String) -> Result<Option<Value>, String> {
+    require_trusted_window(webview.label())?;
+    Ok(cache.get(&key))
+}
+
+const MAX_FLUSH_RETRIES: u32 = 5;
+
+fn schedule_debounced_flush(cache: &PersistentCache, app: &AppHandle) {
+    {
+        let mut gen = cache.generation.lock().unwrap_or_else(|e| e.into_inner());
+        *gen += 1;
     }
-
-    let contents = std::fs::read_to_string(&path)
-        .map_err(|e| format!("Failed to read cache store {}: {e}", path.display()))?;
-    let parsed: Value = serde_json::from_str(&contents).unwrap_or_else(|_| Value::Object(Map::new()));
-    let Some(root) = parsed.as_object() else {
-        return Ok(None);
+    let should_spawn = {
+        let mut sched = cache.flush_scheduled.lock().unwrap_or_else(|e| e.into_inner());
+        if *sched {
+            false
+        } else {
+            *sched = true;
+            true
+        }
     };
-
-    Ok(root.get(&key).cloned())
+    if should_spawn {
+        let handle = app.app_handle().clone();
+        std::thread::spawn(move || {
+            let mut retries = 0u32;
+            loop {
+                std::thread::sleep(std::time::Duration::from_secs(2));
+                let Some(c) = handle.try_state::<PersistentCache>() else { break };
+                let Ok(path) = cache_file_path(&handle) else { break };
+                let gen_before = *c.generation.lock().unwrap_or_else(|e| e.into_inner());
+                match c.flush(&path) {
+                    Ok(_) => {
+                        retries = 0;
+                        let gen_after = *c.generation.lock().unwrap_or_else(|e| e.into_inner());
+                        if gen_after > gen_before {
+                            continue;
+                        }
+                        *c.flush_scheduled.lock().unwrap_or_else(|e| e.into_inner()) = false;
+                        break;
+                    }
+                    Err(e) => {
+                        retries += 1;
+                        eprintln!("[cache] flush error ({retries}/{MAX_FLUSH_RETRIES}): {e}");
+                        if retries >= MAX_FLUSH_RETRIES {
+                            eprintln!("[cache] giving up after {MAX_FLUSH_RETRIES} failures");
+                            *c.flush_scheduled.lock().unwrap_or_else(|e| e.into_inner()) = false;
+                            break;
+                        }
+                        continue;
+                    }
+                }
+            }
+        });
+    }
 }
 
 #[tauri::command]
-fn write_cache_entry(app: AppHandle, key: String, value: String) -> Result<(), String> {
-    let path = cache_file_path(&app)?;
+fn delete_cache_entry(webview: Webview, app: AppHandle, cache: tauri::State<'_, PersistentCache>, key: String) -> Result<(), String> {
+    require_trusted_window(webview.label())?;
+    {
+        let mut data = cache.data.lock().unwrap_or_else(|e| e.into_inner());
+        data.remove(&key);
+    }
+    {
+        let mut dirty = cache.dirty.lock().unwrap_or_else(|e| e.into_inner());
+        *dirty = true;
+    }
+    schedule_debounced_flush(&cache, &app);
+    Ok(())
+}
 
-    let mut root: Map<String, Value> = if path.exists() {
-        let contents = std::fs::read_to_string(&path)
-            .map_err(|e| format!("Failed to read cache store {}: {e}", path.display()))?;
-        serde_json::from_str::<Value>(&contents)
-            .ok()
-            .and_then(|v| v.as_object().cloned())
-            .unwrap_or_default()
-    } else {
-        Map::new()
+#[tauri::command]
+fn delete_cache_entries_by_prefix(webview: Webview, app: AppHandle, cache: tauri::State<'_, PersistentCache>, prefix: String) -> Result<(), String> {
+    require_trusted_window(webview.label())?;
+    let suffix = prefix
+        .strip_prefix("breaker:")
+        .ok_or_else(|| "delete_cache_entries_by_prefix only accepts breaker: prefixes".to_string())?;
+    if suffix.is_empty() || suffix.chars().all(|ch| ch == ':') {
+        return Err("delete_cache_entries_by_prefix requires a specific breaker: prefix".to_string());
+    }
+    let removed_any = {
+        let mut data = cache.data.lock().unwrap_or_else(|e| e.into_inner());
+        let before = data.len();
+        data.retain(|key, _| !key.starts_with(&prefix));
+        data.len() != before
     };
+    if removed_any {
+        {
+            let mut dirty = cache.dirty.lock().unwrap_or_else(|e| e.into_inner());
+            *dirty = true;
+        }
+        schedule_debounced_flush(&cache, &app);
+    }
+    Ok(())
+}
 
+#[tauri::command]
+fn write_cache_entry(webview: Webview, app: AppHandle, cache: tauri::State<'_, PersistentCache>, key: String, value: String) -> Result<(), String> {
+    require_trusted_window(webview.label())?;
+    validate_cache_write_sizes(&key, &value)?;
     let parsed_value: Value = serde_json::from_str(&value)
         .map_err(|e| format!("Invalid cache payload JSON: {e}"))?;
-    root.insert(key, parsed_value);
-
-    let serialized = serde_json::to_string_pretty(&Value::Object(root))
-        .map_err(|e| format!("Failed to serialize cache store: {e}"))?;
-    std::fs::write(&path, serialized)
-        .map_err(|e| format!("Failed to write cache store {}: {e}", path.display()))
+    {
+        let mut data = cache.data.lock().unwrap_or_else(|e| e.into_inner());
+        data.insert(key, parsed_value);
+    }
+    {
+        let mut dirty = cache.dirty.lock().unwrap_or_else(|e| e.into_inner());
+        *dirty = true;
+    }
+    schedule_debounced_flush(&cache, &app);
+    Ok(())
 }
 
 fn logs_dir_path(app: &AppHandle) -> Result<PathBuf, String> {
@@ -299,31 +702,29 @@ fn append_desktop_log(app: &AppHandle, level: &str, message: &str) {
 }
 
 fn open_in_shell(arg: &str) -> Result<(), String> {
-    #[cfg(target_os = "macos")]
-    let mut command = {
-        let mut cmd = Command::new("open");
-        cmd.arg(arg);
-        cmd
-    };
-
-    #[cfg(target_os = "windows")]
-    let mut command = {
-        let mut cmd = Command::new("explorer");
-        cmd.arg(arg);
-        cmd
-    };
-
+    // Linux keeps its own path: spawn xdg-open directly with LD_* scrubbed
+    // (library-injection hardening that a generic opener would drop).
     #[cfg(all(unix, not(target_os = "macos")))]
-    let mut command = {
+    {
         let mut cmd = Command::new("xdg-open");
         cmd.arg(arg);
-        cmd
-    };
+        cmd.env_remove("LD_LIBRARY_PATH");
+        cmd.env_remove("LD_PRELOAD");
+        cmd.spawn()
+            .map(|_| ())
+            .map_err(|e| format!("Failed to open {}: {e}", arg))
+    }
 
-    command
-        .spawn()
-        .map(|_| ())
-        .map_err(|e| format!("Failed to open {}: {e}", arg))
+    // macOS + Windows: `opener` opens the target with the OS default handler
+    // via `/usr/bin/open` (macOS) and `ShellExecuteW` (Windows). It NEVER routes
+    // through `cmd.exe`, so a URL containing shell metacharacters (`&`, `|`, …)
+    // is passed as a single argument and cannot inject commands. This is the fix
+    // for GHSA-2x6r-qq54-mmhr: the old Windows branch ran `cmd /c start "" <url>`
+    // with the URL unquoted, so `https://x/?a=1&calc` executed `calc` on click.
+    #[cfg(not(all(unix, not(target_os = "macos"))))]
+    {
+        opener::open(arg).map_err(|e| format!("Failed to open {}: {e}", arg))
+    }
 }
 
 fn open_path_in_shell(path: &Path) -> Result<(), String> {
@@ -331,7 +732,8 @@ fn open_path_in_shell(path: &Path) -> Result<(), String> {
 }
 
 #[tauri::command]
-fn open_url(url: String) -> Result<(), String> {
+fn open_url(webview: Webview, url: String) -> Result<(), String> {
+    require_trusted_window(webview.label())?;
     let parsed = Url::parse(&url).map_err(|_| "Invalid URL".to_string())?;
 
     match parsed.scheme() {
@@ -361,24 +763,75 @@ fn open_sidecar_log_impl(app: &AppHandle) -> Result<PathBuf, String> {
 }
 
 #[tauri::command]
-fn open_logs_folder(app: AppHandle) -> Result<String, String> {
+fn open_logs_folder(webview: Webview, app: AppHandle) -> Result<String, String> {
+    require_trusted_window(webview.label())?;
     open_logs_folder_impl(&app).map(|path| path.display().to_string())
 }
 
 #[tauri::command]
-fn open_sidecar_log_file(app: AppHandle) -> Result<String, String> {
+fn open_sidecar_log_file(webview: Webview, app: AppHandle) -> Result<String, String> {
+    require_trusted_window(webview.label())?;
     open_sidecar_log_impl(&app).map(|path| path.display().to_string())
 }
 
 #[tauri::command]
-async fn open_settings_window_command(app: AppHandle) -> Result<(), String> {
+async fn open_settings_window_command(webview: Webview, app: AppHandle) -> Result<(), String> {
+    require_trusted_window(webview.label())?;
     open_settings_window(&app)
 }
 
 #[tauri::command]
-fn close_settings_window(app: AppHandle) -> Result<(), String> {
+fn close_settings_window(webview: Webview, app: AppHandle) -> Result<(), String> {
+    require_trusted_window(webview.label())?;
     if let Some(window) = app.get_webview_window("settings") {
-        window.close().map_err(|e| format!("Failed to close settings window: {e}"))?;
+        window
+            .close()
+            .map_err(|e| format!("Failed to close settings window: {e}"))?;
+    }
+    Ok(())
+}
+
+#[tauri::command]
+async fn open_live_channels_window_command(
+    webview: Webview,
+    app: AppHandle,
+    base_url: Option<String>,
+) -> Result<(), String> {
+    require_trusted_window(webview.label())?;
+    if let Some(ref url) = base_url {
+        if !url.is_empty() {
+            let parsed = Url::parse(url).map_err(|_| "Invalid base URL".to_string())?;
+            // The live-channels webview holds trusted-window IPC privileges
+            // (persistent-cache read/write, port discovery, open_url), so its
+            // origin must be first-party — "any https" would hand those to a
+            // remote page if the main window is ever compromised.
+            let allowed = match parsed.scheme() {
+                "http" => matches!(parsed.host_str(), Some("localhost") | Some("127.0.0.1")),
+                "https" => match parsed.host_str() {
+                    Some(host) => {
+                        host == "worldmonitor.app" || host.ends_with(".worldmonitor.app")
+                    }
+                    None => false,
+                },
+                _ => false,
+            };
+            if !allowed {
+                return Err(
+                    "base_url must be worldmonitor.app (or localhost over http)".to_string(),
+                );
+            }
+        }
+    }
+    open_live_channels_window(&app, base_url)
+}
+
+#[tauri::command]
+fn close_live_channels_window(webview: Webview, app: AppHandle) -> Result<(), String> {
+    require_trusted_window(webview.label())?;
+    if let Some(window) = app.get_webview_window("live-channels") {
+        window
+            .close()
+            .map_err(|e| format!("Failed to close live channels window: {e}"))?;
     }
     Ok(())
 }
@@ -386,18 +839,15 @@ fn close_settings_window(app: AppHandle) -> Result<(), String> {
 /// Fetch JSON from Polymarket Gamma API using native TLS (bypasses Cloudflare JA3 blocking).
 /// Called from frontend when browser CORS and sidecar Node.js TLS both fail.
 #[tauri::command]
-async fn fetch_polymarket(path: String, params: String) -> Result<String, String> {
+async fn fetch_polymarket(webview: Webview, state: tauri::State<'_, LocalApiState>, path: String, params: String) -> Result<String, String> {
+    require_trusted_window(webview.label())?;
     let allowed = ["events", "markets", "tags"];
     let segment = path.trim_start_matches('/');
     if !allowed.iter().any(|a| segment.starts_with(a)) {
         return Err("Invalid Polymarket path".into());
     }
     let url = format!("https://gamma-api.polymarket.com/{}?{}", segment, params);
-    let client = reqwest::Client::builder()
-        .use_native_tls()
-        .build()
-        .map_err(|e| format!("HTTP client error: {e}"))?;
-    let resp = client
+    let resp = state.http_client
         .get(&url)
         .header("Accept", "application/json")
         .timeout(std::time::Duration::from_secs(10))
@@ -407,7 +857,9 @@ async fn fetch_polymarket(path: String, params: String) -> Result<String, String
     if !resp.status().is_success() {
         return Err(format!("Polymarket HTTP {}", resp.status()));
     }
-    resp.text().await.map_err(|e| format!("Read body failed: {e}"))
+    resp.text()
+        .await
+        .map_err(|e| format!("Read body failed: {e}"))
 }
 
 fn open_settings_window(app: &AppHandle) -> Result<(), String> {
@@ -419,12 +871,16 @@ fn open_settings_window(app: &AppHandle) -> Result<(), String> {
         return Ok(());
     }
 
-    let _settings_window = WebviewWindowBuilder::new(app, "settings", WebviewUrl::App("settings.html".into()))
+    #[allow(unused_mut)]
+    let mut settings_builder = WebviewWindowBuilder::new(app, "settings", WebviewUrl::App("settings.html".into()))
         .title("World Monitor Settings")
-        .inner_size(980.0, 760.0)
-        .min_inner_size(820.0, 620.0)
+        .inner_size(980.0, 600.0)
+        .min_inner_size(820.0, 480.0)
         .resizable(true)
-        .build()
+        .background_color(tauri::webview::Color(26, 28, 30, 255));
+    #[cfg(target_os = "macos")]
+    { settings_builder = settings_builder.title_bar_style(tauri::TitleBarStyle::Overlay); }
+    let _settings_window = settings_builder.build()
         .map_err(|e| format!("Failed to create settings window: {e}"))?;
 
     // On Windows/Linux, menus are per-window. Remove the inherited app menu
@@ -433,6 +889,77 @@ fn open_settings_window(app: &AppHandle) -> Result<(), String> {
     let _ = _settings_window.remove_menu();
 
     Ok(())
+}
+
+fn open_live_channels_window(app: &AppHandle, base_url: Option<String>) -> Result<(), String> {
+    if let Some(window) = app.get_webview_window("live-channels") {
+        let _ = window.show();
+        window
+            .set_focus()
+            .map_err(|e| format!("Failed to focus live channels window: {e}"))?;
+        return Ok(());
+    }
+
+    // In dev, use the same origin as the main window (e.g. http://localhost:3001) so we don't
+    // get "connection refused" when Vite runs on a different port than devUrl.
+    let url = match base_url {
+        Some(ref origin) if !origin.is_empty() => {
+            let path = origin.trim_end_matches('/');
+            let full_url = format!("{}/live-channels.html", path);
+            WebviewUrl::External(Url::parse(&full_url).map_err(|_| "Invalid base URL".to_string())?)
+        }
+        _ => WebviewUrl::App("live-channels.html".into()),
+    };
+
+    #[allow(unused_mut)]
+    let mut channels_builder = WebviewWindowBuilder::new(app, "live-channels", url)
+        .title("Channel management - World Monitor")
+        .inner_size(680.0, 760.0)
+        .min_inner_size(520.0, 600.0)
+        .resizable(true)
+        .background_color(tauri::webview::Color(26, 28, 30, 255));
+    #[cfg(target_os = "macos")]
+    { channels_builder = channels_builder.title_bar_style(tauri::TitleBarStyle::Overlay); }
+    let _live_channels_window = channels_builder.build()
+        .map_err(|e| format!("Failed to create live channels window: {e}"))?;
+
+    #[cfg(not(target_os = "macos"))]
+    let _ = _live_channels_window.remove_menu();
+
+    Ok(())
+}
+
+fn open_youtube_login_window(app: &AppHandle) -> Result<(), String> {
+    if let Some(window) = app.get_webview_window("youtube-login") {
+        let _ = window.show();
+        window
+            .set_focus()
+            .map_err(|e| format!("Failed to focus YouTube login window: {e}"))?;
+        return Ok(());
+    }
+
+    let url = WebviewUrl::External(
+        Url::parse("https://accounts.google.com/ServiceLogin?service=youtube&continue=https://www.youtube.com/")
+            .map_err(|e| format!("Invalid URL: {e}"))?
+    );
+
+    let _yt_window = WebviewWindowBuilder::new(app, "youtube-login", url)
+        .title("Sign in to YouTube")
+        .inner_size(500.0, 700.0)
+        .resizable(true)
+        .build()
+        .map_err(|e| format!("Failed to create YouTube login window: {e}"))?;
+
+    #[cfg(not(target_os = "macos"))]
+    let _ = _yt_window.remove_menu();
+
+    Ok(())
+}
+
+#[tauri::command]
+async fn open_youtube_login(webview: Webview, app: AppHandle) -> Result<(), String> {
+    require_trusted_window(webview.label())?;
+    open_youtube_login_window(&app)
 }
 
 fn build_app_menu(handle: &AppHandle) -> tauri::Result<Menu<tauri::Wry>> {
@@ -445,18 +972,35 @@ fn build_app_menu(handle: &AppHandle) -> tauri::Result<Menu<tauri::Wry>> {
     )?;
     let separator = PredefinedMenuItem::separator(handle)?;
     let quit_item = PredefinedMenuItem::quit(handle, Some("Quit"))?;
-    let file_menu =
-        Submenu::with_items(handle, "File", true, &[&settings_item, &separator, &quit_item])?;
+    let file_menu = Submenu::with_items(
+        handle,
+        "File",
+        true,
+        &[&settings_item, &separator, &quit_item],
+    )?;
 
+    // The About box is the only place a packaged build states its licence
+    // (#6977). Both fields are set because the platforms disagree about which
+    // one they render: muda ignores `license` on macOS and `credits` on
+    // Windows and Linux, so each has to carry the licence itself for the
+    // platform that shows it. `credits` also points at the notices file the
+    // build generates into resources/, which carries the verbatim MIT/BSD/
+    // Apache texts a binary distribution has to travel with.
     let about_metadata = AboutMetadata {
         name: Some("World Monitor".into()),
         version: Some(env!("CARGO_PKG_VERSION").into()),
-        copyright: Some("\u{00a9} 2025 Elie Habib".into()),
+        copyright: Some("\u{00a9} 2024-2026 Elie Habib".into()),
+        license: Some("AGPL-3.0-only".into()),
+        credits: Some(
+            "Licensed under AGPL-3.0-only.\nThird-party notices: resources/notices/THIRD-PARTY-NOTICES.md\nSource: https://github.com/koala73/worldmonitor"
+                .into(),
+        ),
         website: Some("https://worldmonitor.app".into()),
         website_label: Some("worldmonitor.app".into()),
         ..Default::default()
     };
-    let about_item = PredefinedMenuItem::about(handle, Some("About World Monitor"), Some(about_metadata))?;
+    let about_item =
+        PredefinedMenuItem::about(handle, Some("About World Monitor"), Some(about_metadata))?;
     let github_item = MenuItem::with_id(
         handle,
         MENU_HELP_GITHUB_ID,
@@ -464,19 +1008,31 @@ fn build_app_menu(handle: &AppHandle) -> tauri::Result<Menu<tauri::Wry>> {
         true,
         None::<&str>,
     )?;
-    let devtools_item = MenuItem::with_id(
-        handle,
-        MENU_HELP_DEVTOOLS_ID,
-        "Toggle Developer Tools",
-        true,
-        Some("CmdOrCtrl+Alt+I"),
-    )?;
     let help_separator = PredefinedMenuItem::separator(handle)?;
+
+    #[cfg(feature = "devtools")]
+    let help_menu = {
+        let devtools_item = MenuItem::with_id(
+            handle,
+            MENU_HELP_DEVTOOLS_ID,
+            "Toggle Developer Tools",
+            true,
+            Some("CmdOrCtrl+Alt+I"),
+        )?;
+        Submenu::with_items(
+            handle,
+            "Help",
+            true,
+            &[&about_item, &help_separator, &github_item, &devtools_item],
+        )?
+    };
+
+    #[cfg(not(feature = "devtools"))]
     let help_menu = Submenu::with_items(
         handle,
         "Help",
         true,
-        &[&about_item, &help_separator, &github_item, &devtools_item],
+        &[&about_item, &help_separator, &github_item],
     )?;
 
     let edit_menu = {
@@ -487,7 +1043,12 @@ fn build_app_menu(handle: &AppHandle) -> tauri::Result<Menu<tauri::Wry>> {
         let copy = PredefinedMenuItem::copy(handle, None)?;
         let paste = PredefinedMenuItem::paste(handle, None)?;
         let select_all = PredefinedMenuItem::select_all(handle, None)?;
-        Submenu::with_items(handle, "Edit", true, &[&undo, &redo, &sep1, &cut, &copy, &paste, &select_all])?
+        Submenu::with_items(
+            handle,
+            "Edit",
+            true,
+            &[&undo, &redo, &sep1, &cut, &copy, &paste, &select_all],
+        )?
     };
 
     Menu::with_items(handle, &[&file_menu, &edit_menu, &help_menu])
@@ -504,6 +1065,7 @@ fn handle_menu_event(app: &AppHandle, event: tauri::menu::MenuEvent) {
         MENU_HELP_GITHUB_ID => {
             let _ = open_in_shell("https://github.com/koala73/worldmonitor");
         }
+        #[cfg(feature = "devtools")]
         MENU_HELP_DEVTOOLS_ID => {
             if let Some(window) = app.get_webview_window("main") {
                 if window.is_devtools_open() {
@@ -531,10 +1093,63 @@ fn sanitize_path_for_node(p: &Path) -> String {
     }
 }
 
+fn build_time_sidecar_env_value(key: &str) -> Option<&'static str> {
+    match key {
+        "CONVEX_URL" => option_env!("CONVEX_URL"),
+        DESKTOP_SHARED_SECRET_KEY => option_env!("WM_DESKTOP_SHARED_SECRET"),
+        _ => None,
+    }
+    .filter(|value| !value.trim().is_empty())
+}
+
+fn sidecar_env_value(key: &str) -> Option<String> {
+    build_time_sidecar_env_value(key)
+        .map(ToString::to_string)
+        .or_else(|| std::env::var(key).ok().filter(|value| !value.trim().is_empty()))
+}
+
 #[cfg(test)]
 mod sanitize_path_tests {
-    use super::sanitize_path_for_node;
-    use std::path::Path;
+    use super::{
+        build_time_sidecar_env_value, can_manage_renderer_secrets, configured_renderer_secret_keys,
+        is_renderer_managed_secret_key, local_api_proxy_path_is_allowed, sanitize_path_for_node,
+        read_port_file, watch_for_late_sidecar_port, SidecarReadinessOutcome,
+        BUILD_TIME_SIDECAR_ENV_KEYS, DEFAULT_LOCAL_API_PORT, DESKTOP_SHARED_SECRET_KEY,
+        SUPPORTED_SECRET_KEYS,
+    };
+    use std::collections::HashMap;
+    use std::fs;
+    use std::path::{Path, PathBuf};
+    use std::process::{Child, Command};
+    use std::sync::{Arc, Mutex};
+    use std::time::{SystemTime, UNIX_EPOCH};
+
+    fn delayed_sidecar_test_child() -> Child {
+        Command::new(std::env::current_exe().expect("resolve test executable"))
+            .args([
+                "--exact",
+                "sanitize_path_tests::sidecar_readiness_child_waits",
+                "--ignored",
+            ])
+            .spawn()
+            .expect("spawn test child")
+    }
+
+    fn unique_test_dir() -> PathBuf {
+        std::env::temp_dir().join(format!(
+            "worldmonitor-sidecar-readiness-{}",
+            SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .expect("system time after epoch")
+                .as_nanos()
+        ))
+    }
+
+    #[test]
+    #[ignore = "spawned as a long-lived child by the sidecar readiness test"]
+    fn sidecar_readiness_child_waits() {
+        std::thread::sleep(std::time::Duration::from_secs(30));
+    }
 
     #[test]
     fn strips_extended_drive_prefix() {
@@ -561,6 +1176,112 @@ mod sanitize_path_tests {
             sanitize_path_for_node(raw),
             r"C:\Users\alice\sidecar\local-api-server.mjs".to_string()
         );
+    }
+
+    #[test]
+    fn supports_desktop_shared_secret_for_keychain_injection() {
+        assert!(SUPPORTED_SECRET_KEYS.contains(&DESKTOP_SHARED_SECRET_KEY));
+    }
+
+    #[test]
+    fn supports_desktop_shared_secret_for_packaged_sidecar_env() {
+        assert!(BUILD_TIME_SIDECAR_ENV_KEYS.contains(&DESKTOP_SHARED_SECRET_KEY));
+    }
+
+    #[test]
+    fn supports_alpha_vantage_for_keychain_injection() {
+        assert!(SUPPORTED_SECRET_KEYS.contains(&"ALPHA_VANTAGE_API_KEY"));
+    }
+
+    #[test]
+    fn renderer_secret_commands_cannot_manage_desktop_shared_secret() {
+        assert!(!is_renderer_managed_secret_key(DESKTOP_SHARED_SECRET_KEY));
+    }
+
+    #[test]
+    fn only_main_and_settings_can_manage_renderer_secrets() {
+        assert!(can_manage_renderer_secrets("main"));
+        assert!(can_manage_renderer_secrets("settings"));
+        assert!(!can_manage_renderer_secrets("live-channels"));
+        assert!(!can_manage_renderer_secrets("youtube-login"));
+    }
+
+    #[test]
+    fn configured_secret_metadata_filters_internal_values_and_keys() {
+        let secrets = HashMap::from([
+            ("GROQ_API_KEY".to_string(), "secret-value".to_string()),
+            (DESKTOP_SHARED_SECRET_KEY.to_string(), "internal-value".to_string()),
+        ]);
+        assert_eq!(configured_renderer_secret_keys(&secrets), vec!["GROQ_API_KEY"]);
+    }
+
+    #[test]
+    fn ignores_unknown_build_time_sidecar_env_keys() {
+        assert_eq!(build_time_sidecar_env_value("NOT_A_SUPPORTED_SIDECAR_KEY"), None);
+    }
+
+    #[test]
+    fn local_api_proxy_allows_normal_api_routes_and_settings_diagnostics() {
+        assert!(local_api_proxy_path_is_allowed("/api/fred-data?series_id=CPI"));
+        assert!(local_api_proxy_path_is_allowed("/api/local-debug-toggle"));
+        assert!(local_api_proxy_path_is_allowed("/api/local-traffic-log"));
+    }
+
+    #[test]
+    fn local_api_proxy_rejects_secret_control_routes_and_non_api_paths() {
+        for path in [
+            "/api/local-env-update",
+            "/api/local-env-update-batch",
+            "/api/local-validate-secret",
+            "/api/../api/local-env-update",
+            "/api/%2e%2e/api/local-env-update",
+            "/api/local-unexpected",
+            "/settings",
+            "//api/fred-data",
+        ] {
+            assert!(!local_api_proxy_path_is_allowed(path), "{path} must be rejected");
+        }
+    }
+
+    #[test]
+    fn late_port_file_is_promoted_without_default_port_fallback() {
+        let test_dir = unique_test_dir();
+        fs::create_dir_all(&test_dir).expect("create test directory");
+        let port_file = test_dir.join("sidecar.port");
+        let child = delayed_sidecar_test_child();
+        let expected_pid = child.id();
+        let child = Arc::new(Mutex::new(Some(child)));
+        let port = Arc::new(Mutex::new(None));
+
+        // This models the initial readiness miss. The port stays absent, so no
+        // bearer request can be made to DEFAULT_LOCAL_API_PORT.
+        assert_eq!(read_port_file(&port_file, 10), None);
+        assert_eq!(*port.lock().expect("lock port"), None);
+
+        let delayed_port_file = port_file.clone();
+        let writer = std::thread::spawn(move || {
+            std::thread::sleep(std::time::Duration::from_millis(50));
+            fs::write(delayed_port_file, "47555\n").expect("write delayed port file");
+        });
+
+        let outcome = watch_for_late_sidecar_port(
+            port_file,
+            Arc::clone(&child),
+            Arc::clone(&port),
+            expected_pid,
+            2_000,
+        );
+        writer.join().expect("join delayed port writer");
+
+        assert_eq!(outcome, SidecarReadinessOutcome::Confirmed(47555));
+        assert_eq!(*port.lock().expect("lock port"), Some(47555));
+        assert_ne!(*port.lock().expect("lock port"), Some(DEFAULT_LOCAL_API_PORT));
+
+        if let Some(mut child) = child.lock().expect("lock child").take() {
+            let _ = child.kill();
+            let _ = child.wait();
+        }
+        let _ = fs::remove_dir_all(test_dir);
     }
 }
 
@@ -616,9 +1337,17 @@ fn resolve_node_binary(app: &AppHandle) -> Option<PathBuf> {
     if !cfg!(debug_assertions) {
         let node_name = if cfg!(windows) { "node.exe" } else { "node" };
         if let Ok(resource_dir) = app.path().resource_dir() {
-            let bundled = resource_dir.join("sidecar").join("node").join(node_name);
-            if bundled.is_file() {
-                return Some(bundled);
+            let mut candidates = vec![resource_dir.join("sidecar").join("node").join(node_name)];
+            if cfg!(windows) {
+                // NSIS resource paths can flatten nested names in some upgrade scenarios.
+                // Keep this fallback so sidecar startup still succeeds if the runtime is
+                // materialized as sidecar\node.node.exe instead of sidecar\node\node.exe.
+                candidates.push(resource_dir.join("sidecar").join("node.node.exe"));
+            }
+            for bundled in candidates {
+                if bundled.is_file() {
+                    return Some(bundled);
+                }
             }
         }
     }
@@ -650,14 +1379,188 @@ fn resolve_node_binary(app: &AppHandle) -> Option<PathBuf> {
     common_locations.into_iter().find(|path| path.is_file())
 }
 
+fn read_confirmed_port_file(path: &Path) -> Option<u16> {
+    fs::read_to_string(path)
+        .ok()?
+        .trim()
+        .parse::<u16>()
+        .ok()
+        .filter(|port| *port > 0)
+}
+
+fn read_port_file(path: &Path, timeout_ms: u64) -> Option<u16> {
+    let start = std::time::Instant::now();
+    let interval = std::time::Duration::from_millis(100);
+    let timeout = std::time::Duration::from_millis(timeout_ms);
+    while start.elapsed() < timeout {
+        if let Some(port) = read_confirmed_port_file(path) {
+            return Some(port);
+        }
+        std::thread::sleep(interval);
+    }
+    None
+}
+
+#[derive(Debug, PartialEq, Eq)]
+enum SidecarReadinessOutcome {
+    Confirmed(u16),
+    Exited,
+    Replaced,
+    TimedOut,
+}
+
+/// Promotes a port only while the child that created the port file is still
+/// alive. Holding the child lock until after the port assignment prevents a
+/// concurrent stop from leaving a stale port behind.
+fn promote_verified_sidecar_port(
+    child: &Arc<Mutex<Option<Child>>>,
+    port: &Arc<Mutex<Option<u16>>>,
+    expected_pid: u32,
+    confirmed_port: u16,
+) -> SidecarReadinessOutcome {
+    let mut child_slot = match child.lock() {
+        Ok(slot) => slot,
+        Err(_) => return SidecarReadinessOutcome::TimedOut,
+    };
+    let Some(active_child) = child_slot.as_mut() else {
+        return SidecarReadinessOutcome::Exited;
+    };
+    if active_child.id() != expected_pid {
+        return SidecarReadinessOutcome::Replaced;
+    }
+    match active_child.try_wait() {
+        Ok(None) => match port.lock() {
+            Ok(mut port_slot) => {
+                *port_slot = Some(confirmed_port);
+                SidecarReadinessOutcome::Confirmed(confirmed_port)
+            }
+            Err(_) => SidecarReadinessOutcome::TimedOut,
+        },
+        Ok(Some(_)) => {
+            *child_slot = None;
+            drop(child_slot);
+            if let Ok(mut port_slot) = port.lock() {
+                *port_slot = None;
+            }
+            SidecarReadinessOutcome::Exited
+        }
+        // Do not send the token to a port if we cannot verify the child state.
+        Err(_) => SidecarReadinessOutcome::TimedOut,
+    }
+}
+
+fn sidecar_child_outcome(
+    child: &Arc<Mutex<Option<Child>>>,
+    port: &Arc<Mutex<Option<u16>>>,
+    expected_pid: u32,
+) -> Option<SidecarReadinessOutcome> {
+    let mut child_slot = match child.lock() {
+        Ok(slot) => slot,
+        Err(_) => return Some(SidecarReadinessOutcome::TimedOut),
+    };
+    let Some(active_child) = child_slot.as_mut() else {
+        return Some(SidecarReadinessOutcome::Exited);
+    };
+    if active_child.id() != expected_pid {
+        return Some(SidecarReadinessOutcome::Replaced);
+    }
+    match active_child.try_wait() {
+        Ok(None) | Err(_) => None,
+        Ok(Some(_)) => {
+            *child_slot = None;
+            drop(child_slot);
+            if let Ok(mut port_slot) = port.lock() {
+                *port_slot = None;
+            }
+            Some(SidecarReadinessOutcome::Exited)
+        }
+    }
+}
+
+/// Waits for a late port-file write without ever selecting the configured
+/// default port. The watcher is bound to the launched child PID so an old
+/// watcher cannot promote a port after the sidecar has been stopped or replaced.
+fn watch_for_late_sidecar_port(
+    port_file: PathBuf,
+    child: Arc<Mutex<Option<Child>>>,
+    port: Arc<Mutex<Option<u16>>>,
+    expected_pid: u32,
+    timeout_ms: u64,
+) -> SidecarReadinessOutcome {
+    let start = std::time::Instant::now();
+    let interval = std::time::Duration::from_millis(100);
+    let timeout = std::time::Duration::from_millis(timeout_ms);
+
+    while start.elapsed() < timeout {
+        if let Some(outcome) = sidecar_child_outcome(&child, &port, expected_pid) {
+            return outcome;
+        }
+        if let Some(confirmed_port) = read_confirmed_port_file(&port_file) {
+            return promote_verified_sidecar_port(&child, &port, expected_pid, confirmed_port);
+        }
+        std::thread::sleep(interval);
+    }
+
+    sidecar_child_outcome(&child, &port, expected_pid)
+        .unwrap_or(SidecarReadinessOutcome::TimedOut)
+}
+
+fn start_late_sidecar_port_watcher(
+    app: AppHandle,
+    port_file: PathBuf,
+    child: Arc<Mutex<Option<Child>>>,
+    port: Arc<Mutex<Option<u16>>>,
+    expected_pid: u32,
+) {
+    std::thread::spawn(move || {
+        match watch_for_late_sidecar_port(
+            port_file,
+            child,
+            port,
+            expected_pid,
+            SIDECAR_PORT_RECOVERY_TIMEOUT_MS,
+        ) {
+            SidecarReadinessOutcome::Confirmed(confirmed_port) => append_desktop_log(
+                &app,
+                "INFO",
+                &format!("sidecar confirmed port={confirmed_port} after initial readiness timeout"),
+            ),
+            SidecarReadinessOutcome::Exited => append_desktop_log(
+                &app,
+                "WARN",
+                "sidecar exited before reporting a verified port; a later start can retry",
+            ),
+            SidecarReadinessOutcome::Replaced => (),
+            SidecarReadinessOutcome::TimedOut => append_desktop_log(
+                &app,
+                "WARN",
+                "sidecar did not report a verified port during bounded recovery; refusing to target the default port",
+            ),
+        }
+    });
+}
+
 fn start_local_api(app: &AppHandle) -> Result<(), String> {
     let state = app.state::<LocalApiState>();
     let mut slot = state
         .child
         .lock()
         .map_err(|_| "Failed to lock local API state".to_string())?;
-    if slot.is_some() {
-        return Ok(());
+    if let Some(child) = slot.as_mut() {
+        match child.try_wait() {
+            Ok(None) | Err(_) => return Ok(()),
+            Ok(Some(_)) => {
+                *slot = None;
+                if let Ok(mut port_slot) = state.port.lock() {
+                    *port_slot = None;
+                }
+            }
+        }
+    }
+
+    // Clear port state for fresh start
+    if let Ok(mut port_slot) = state.port.lock() {
+        *port_slot = None;
     }
 
     let (script, resource_root) = local_api_paths(app);
@@ -670,6 +1573,9 @@ fn start_local_api(app: &AppHandle) -> Result<(), String> {
     let node_binary = resolve_node_binary(app).ok_or_else(|| {
         "Node.js executable not found. Install Node 18+ or set LOCAL_API_NODE_BIN".to_string()
     })?;
+
+    let port_file = logs_dir_path(app)?.join("sidecar.port");
+    let _ = fs::remove_file(&port_file);
 
     let log_path = sidecar_log_path(app)?;
     let log_file = OpenOptions::new()
@@ -691,10 +1597,26 @@ fn start_local_api(app: &AppHandle) -> Result<(), String> {
             log_path.display()
         ),
     );
-    append_desktop_log(app, "INFO", &format!("resolved node binary={}", node_binary.display()));
+    append_desktop_log(
+        app,
+        "INFO",
+        &format!("resolved node binary={}", node_binary.display()),
+    );
+    append_desktop_log(
+        app,
+        "INFO",
+        &format!(
+            "local API sidecar preferred port={} port_file={}",
+            DEFAULT_LOCAL_API_PORT,
+            port_file.display()
+        ),
+    );
 
     // Generate a unique token for local API auth (prevents other local processes from accessing sidecar)
-    let mut token_slot = state.token.lock().map_err(|_| "Failed to lock token slot")?;
+    let mut token_slot = state
+        .token
+        .lock()
+        .map_err(|_| "Failed to lock token slot")?;
     if token_slot.is_none() {
         *token_slot = Some(generate_local_token());
     }
@@ -704,16 +1626,26 @@ fn start_local_api(app: &AppHandle) -> Result<(), String> {
     let mut cmd = Command::new(&node_binary);
     #[cfg(windows)]
     cmd.creation_flags(0x08000000); // CREATE_NO_WINDOW — hide the node.exe console
-    // Sanitize paths for Node.js on Windows: strip \\?\ UNC prefix and set
-    // explicit working directory to avoid bare drive-letter CWD issues that
-    // cause EISDIR errors in Node.js module resolution.
+                                    // Sanitize paths for Node.js on Windows: strip \\?\ UNC prefix and set
+                                    // explicit working directory to avoid bare drive-letter CWD issues that
+                                    // cause EISDIR errors in Node.js module resolution.
     let script_for_node = sanitize_path_for_node(&script);
     let resource_for_node = sanitize_path_for_node(&resource_root);
-    append_desktop_log(app, "INFO", &format!("node args: script={script_for_node} resource_dir={resource_for_node}"));
+    append_desktop_log(
+        app,
+        "INFO",
+        &format!("node args: script={script_for_node} resource_dir={resource_for_node}"),
+    );
+    let data_dir = logs_dir_path(app)
+        .map(|p| sanitize_path_for_node(&p))
+        .unwrap_or_else(|_| resource_for_node.clone());
     cmd.arg(&script_for_node)
-        .env("LOCAL_API_PORT", LOCAL_API_PORT)
+        .env("LOCAL_API_PORT", DEFAULT_LOCAL_API_PORT.to_string())
+        .env("LOCAL_API_PORT_FILE", &port_file)
         .env("LOCAL_API_RESOURCE_DIR", &resource_for_node)
+        .env("LOCAL_API_DATA_DIR", &data_dir)
         .env("LOCAL_API_MODE", "tauri-sidecar")
+        .env("LOCAL_API_CLOUD_FALLBACK", "true")
         .env("LOCAL_API_TOKEN", &local_api_token)
         .stdout(Stdio::from(log_file))
         .stderr(Stdio::from(log_file_err));
@@ -730,13 +1662,62 @@ fn start_local_api(app: &AppHandle) -> Result<(), String> {
             secret_count += 1;
         }
     }
-    append_desktop_log(app, "INFO", &format!("injected {secret_count} keychain secrets into sidecar env"));
+    append_desktop_log(
+        app,
+        "INFO",
+        &format!("injected {secret_count} keychain secrets into sidecar env"),
+    );
+
+    // Inject packaged secrets (CI) with runtime env fallback (dev).
+    for key in BUILD_TIME_SIDECAR_ENV_KEYS {
+        if let Some(value) = sidecar_env_value(key) {
+            cmd.env(key, value);
+        }
+    }
 
     let child = cmd
         .spawn()
         .map_err(|e| format!("Failed to launch local API: {e}"))?;
-    append_desktop_log(app, "INFO", &format!("local API sidecar started pid={}", child.id()));
+    let child_pid = child.id();
+    append_desktop_log(
+        app,
+        "INFO",
+        &format!("local API sidecar started pid={}", child.id()),
+    );
     *slot = Some(child);
+    drop(slot);
+
+    // Wait for sidecar to write confirmed port (up to 5s)
+    if let Some(confirmed_port) = read_port_file(&port_file, 5000) {
+        append_desktop_log(
+            app,
+            "INFO",
+            &format!("sidecar confirmed port={confirmed_port}"),
+        );
+        if let Ok(mut port_slot) = state.port.lock() {
+            *port_slot = Some(confirmed_port);
+        }
+    } else {
+        // Fail CLOSED. The default port is only a guess: the sidecar moves to
+        // an ephemeral port on EADDRINUSE, and an unrelated local process may
+        // be squatting 46123. Sending LOCAL_API_TOKEN bearer traffic to an
+        // unverified listener would hand the token to whoever owns the port.
+        // Commands surface "sidecar is not ready" until the sidecar actually
+        // reports its port via the port file.
+        append_desktop_log(
+            app,
+            "WARN",
+            "sidecar port file not found within timeout; refusing to target the default port unverified",
+        );
+        start_late_sidecar_port_watcher(
+            app.clone(),
+            port_file,
+            Arc::clone(&state.child),
+            Arc::clone(&state.port),
+            child_pid,
+        );
+    }
+
     Ok(())
 }
 
@@ -748,33 +1729,224 @@ fn stop_local_api(app: &AppHandle) {
                 append_desktop_log(app, "INFO", "local API sidecar stopped");
             }
         }
+        if let Ok(mut port_slot) = state.port.lock() {
+            *port_slot = None;
+        }
+        if let Ok(log_dir) = logs_dir_path(app) {
+            let _ = fs::remove_file(log_dir.join("sidecar.port"));
+        }
     }
 }
 
+#[cfg(target_os = "linux")]
+fn resolve_appimage_gio_module_dir() -> Option<PathBuf> {
+    let appdir = env::var_os("APPDIR")?;
+    let appdir = PathBuf::from(appdir);
+
+    // Common layouts produced by AppImage/linuxdeploy on Debian and RPM families.
+    let preferred = [
+        "usr/lib/gio/modules",
+        "usr/lib64/gio/modules",
+        "usr/lib/x86_64-linux-gnu/gio/modules",
+        "usr/lib/aarch64-linux-gnu/gio/modules",
+        "usr/lib/arm-linux-gnueabihf/gio/modules",
+        "lib/gio/modules",
+        "lib64/gio/modules",
+    ];
+
+    for relative in preferred {
+        let candidate = appdir.join(relative);
+        if candidate.is_dir() {
+            return Some(candidate);
+        }
+    }
+
+    // Fallback: probe one level of arch-specific directories, e.g. usr/lib/<triplet>/gio/modules.
+    for lib_root in ["usr/lib", "usr/lib64", "lib", "lib64"] {
+        let root = appdir.join(lib_root);
+        if !root.is_dir() {
+            continue;
+        }
+        let entries = match fs::read_dir(&root) {
+            Ok(entries) => entries,
+            Err(_) => continue,
+        };
+        for entry in entries.flatten() {
+            let candidate = entry.path().join("gio/modules");
+            if candidate.is_dir() {
+                return Some(candidate);
+            }
+        }
+    }
+
+    None
+}
+
 fn main() {
+    // Work around WebKitGTK rendering issues on Linux that can cause blank white
+    // screens. DMA-BUF renderer failures are common with NVIDIA drivers and on
+    // immutable distros (e.g. Bazzite/Fedora Atomic).  Setting the env var before
+    // WebKit initialises forces a software fallback path.  Only set when the user
+    // hasn't explicitly configured the variable.
+    #[cfg(target_os = "linux")]
+    {
+        if env::var_os("WEBKIT_DISABLE_DMABUF_RENDERER").is_none() {
+            // SAFETY: called before any threads are spawned (Tauri hasn't started yet).
+            unsafe { env::set_var("WEBKIT_DISABLE_DMABUF_RENDERER", "1") };
+        }
+
+        // WebKitGTK promotes iframes, <video>, and canvas to GPU-textured
+        // compositing layers.  In VMs (Apple Virtualization.framework,
+        // QEMU/KVM, VMware, etc.) the virtio-gpu driver often only supports
+        // 2D or limited GL — GBM buffer allocation for compositing layers
+        // fails silently, rendering iframe/video content as black while the
+        // main page (software-tiled) works fine.
+        //
+        // Detect VM environments via /proc/cpuinfo "hypervisor" flag or
+        // sys_vendor strings and disable accelerated compositing + force
+        // software GL so all content renders through the CPU path.
+        let in_vm = std::fs::read_to_string("/proc/cpuinfo")
+            .map(|c| c.contains("hypervisor"))
+            .unwrap_or(false)
+            || std::fs::read_to_string("/sys/class/dmi/id/sys_vendor")
+                .map(|v| {
+                    let v = v.trim().to_lowercase();
+                    v.contains("qemu") || v.contains("vmware") || v.contains("virtualbox")
+                        || v.contains("apple") || v.contains("parallels") || v.contains("xen")
+                        || v.contains("microsoft") || v.contains("innotek")
+                })
+                .unwrap_or(false);
+
+        if in_vm {
+            if env::var_os("WEBKIT_DISABLE_COMPOSITING_MODE").is_none() {
+                unsafe { env::set_var("WEBKIT_DISABLE_COMPOSITING_MODE", "1") };
+            }
+            if env::var_os("LIBGL_ALWAYS_SOFTWARE").is_none() {
+                unsafe { env::set_var("LIBGL_ALWAYS_SOFTWARE", "1") };
+            }
+            eprintln!("[tauri] VM detected; disabled WebKitGTK accelerated compositing for iframe/video compatibility");
+        }
+
+        // NVIDIA proprietary drivers often fail to create a surfaceless EGL
+        // display (EGL_BAD_ALLOC) in WebKitGTK's web process, especially on
+        // Wayland where explicit sync can also cause flickering/crashes.
+        // Detect NVIDIA by checking for /proc/driver/nvidia (created by
+        // nvidia.ko) and apply Wayland-specific workarounds.
+        let has_nvidia = std::path::Path::new("/proc/driver/nvidia").exists();
+        if has_nvidia {
+            if env::var_os("__NV_DISABLE_EXPLICIT_SYNC").is_none() {
+                unsafe { env::set_var("__NV_DISABLE_EXPLICIT_SYNC", "1") };
+            }
+            // Force X11 backend on NVIDIA + Wayland to avoid surfaceless EGL
+            // failures.  Users who prefer native Wayland can override with
+            // GDK_BACKEND=wayland.
+            if env::var_os("WAYLAND_DISPLAY").is_some() && env::var_os("GDK_BACKEND").is_none() {
+                unsafe { env::set_var("GDK_BACKEND", "x11") };
+                eprintln!(
+                    "[tauri] NVIDIA GPU + Wayland detected; forcing GDK_BACKEND=x11 to avoid EGL_BAD_ALLOC. \
+                     Set GDK_BACKEND=wayland to override."
+                );
+            }
+        }
+
+        // On Wayland-only compositors (e.g. niri, river, sway without XWayland),
+        // GTK3 may fail to initialise if it defaults to X11 backend first and no
+        // DISPLAY is set.  Explicitly prefer the Wayland backend when a Wayland
+        // display is available.  Falls back to X11 if Wayland init fails.
+        if env::var_os("WAYLAND_DISPLAY").is_some() && env::var_os("GDK_BACKEND").is_none() {
+            unsafe { env::set_var("GDK_BACKEND", "wayland,x11") };
+        }
+
+        // Work around GLib version mismatch when running as an AppImage on newer
+        // distros.  The AppImage bundles GLib from the CI build system (Ubuntu
+        // 24.04, GLib 2.80).  Host GIO modules (e.g. GVFS's libgvfsdbus.so) may
+        // link against newer GLib symbols absent in the bundled copy, producing:
+        //   "undefined symbol: g_task_set_static_name"
+        // Point GIO_MODULE_DIR at the AppImage's bundled modules to isolate from
+        // host libraries.  Also disable the WebKit bubblewrap sandbox which fails
+        // inside AppImage's FUSE mount (causes blank screen on many distros).
+        if env::var_os("APPIMAGE").is_some() && env::var_os("GIO_MODULE_DIR").is_none() {
+            if let Some(module_dir) = resolve_appimage_gio_module_dir() {
+                unsafe { env::set_var("GIO_MODULE_DIR", &module_dir) };
+            } else if env::var_os("GIO_USE_VFS").is_none() {
+                // Last-resort fallback: prefer local VFS backend if module path
+                // discovery fails, which reduces GVFS dependency surface.
+                unsafe { env::set_var("GIO_USE_VFS", "local") };
+                eprintln!(
+                    "[tauri] APPIMAGE detected but bundled gio/modules not found; using GIO_USE_VFS=local fallback"
+                );
+            }
+        }
+
+        // WebKit2GTK's bubblewrap sandbox can fail inside an AppImage FUSE
+        // mount, causing blank white screens. Disable it when running as
+        // AppImage — the AppImage itself already provides isolation.
+        if env::var_os("APPIMAGE").is_some() {
+            // WebKitGTK 2.39.3+ deprecated WEBKIT_FORCE_SANDBOX and now expects
+            // WEBKIT_DISABLE_SANDBOX_THIS_IS_DANGEROUS=1 instead.  Setting the
+            // old variable on newer WebKitGTK triggers a noisy deprecation
+            // warning in the system journal, so only set the new one.
+            if env::var_os("WEBKIT_DISABLE_SANDBOX_THIS_IS_DANGEROUS").is_none() {
+                unsafe { env::set_var("WEBKIT_DISABLE_SANDBOX_THIS_IS_DANGEROUS", "1") };
+            }
+            // Prevent GTK from loading host input-method modules that may
+            // link against incompatible library versions.
+            if env::var_os("GTK_IM_MODULE").is_none() {
+                unsafe { env::set_var("GTK_IM_MODULE", "gtk-im-context-simple") };
+            }
+
+            // The linuxdeploy GStreamer hook sets GST_PLUGIN_PATH_1_0 and
+            // GST_PLUGIN_SYSTEM_PATH_1_0 to only contain bundled plugins.
+            // CI installs the full GStreamer codec suite (base, good, bad,
+            // ugly, libav, gl) so bundleMediaFramework=true bundles everything.
+            //
+            // IMPORTANT: Do NOT append host plugin directories — mixing plugins
+            // compiled against a different GStreamer version causes ABI mismatches
+            // (undefined symbol errors like gst_util_floor_log2, mpg123_open_handle64)
+            // and leaves WebKit without usable codecs.  The AppImage must be fully
+            // self-contained for GStreamer.
+            //
+            // If the linuxdeploy hook didn't set the paths (shouldn't happen),
+            // explicitly block host plugin scanning to prevent ABI conflicts.
+            if env::var_os("GST_PLUGIN_SYSTEM_PATH_1_0").is_none() {
+                // Empty string prevents GStreamer from scanning /usr/lib/gstreamer-1.0
+                unsafe { env::set_var("GST_PLUGIN_SYSTEM_PATH_1_0", "") };
+            }
+        }
+    }
+
     tauri::Builder::default()
         .menu(build_app_menu)
         .on_menu_event(handle_menu_event)
         .manage(LocalApiState::default())
         .manage(SecretsCache::load_from_keychain())
         .invoke_handler(tauri::generate_handler![
-            list_supported_secret_keys,
-            get_secret,
-            get_all_secrets,
+            list_configured_secret_keys,
             set_secret,
             delete_secret,
-            get_local_api_token,
+            validate_secret_with_sidecar,
+            proxy_local_api_request,
+            get_local_api_port,
             get_desktop_runtime_info,
             read_cache_entry,
             write_cache_entry,
+            delete_cache_entry,
+            delete_cache_entries_by_prefix,
             open_logs_folder,
             open_sidecar_log_file,
             open_settings_window_command,
             close_settings_window,
+            open_live_channels_window_command,
+            close_live_channels_window,
             open_url,
+            open_youtube_login,
             fetch_polymarket
         ])
         .setup(|app| {
+            // Load persistent cache into memory (avoids 14MB file I/O on every IPC call)
+            let cache_path = cache_file_path(&app.handle()).unwrap_or_default();
+            app.manage(PersistentCache::load(&cache_path));
+
             if let Err(err) = start_local_api(&app.handle()) {
                 append_desktop_log(
                     &app.handle(),
@@ -810,7 +1982,10 @@ fn main() {
                         let _ = w.set_focus();
                     }
                 }
-                // Raise settings window when main window gains focus so it doesn't hide behind
+                // Only macOS needs explicit re-raising to keep settings above the main window.
+                // On Windows, focusing the settings window here can trigger rapid focus churn
+                // between windows and present as a UI hang.
+                #[cfg(target_os = "macos")]
                 RunEvent::WindowEvent {
                     label,
                     event: WindowEvent::Focused(true),
@@ -822,6 +1997,12 @@ fn main() {
                     }
                 }
                 RunEvent::ExitRequested { .. } | RunEvent::Exit => {
+                    // Flush in-memory cache to disk before quitting
+                    if let Ok(path) = cache_file_path(app) {
+                        if let Some(cache) = app.try_state::<PersistentCache>() {
+                            let _ = cache.flush(&path);
+                        }
+                    }
                     stop_local_api(app);
                 }
                 _ => {}

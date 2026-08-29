@@ -1,11 +1,25 @@
 import type { SignalArticle } from '@/services/analysis-core';
 import type { CorrelationSignal } from '@/services/correlation';
 import type { UnifiedAlert } from '@/services/cross-module-integration';
-import { suppressTrendingTerm } from '@/services/trending-keywords';
-import { escapeHtml } from '@/utils/sanitize';
+import { escapeHtml, sanitizeUrl } from '@/utils/sanitize';
 import { getCSSColor } from '@/utils';
 import { getSignalContext, type SignalType } from '@/utils/analysis-constants';
 import { t } from '@/services/i18n';
+import { setTrustedHtml, trustedHtml } from '@/utils/dom-utils';
+import { createFocusTrap, type FocusTrap } from '@/utils/focus-trap';
+
+// Render-side display ceiling for a keyword spike's evidence list. Independent
+// of the emitter's own cap (MAX_SPIKE_ARTICLES) and deliberately higher, so it
+// bounds an untrusted producer without ever truncating what handleSpike emits.
+const MAX_RENDERED_EVIDENCE_ITEMS = 12;
+
+function suppressTrendingTermLazy(term: string): void {
+  void import('@/services/trending-keywords')
+    .then(module => module.suppressTrendingTerm(term))
+    .catch((err) => {
+      console.warn('[SignalModal] suppressTrendingTerm failed (chunk load?):', err);
+    });
+}
 
 export class SignalModal {
   private element: HTMLElement;
@@ -13,6 +27,8 @@ export class SignalModal {
   private audioEnabled = true;
   private audio: HTMLAudioElement | null = null;
   private onLocationClick?: (lat: number, lon: number) => void;
+  private escHandler = (e: KeyboardEvent) => { if (e.key === 'Escape') this.hide(); };
+  private focusTrap: FocusTrap | null = null;
 
   constructor() {
     this.element = document.createElement('div');
@@ -23,7 +39,7 @@ export class SignalModal {
       <div class="signal-modal">
         <div class="signal-modal-header">
           <span class="signal-modal-title">🎯 ${t('modals.signal.title')}</span>
-          <button class="signal-modal-close">×</button>
+          <button class="signal-modal-close" aria-label="Close">×</button>
         </div>
         <div class="signal-modal-content"></div>
         <div class="signal-modal-footer">
@@ -78,7 +94,7 @@ export class SignalModal {
       if (target.classList.contains('location-link')) {
         const lat = parseFloat(target.dataset.lat || '0');
         const lon = parseFloat(target.dataset.lon || '0');
-        if (this.onLocationClick && !isNaN(lat) && !isNaN(lon)) {
+        if (this.onLocationClick && !Number.isNaN(lat) && !Number.isNaN(lon)) {
           this.onLocationClick(lat, lon);
           this.hide();
         }
@@ -88,7 +104,7 @@ export class SignalModal {
       if (target.classList.contains('suppress-keyword-btn')) {
         const term = (target.dataset.term || '').trim();
         if (!term) return;
-        suppressTrendingTerm(term);
+        suppressTrendingTermLazy(term);
         this.currentSignals = this.currentSignals.filter(signal => {
           const signalTerm = (signal.data as Record<string, unknown>).term;
           return typeof signalTerm !== 'string' || signalTerm.toLowerCase() !== term.toLowerCase();
@@ -102,6 +118,20 @@ export class SignalModal {
     this.onLocationClick = handler;
   }
 
+  /**
+   * Wires the dialog's keyboard behavior. `trapFocus` is false for surfaces the
+   * user did not ask for: an unsolicited popup must not pull the caret out of
+   * whatever they were typing in, so those get Escape without focus containment.
+   */
+  private activateEsc(trapFocus = true): void {
+    document.addEventListener('keydown', this.escHandler);
+    if (!trapFocus) return;
+    this.focusTrap ??= createFocusTrap(this.element, {
+      initialFocus: () => this.element.querySelector<HTMLElement>('.signal-modal-close'),
+    });
+    this.focusTrap.activate();
+  }
+
   public show(signals: CorrelationSignal[]): void {
     if (signals.length === 0) return;
     if (document.fullscreenElement) return;
@@ -109,6 +139,9 @@ export class SignalModal {
     this.currentSignals = [...signals, ...this.currentSignals].slice(0, 50);
     this.renderSignals();
     this.element.classList.add('active');
+    // Reached from background correlation and military-surge analysis, not from
+    // a user gesture, so this path does not take focus.
+    this.activateEsc(false);
     this.playSound();
   }
 
@@ -116,6 +149,7 @@ export class SignalModal {
     this.currentSignals = [signal];
     this.renderSignals();
     this.element.classList.add('active');
+    this.activateEsc();
   }
 
   public showAlert(alert: UnifiedAlert): void {
@@ -131,6 +165,8 @@ export class SignalModal {
       cii_spike: '📊',
       convergence: '🌍',
       cascade: '⚡',
+      sanctions: '🚫',
+      radiation: '☢️',
       composite: '🔗',
     };
 
@@ -188,7 +224,7 @@ export class SignalModal {
       detailsHtml += `
         <div class="signal-context-item">
           <span class="context-label">${t('modals.signal.source')}</span>
-          <span class="context-value">${escapeHtml(cascade.sourceName)} (${cascade.sourceType})</span>
+          <span class="context-value">${escapeHtml(cascade.sourceName)} (${escapeHtml(cascade.sourceType)})</span>
         </div>
         <div class="signal-context-item">
           <span class="context-label">${t('modals.signal.countriesAffected')}</span>
@@ -201,7 +237,68 @@ export class SignalModal {
       `;
     }
 
-    content.innerHTML = `
+
+    if (alert.components.sanctions) {
+      const sanctions = alert.components.sanctions;
+      detailsHtml += `
+        <div class="signal-context-item">
+          <span class="context-label">Country</span>
+          <span class="context-value">${escapeHtml(sanctions.countryName)} (${escapeHtml(sanctions.countryCode)})</span>
+        </div>
+        <div class="signal-context-item">
+          <span class="context-label">Pressure</span>
+          <span class="context-value">${sanctions.entryCount} designations${sanctions.newEntryCount > 0 ? ` · +${sanctions.newEntryCount} new` : ''}</span>
+        </div>
+        <div class="signal-context-item">
+          <span class="context-label">Top program</span>
+          <span class="context-value">${escapeHtml(sanctions.topProgram)} (${sanctions.topProgramCount})</span>
+        </div>
+        <div class="signal-context-item">
+          <span class="context-label">Vessels / aircraft</span>
+          <span class="context-value">${sanctions.vesselCount} / ${sanctions.aircraftCount}</span>
+        </div>
+        <div class="signal-context-item">
+          <span class="context-label">Dataset size</span>
+          <span class="context-value">${sanctions.totalCount}${sanctions.datasetDate ? ` · ${new Date(sanctions.datasetDate).toISOString().slice(0, 10)}` : ''}</span>
+        </div>
+      `;
+    }
+
+    if (alert.components.radiation) {
+      const radiation = alert.components.radiation;
+      detailsHtml += `
+        <div class="signal-context-item">
+          <span class="context-label">Station</span>
+          <span class="context-value">${escapeHtml(radiation.siteName)}</span>
+        </div>
+        <div class="signal-context-item">
+          <span class="context-label">Reading</span>
+          <span class="context-value">${radiation.value.toFixed(1)} ${escapeHtml(radiation.unit)}</span>
+        </div>
+        <div class="signal-context-item">
+          <span class="context-label">Baseline</span>
+          <span class="context-value">${radiation.baselineValue.toFixed(1)} ${escapeHtml(radiation.unit)}</span>
+        </div>
+        <div class="signal-context-item">
+          <span class="context-label">Delta / z-score</span>
+          <span class="context-value">+${radiation.delta.toFixed(1)} / ${radiation.zScore.toFixed(2)}</span>
+        </div>
+        <div class="signal-context-item">
+          <span class="context-label">Confidence</span>
+          <span class="context-value">${escapeHtml(radiation.confidence)}${radiation.corroborated ? ' · confirmed' : ''}${radiation.conflictingSources ? ' · conflicting' : ''}</span>
+        </div>
+        <div class="signal-context-item">
+          <span class="context-label">Sources</span>
+          <span class="context-value">${escapeHtml(radiation.contributingSources.join(' + '))} (${radiation.sourceCount})</span>
+        </div>
+        <div class="signal-context-item">
+          <span class="context-label">Anomalies in batch</span>
+          <span class="context-value">${radiation.anomalyCount} total (${radiation.spikeCount} spike, ${radiation.elevatedCount} elevated, ${radiation.corroboratedCount} confirmed)</span>
+        </div>
+      `;
+    }
+
+    setTrustedHtml(content, trustedHtml(`
       <div class="signal-item" style="border-left-color: ${color}">
         <div class="signal-type">${icon} ${alert.type.toUpperCase().replace('_', ' ')}</div>
         <div class="signal-title">${escapeHtml(alert.title)}</div>
@@ -219,20 +316,23 @@ export class SignalModal {
           </div>
         ` : ''}
       </div>
-    `;
+    `, "legacy direct innerHTML migration"));
 
     this.element.classList.add('active');
+    this.activateEsc();
   }
 
   public playSound(): void {
     if (this.audioEnabled && this.audio) {
       this.audio.currentTime = 0;
-      this.audio.play().catch(() => {});
+      this.audio.play()?.catch(() => {});
     }
   }
 
   public hide(): void {
     this.element.classList.remove('active');
+    document.removeEventListener('keydown', this.escHandler);
+    this.focusTrap?.deactivate();
   }
 
   private renderSignals(): void {
@@ -261,65 +361,6 @@ export class SignalModal {
       const newsCorrelation = data?.newsCorrelation as string | null;
       const focalPoints = data?.focalPointContext as string[] | null;
       const locationData = { lat: data?.lat as number | undefined, lon: data?.lon as number | undefined, regionName: data?.regionName as string | undefined };
-
-      return `
-        <div class="signal-item ${escapeHtml(signal.type)}">
-          <div class="signal-type">${signalTypeLabels[signal.type] || escapeHtml(signal.type)}</div>
-          <div class="signal-title">${escapeHtml(signal.title)}</div>
-          <div class="signal-description">${escapeHtml(signal.description)}</div>
-          <div class="signal-meta">
-            <span class="signal-confidence">${t('modals.signal.confidence')}: ${Math.round(signal.confidence * 100)}%</span>
-            <span class="signal-time">${this.formatTime(signal.timestamp)}</span>
-          </div>
-          ${signal.data.explanation ? `
-            <div class="signal-explanation">${escapeHtml(signal.data.explanation)}</div>
-          ` : ''}
-          ${focalPoints && focalPoints.length > 0 ? `
-            <div class="signal-focal-points">
-              <div class="focal-points-header">📡 ${t('modals.signal.focalPoints')}</div>
-              ${focalPoints.map(fp => `<div class="focal-point-item">${escapeHtml(fp)}</div>`).join('')}
-            </div>
-          ` : ''}
-          ${newsCorrelation ? `
-            <div class="signal-news-correlation">
-              <div class="news-correlation-header">📰 ${t('modals.signal.newsCorrelation')}</div>
-              <pre class="news-correlation-text">${escapeHtml(newsCorrelation)}</pre>
-            </div>
-          ` : ''}
-          ${locationData.lat && locationData.lon ? `
-            <div class="signal-location">
-              <button class="location-link" data-lat="${locationData.lat}" data-lon="${locationData.lon}">
-                📍 ${t('modals.signal.viewOnMap')}: ${locationData.regionName || `${locationData.lat.toFixed(2)}°, ${locationData.lon.toFixed(2)}°`}
-              </button>
-            </div>
-          ` : ''}
-          <div class="signal-context">
-            <div class="signal-context-item why-matters">
-              <span class="context-label">${t('modals.signal.whyItMatters')}</span>
-              <span class="context-value">${escapeHtml(context.whyItMatters)}</span>
-            </div>
-            <div class="signal-context-item actionable">
-              <span class="context-label">${t('modals.signal.action')}</span>
-              <span class="context-value">${escapeHtml(context.actionableInsight)}</span>
-            </div>
-            <div class="signal-context-item confidence-note">
-              <span class="context-label">${t('modals.signal.note')}</span>
-              <span class="context-value">${escapeHtml(context.confidenceNote)}</span>
-            </div>
-          </div>
-          ${signal.data.relatedTopics?.length ? `
-            <div class="signal-topics">
-              ${signal.data.relatedTopics.map(t => `<span class="signal-topic">${escapeHtml(t)}</span>`).join('')}
-            </div>
-          ` : ''}
-          ${signal.type === 'keyword_spike' && typeof data?.term === 'string' ? `
-            <div class="signal-actions">
-              <button class="suppress-keyword-btn" data-term="${escapeHtml(data.term)}">${t('modals.signal.suppress')}</button>
-            </div>
-          ` : ''}
-        </div>
-      `;
-    }).join('');
 
       return `
         <div class="signal-item ${escapeHtml(signal.type)}">

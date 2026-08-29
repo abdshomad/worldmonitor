@@ -45,8 +45,6 @@ interface NgaWarning {
   authority: string;
 }
 
-const NGA_API_URL = '/api/nga-warnings';
-
 const CABLE_KEYWORDS = [
   'CABLE',
   'CABLESHIP',
@@ -309,19 +307,9 @@ function formatNgaDate(epochMs: number): string {
 
 export async function fetchCableActivity(): Promise<CableActivity> {
   try {
-    const response = await fetch(NGA_API_URL, {
-      headers: {
-        'Accept': 'application/json',
-      },
-    });
-
-    if (!response.ok) {
-      throw new Error(`NGA API error: ${response.status}`);
-    }
-
-    const data = await response.json();
-    const warnings: NgaWarning[] = Array.isArray(data) ? data : (data?.warnings ?? []);
-    console.log(`[CableActivity] Fetched ${warnings.length} NGA warnings`);
+    await ensureCablesData();
+    const response = await maritimeClient.listNavigationalWarnings({ area: '', pageSize: 0, cursor: '' });
+    const warnings: NgaWarning[] = response.warnings.map(protoToNgaWarning);
 
     const activity = processWarnings(warnings);
 

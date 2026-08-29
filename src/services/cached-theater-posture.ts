@@ -1,11 +1,15 @@
-/**
- * Cached Theater Posture Service
- * Fetches pre-computed theater posture summaries from backend
- * Shares calculation across all users via Redis cache
- * Persists to localStorage so data shows instantly on reload
- */
-
 import type { TheaterPostureSummary } from './military-surge';
+import { getRpcBaseUrl } from '@/services/rpc-client';
+import type { GetTheaterPostureResponse, TheaterPosture } from '@/generated/client/worldmonitor/military/v1/service_client';
+import { createCircuitBreaker } from '@/utils';
+import { getHydratedData } from '@/services/bootstrap';
+import { MilitaryServiceClient } from '@/services/generated-rpc-clients';
+
+// ---- Sebuf client ----
+
+const client = new MilitaryServiceClient(getRpcBaseUrl(), { fetch: (...args) => globalThis.fetch(...args) });
+
+// ---- Legacy interface (preserved for consumer compatibility) ----
 
 export interface CachedTheaterPosture {
   postures: TheaterPostureSummary[];
@@ -16,13 +20,105 @@ export interface CachedTheaterPosture {
   error?: string;
 }
 
-const LS_KEY = 'wm:theater-posture';
-const LS_MAX_AGE_MS = 30 * 60 * 1000; // 30 min max staleness for localStorage
+// ---- Proto → legacy adapter ----
 
-let cachedPosture: CachedTheaterPosture | null = null;
-let fetchPromise: Promise<CachedTheaterPosture | null> | null = null;
-let lastFetchTime = 0;
-const REFETCH_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes (matches server TTL)
+interface TheaterMeta {
+  name: string;
+  shortName: string;
+  targetNation: string | null;
+  centerLat: number;
+  centerLon: number;
+  bounds: { north: number; south: number; east: number; west: number };
+}
+
+const THEATER_META: Record<string, TheaterMeta> = {
+  'iran-theater': { name: 'Iran Theater', shortName: 'IRAN', targetNation: 'Iran', centerLat: 31, centerLon: 47.5, bounds: { north: 42, south: 20, east: 65, west: 30 } },
+  'taiwan-theater': { name: 'Taiwan Strait', shortName: 'TAIWAN', targetNation: 'Taiwan', centerLat: 24, centerLon: 122.5, bounds: { north: 30, south: 18, east: 130, west: 115 } },
+  'baltic-theater': { name: 'Baltic Theater', shortName: 'BALTIC', targetNation: null, centerLat: 58.5, centerLon: 21, bounds: { north: 65, south: 52, east: 32, west: 10 } },
+  'blacksea-theater': { name: 'Black Sea', shortName: 'BLACK SEA', targetNation: null, centerLat: 44, centerLon: 34, bounds: { north: 48, south: 40, east: 42, west: 26 } },
+  'korea-theater': { name: 'Korean Peninsula', shortName: 'KOREA', targetNation: 'North Korea', centerLat: 38, centerLon: 128, bounds: { north: 43, south: 33, east: 132, west: 124 } },
+  'south-china-sea': { name: 'South China Sea', shortName: 'SCS', targetNation: null, centerLat: 15, centerLon: 113, bounds: { north: 25, south: 5, east: 121, west: 105 } },
+  'east-med-theater': { name: 'Eastern Mediterranean', shortName: 'E.MED', targetNation: null, centerLat: 35, centerLon: 31, bounds: { north: 37, south: 33, east: 37, west: 25 } },
+  'israel-gaza-theater': { name: 'Israel/Gaza', shortName: 'GAZA', targetNation: 'Gaza', centerLat: 31, centerLon: 34.5, bounds: { north: 33, south: 29, east: 36, west: 33 } },
+  'yemen-redsea-theater': { name: 'Yemen/Red Sea', shortName: 'RED SEA', targetNation: 'Yemen', centerLat: 16.5, centerLon: 43, bounds: { north: 22, south: 11, east: 54, west: 32 } },
+};
+
+function toPostureSummary(proto: TheaterPosture): TheaterPostureSummary {
+  const meta = THEATER_META[proto.theater];
+  const strikeCapable = proto.activeOperations.includes('strike_capable');
+  const postureLevel = (proto.postureLevel === 'critical' || proto.postureLevel === 'elevated')
+    ? proto.postureLevel as 'critical' | 'elevated'
+    : 'normal' as const;
+
+  return {
+    theaterId: proto.theater,
+    theaterName: meta?.name ?? proto.theater,
+    shortName: meta?.shortName ?? proto.theater,
+    targetNation: meta?.targetNation ?? null,
+    fighters: 0,
+    tankers: 0,
+    awacs: 0,
+    reconnaissance: 0,
+    transport: 0,
+    bombers: 0,
+    drones: 0,
+    totalAircraft: proto.activeFlights,
+    destroyers: 0,
+    frigates: 0,
+    carriers: 0,
+    submarines: 0,
+    patrol: 0,
+    auxiliaryVessels: 0,
+    totalVessels: proto.trackedVessels,
+    byOperator: {},
+    postureLevel,
+    strikeCapable,
+    trend: 'stable',
+    changePercent: 0,
+    summary: '',
+    headline: postureLevel === 'critical'
+      ? `Critical military buildup - ${meta?.name ?? proto.theater}`
+      : postureLevel === 'elevated'
+        ? `Elevated military activity - ${meta?.name ?? proto.theater}`
+        : `Normal activity - ${meta?.name ?? proto.theater}`,
+    centerLat: meta?.centerLat ?? 0,
+    centerLon: meta?.centerLon ?? 0,
+    bounds: meta?.bounds,
+  };
+}
+
+export function toPostureData(resp: GetTheaterPostureResponse): CachedTheaterPosture {
+  const postures = resp.theaters.map(toPostureSummary);
+  const totalFlights = postures.reduce((sum, p) => sum + p.totalAircraft, 0);
+  return {
+    postures,
+    totalFlights,
+    timestamp: new Date().toISOString(),
+    cached: true,
+  };
+}
+
+// ---- Circuit breaker ----
+
+const breaker = createCircuitBreaker<CachedTheaterPosture>({
+  name: 'Theater Posture',
+  cacheTtlMs: 15 * 60 * 1000,
+  persistCache: true,
+});
+
+function emptyFallback(): CachedTheaterPosture {
+  return {
+    postures: [],
+    totalFlights: 0,
+    timestamp: new Date().toISOString(),
+    cached: true,
+  };
+}
+
+// ---- Local storage persistence ----
+
+const LS_KEY = 'wm:theater-posture';
+const LS_MAX_STALENESS_MS = 24 * 60 * 60 * 1000; // 24h — match IndexedDB ceiling
 
 function createAbortError(): DOMException {
   return new DOMException('The operation was aborted.', 'AbortError');
@@ -57,14 +153,16 @@ function loadFromStorage(): CachedTheaterPosture | null {
     const raw = localStorage.getItem(LS_KEY);
     if (!raw) return null;
     const { data, savedAt } = JSON.parse(raw);
-    if (Date.now() - savedAt > LS_MAX_AGE_MS) {
+    if (!Number.isFinite(savedAt) || !Array.isArray(data?.postures)) {
       localStorage.removeItem(LS_KEY);
       return null;
     }
-    return { ...data, stale: true };
-  } catch {
-    return null;
-  }
+    if (Date.now() - savedAt > LS_MAX_STALENESS_MS) {
+      localStorage.removeItem(LS_KEY);
+      return null;
+    }
+    return data;
+  } catch { return null; }
 }
 
 function saveToStorage(data: CachedTheaterPosture): void {
@@ -73,70 +171,46 @@ function saveToStorage(data: CachedTheaterPosture): void {
   } catch { /* quota exceeded - ignore */ }
 }
 
-// Hydrate in-memory cache from localStorage on module load
+// Prime breaker from localStorage on module load
 const stored = loadFromStorage();
-if (stored) {
-  cachedPosture = stored;
-  console.log('[CachedTheaterPosture] Restored from localStorage (stale)');
-}
+if (stored) breaker.recordSuccess(stored);
 
 export async function fetchCachedTheaterPosture(signal?: AbortSignal): Promise<CachedTheaterPosture | null> {
   if (signal?.aborted) throw createAbortError();
-  const now = Date.now();
 
-  // Return cached if fresh
-  if (cachedPosture && !cachedPosture.stale && now - lastFetchTime < REFETCH_INTERVAL_MS) {
-    return cachedPosture;
-  }
-
-  // Deduplicate concurrent fetches
-  if (fetchPromise) {
-    return withCallerAbort(fetchPromise, signal);
-  }
-
-  // If we have stale localStorage data, return it immediately but fetch in background
-  const hasStaleData = cachedPosture?.stale;
-
-  fetchPromise = (async () => {
-    try {
-      // Use a shared fetch without caller signal so one caller abort does not cancel everyone.
-      const response = await fetch('/api/theater-posture');
-      if (!response.ok) {
-        console.warn('[CachedTheaterPosture] API error:', response.status);
-        return cachedPosture; // Return stale cache on error
-      }
-
-      const data = await response.json();
-      cachedPosture = data;
-      lastFetchTime = Date.now();
+  // Layer 1: Bootstrap hydration (one-time, only when breaker has no cached data)
+  if (breaker.getCached() === null) {
+    const hydrated = getHydratedData('theaterPosture') as GetTheaterPostureResponse | undefined;
+    if (hydrated?.theaters?.length) {
+      const data = toPostureData(hydrated);
+      breaker.recordSuccess(data);
       saveToStorage(data);
-      console.log(
-        '[CachedTheaterPosture] Loaded',
-        data.cached ? '(from Redis)' : '(computed)',
-        `${data.postures?.length || 0} theaters, ${data.totalFlights || 0} flights`
-      );
-      return cachedPosture;
-    } catch (error) {
-      if (error instanceof DOMException && error.name === 'AbortError') throw error;
-      console.error('[CachedTheaterPosture] Fetch error:', error);
-      return cachedPosture; // Return stale cache on error
-    } finally {
-      fetchPromise = null;
+      return data;
     }
-  })();
-
-  // If we have stale data, return it now — the fetch updates in background
-  if (hasStaleData) {
-    return cachedPosture;
   }
 
-  return withCallerAbort(fetchPromise, signal);
+  // Layer 2: Circuit breaker (in-memory cache → SWR → IndexedDB → RPC → fallback)
+  const result = await withCallerAbort(
+    breaker.execute(async () => {
+      const resp = await client.getTheaterPosture({ theater: '' });
+      const data = toPostureData(resp);
+      saveToStorage(data);
+      return data;
+    }, emptyFallback(), { shouldCache: (r) => r.postures.length > 0 }),
+    signal,
+  );
+
+  if (!result || !Array.isArray(result.postures) || result.postures.length === 0) {
+    return null;
+  }
+
+  return result;
 }
 
 export function getCachedPosture(): CachedTheaterPosture | null {
-  return cachedPosture;
+  return breaker.getCached();
 }
 
 export function hasCachedPosture(): boolean {
-  return cachedPosture !== null;
+  return breaker.getCached() !== null;
 }

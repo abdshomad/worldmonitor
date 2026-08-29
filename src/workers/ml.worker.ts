@@ -5,6 +5,8 @@
 
 import { pipeline, env } from '@xenova/transformers';
 import { MODEL_CONFIGS, type ModelConfig } from '@/config/ml-config';
+import { AsyncResourceLifecycle } from './async-resource-lifecycle';
+import { storeVectors, searchVectors, getCount, resetStore, sanitizeTitle, type VectorSearchResult } from './vector-db';
 
 // Configure transformers.js
 env.allowLocalModels = false;
@@ -69,6 +71,36 @@ interface ResetMessage {
   type: 'reset';
 }
 
+interface VectorStoreIngestMessage {
+  type: 'vector-store-ingest';
+  id: string;
+  items: Array<{
+    text: string;
+    pubDate: number;
+    source: string;
+    url: string;
+    tags?: string[];
+  }>;
+}
+
+interface VectorStoreSearchMessage {
+  type: 'vector-store-search';
+  id: string;
+  queries: string[];
+  topK: number;
+  minScore: number;
+}
+
+interface VectorStoreCountMessage {
+  type: 'vector-store-count';
+  id: string;
+}
+
+interface VectorStoreResetMessage {
+  type: 'vector-store-reset';
+  id: string;
+}
+
 type MLWorkerMessage =
   | InitMessage
   | LoadModelMessage
@@ -79,115 +111,109 @@ type MLWorkerMessage =
   | NERMessage
   | SemanticClusterMessage
   | StatusMessage
-  | ResetMessage;
+  | ResetMessage
+  | VectorStoreIngestMessage
+  | VectorStoreSearchMessage
+  | VectorStoreCountMessage
+  | VectorStoreResetMessage;
 
-// Loaded pipelines (using unknown since pipeline types vary)
+// Pipeline types vary by task in transformers.js.
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-const loadedPipelines = new Map<string, any>();
-const loadingPromises = new Map<string, Promise<void>>();
+type ModelPipeline = any;
+const modelPipelines = new AsyncResourceLifecycle<string, ModelPipeline>(async (pipe) => {
+  if (typeof pipe?.dispose === 'function') await pipe.dispose();
+});
 
 function getModelConfig(modelId: string): ModelConfig | undefined {
   return MODEL_CONFIGS.find(m => m.id === modelId);
 }
 
-async function loadModel(modelId: string): Promise<void> {
-  if (loadedPipelines.has(modelId)) return;
+function isSupportedModelId(modelId: string): boolean {
+  return !!getModelConfig(modelId);
+}
 
-  // Prevent concurrent loads - return existing promise if loading
-  const existing = loadingPromises.get(modelId);
-  if (existing) return existing;
-
+async function createModelPipeline(modelId: string): Promise<ModelPipeline> {
   const config = getModelConfig(modelId);
   if (!config) throw new Error(`Unknown model: ${modelId}`);
 
   console.log(`[MLWorker] Loading model: ${config.hfModel}`);
   const startTime = Date.now();
 
-  const loadPromise = (async () => {
-    // Suppress verbose ONNX Runtime warnings (CleanUnusedInitializersAndNodeArgs)
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const ort = (globalThis as any).ort;
-    if (ort?.env) { try { ort.env.logLevel = 'error'; } catch { /* ignore */ } }
+  // Suppress verbose ONNX Runtime warnings (CleanUnusedInitializersAndNodeArgs)
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const ort = (globalThis as any).ort;
+  if (ort?.env) { try { ort.env.logLevel = 'error'; } catch { /* ignore */ } }
 
-    const pipe = await pipeline(config.task, config.hfModel, {
-      progress_callback: (progress: { status: string; progress?: number }) => {
-        if (progress.status === 'progress' && progress.progress !== undefined) {
-          self.postMessage({
-            type: 'model-progress',
-            modelId,
-            progress: progress.progress,
-          });
-        }
-      },
-    });
+  const pipe = await pipeline(config.task, config.hfModel, {
+    progress_callback: (progress: { status: string; progress?: number }) => {
+      if (progress.status === 'progress' && progress.progress !== undefined) {
+        self.postMessage({
+          type: 'model-progress',
+          modelId,
+          progress: progress.progress,
+        });
+      }
+    },
+  });
 
-    loadedPipelines.set(modelId, pipe);
-    loadingPromises.delete(modelId);
-    console.log(`[MLWorker] Model loaded in ${Date.now() - startTime}ms: ${modelId}`);
-
-    // Notify manager that model is now available (no id = unsolicited notification)
-    self.postMessage({ type: 'model-loaded', modelId });
-  })();
-
-  loadingPromises.set(modelId, loadPromise);
-  return loadPromise;
+  console.log(`[MLWorker] Model loaded in ${Date.now() - startTime}ms: ${modelId}`);
+  self.postMessage({ type: 'model-loaded', modelId });
+  return pipe;
 }
 
-function unloadModel(modelId: string): void {
-  const pipe = loadedPipelines.get(modelId);
-  if (pipe) {
-    loadedPipelines.delete(modelId);
-    console.log(`[MLWorker] Unloaded model: ${modelId}`);
-  }
+async function loadModel(modelId: string): Promise<void> {
+  await modelPipelines.load(modelId, () => createModelPipeline(modelId));
+}
+
+async function unloadModel(modelId: string): Promise<void> {
+  const disposed = await modelPipelines.unload(modelId);
+  if (disposed) console.log(`[MLWorker] Unloaded model: ${modelId}`);
 }
 
 async function embedTexts(texts: string[]): Promise<number[][]> {
-  await loadModel('embeddings');
-  const pipe = loadedPipelines.get('embeddings')!;
-
-  const results: number[][] = [];
-  for (const text of texts) {
-    const output = await pipe(text, { pooling: 'mean', normalize: true });
-    results.push(Array.from(output.data as Float32Array));
-  }
-
-  return results;
+  return modelPipelines.use('embeddings', () => createModelPipeline('embeddings'), async (pipe) => {
+    const results: number[][] = [];
+    for (const text of texts) {
+      const output = await pipe(text, { pooling: 'mean', normalize: true });
+      results.push(Array.from(output.data as Float32Array));
+    }
+    return results;
+  });
 }
 
 async function summarizeTexts(texts: string[], modelId = 'summarization'): Promise<string[]> {
-  await loadModel(modelId);
-  const pipe = loadedPipelines.get(modelId)!;
-
-  const results: string[] = [];
-  for (const text of texts) {
-    const output = await pipe(`summarize: ${text}`, {
-      max_new_tokens: 64,
-      min_length: 10,
-    });
-    const result = (output as Array<{ generated_text: string }>)[0];
-    results.push(result?.generated_text ?? '');
+  if (!isSupportedModelId(modelId)) {
+    throw new Error(`Unknown model: ${modelId}`);
   }
-
-  return results;
+  return modelPipelines.use(modelId, () => createModelPipeline(modelId), async (pipe) => {
+    const results: string[] = [];
+    for (const text of texts) {
+      const output = await pipe(`summarize: ${text}`, {
+        max_new_tokens: 64,
+        min_length: 10,
+      });
+      const result = (output as Array<{ generated_text: string }>)[0];
+      results.push(result?.generated_text ?? '');
+    }
+    return results;
+  });
 }
 
 async function classifySentiment(texts: string[]): Promise<Array<{ label: string; score: number }>> {
-  await loadModel('sentiment');
-  const pipe = loadedPipelines.get('sentiment')!;
-
-  const results: Array<{ label: string; score: number }> = [];
-  for (const text of texts) {
-    const output = await pipe(text);
-    const result = (output as Array<{ label: string; score: number }>)[0];
-    if (result) {
-      results.push({
-        label: result.label.toLowerCase() === 'positive' ? 'positive' : 'negative',
-        score: result.score,
-      });
+  return modelPipelines.use('sentiment', () => createModelPipeline('sentiment'), async (pipe) => {
+    const results: Array<{ label: string; score: number }> = [];
+    for (const text of texts) {
+      const output = await pipe(text);
+      const result = (output as Array<{ label: string; score: number }>)[0];
+      if (result) {
+        results.push({
+          label: result.label.toLowerCase() === 'positive' ? 'positive' : 'negative',
+          score: result.score,
+        });
+      }
     }
-  }
-
-  return results;
+    return results;
+  });
 }
 
 interface NEREntity {
@@ -199,29 +225,27 @@ interface NEREntity {
 }
 
 async function extractEntities(texts: string[]): Promise<NEREntity[][]> {
-  await loadModel('ner');
-  const pipe = loadedPipelines.get('ner')!;
-
-  const results: NEREntity[][] = [];
-  for (const text of texts) {
-    const output = await pipe(text);
-    const entities = (output as Array<{
-      entity_group: string;
-      score: number;
-      word: string;
-      start: number;
-      end: number;
-    }>).map(e => ({
-      text: e.word,
-      type: e.entity_group,
-      confidence: e.score,
-      start: e.start,
-      end: e.end,
-    }));
-    results.push(entities);
-  }
-
-  return results;
+  return modelPipelines.use('ner', () => createModelPipeline('ner'), async (pipe) => {
+    const results: NEREntity[][] = [];
+    for (const text of texts) {
+      const output = await pipe(text);
+      const entities = (output as Array<{
+        entity_group: string;
+        score: number;
+        word: string;
+        start: number;
+        end: number;
+      }>).map(e => ({
+        text: e.word,
+        type: e.entity_group,
+        confidence: e.score,
+        start: e.start,
+        end: e.end,
+      }));
+      results.push(entities);
+    }
+    return results;
+  });
 }
 
 function cosineSimilarity(a: number[], b: number[]): number {
@@ -239,6 +263,23 @@ function cosineSimilarity(a: number[], b: number[]): number {
 
   const denominator = Math.sqrt(normA) * Math.sqrt(normB);
   return denominator === 0 ? 0 : dotProduct / denominator;
+}
+
+function cosineSimilarityF32(a: Float32Array, b: Float32Array): number {
+  // Dimension mismatch (e.g. a stored vector from an older embedding model)
+  // would read past the end of b and poison every term with NaN. Treat it
+  // as zero similarity - searchVectors also filters non-finite scores.
+  if (a.length === 0 || a.length !== b.length) return 0;
+  let dot = 0;
+  let nA = 0;
+  let nB = 0;
+  for (let i = 0; i < a.length; i++) {
+    dot += a[i]! * b[i]!;
+    nA += a[i]! * a[i]!;
+    nB += b[i]! * b[i]!;
+  }
+  const denom = Math.sqrt(nA) * Math.sqrt(nB);
+  return denom === 0 ? 0 : dot / denom;
 }
 
 function semanticCluster(
@@ -289,6 +330,9 @@ self.onmessage = async (event: MessageEvent<MLWorkerMessage>) => {
       }
 
       case 'load-model': {
+        if (!isSupportedModelId(message.modelId)) {
+          throw new Error(`Unknown model: ${message.modelId}`);
+        }
         await loadModel(message.modelId);
         self.postMessage({
           type: 'model-loaded',
@@ -299,7 +343,7 @@ self.onmessage = async (event: MessageEvent<MLWorkerMessage>) => {
       }
 
       case 'unload-model': {
-        unloadModel(message.modelId);
+        await unloadModel(message.modelId);
         self.postMessage({
           type: 'model-unloaded',
           id: message.id,
@@ -358,17 +402,90 @@ self.onmessage = async (event: MessageEvent<MLWorkerMessage>) => {
         break;
       }
 
+      case 'vector-store-ingest': {
+        const EMBED_DIM = 384;
+        const embeddings = await embedTexts(message.items.map(i => sanitizeTitle(i.text)));
+        const valid: Array<{
+          text: string;
+          embedding: Float32Array;
+          pubDate: number;
+          source: string;
+          url: string;
+          tags?: string[];
+        }> = [];
+        for (let i = 0; i < message.items.length; i++) {
+          const emb = embeddings[i];
+          if (!emb || emb.length !== EMBED_DIM) continue;
+          const item = message.items[i]!;
+          valid.push({
+            text: item.text,
+            embedding: new Float32Array(emb),
+            pubDate: item.pubDate,
+            source: item.source,
+            url: item.url,
+            ...(item.tags?.length ? { tags: item.tags } : {}),
+          });
+        }
+        const stored = valid.length > 0 ? await storeVectors(valid) : 0;
+        self.postMessage({
+          type: 'vector-store-ingest-result',
+          id: message.id,
+          stored,
+        });
+        break;
+      }
+
+      case 'vector-store-search': {
+        const clampedTopK = Math.max(1, Math.min(20, message.topK));
+        const clampedMinScore = Math.max(0, Math.min(1, message.minScore));
+        const queries = message.queries.slice(0, 5).map(q => sanitizeTitle(q));
+        const queryEmbeddings = await embedTexts(queries);
+        const queryF32: Float32Array[] = [];
+        for (const emb of queryEmbeddings) {
+          if (emb && emb.length > 0) queryF32.push(new Float32Array(emb));
+        }
+        let results: VectorSearchResult[] = [];
+        if (queryF32.length > 0) {
+          results = await searchVectors(queryF32, clampedTopK, clampedMinScore, cosineSimilarityF32);
+        }
+        self.postMessage({
+          type: 'vector-store-search-result',
+          id: message.id,
+          results,
+        });
+        break;
+      }
+
+      case 'vector-store-count': {
+        const count = await getCount();
+        self.postMessage({
+          type: 'vector-store-count-result',
+          id: message.id,
+          count,
+        });
+        break;
+      }
+
+      case 'vector-store-reset': {
+        await resetStore();
+        self.postMessage({
+          type: 'vector-store-reset-result',
+          id: message.id,
+        });
+        break;
+      }
+
       case 'status': {
         self.postMessage({
           type: 'status-result',
           id: message.id,
-          loadedModels: Array.from(loadedPipelines.keys()),
+          loadedModels: modelPipelines.keys(),
         });
         break;
       }
 
       case 'reset': {
-        loadedPipelines.clear();
+        await modelPipelines.reset();
         self.postMessage({ type: 'reset-complete' });
         break;
       }

@@ -1,3 +1,4 @@
+// Non-sebuf: returns XML/HTML, stays as standalone Vercel function
 /**
  * Story Page for Social Crawlers
  * Returns HTML with proper og:image and twitter:card meta tags.
@@ -15,7 +16,7 @@ const COUNTRY_NAMES = {
 const BOT_UA = /twitterbot|facebookexternalhit|linkedinbot|slackbot|telegrambot|whatsapp|discordbot|redditbot|googlebot/i;
 
 export default function handler(req, res) {
-  const url = new URL(req.url, `https://${req.headers.host}`);
+  const url = new URL(req.url, 'https://worldmonitor.app');
   const countryCode = (url.searchParams.get('c') || '').toUpperCase();
   const type = url.searchParams.get('t') || 'ciianalysis';
   const ts = url.searchParams.get('ts') || '';
@@ -25,12 +26,17 @@ export default function handler(req, res) {
   const ua = req.headers['user-agent'] || '';
   const isBot = BOT_UA.test(ua);
 
-  const baseUrl = `https://${req.headers.host}`;
+  res.setHeader('Vary', 'User-Agent');
+
+  const baseUrl = 'https://worldmonitor.app';
   const spaUrl = `${baseUrl}/?c=${countryCode}&t=${type}${ts ? `&ts=${ts}` : ''}`;
 
   // Real users → redirect to SPA
   if (!isBot) {
-    res.writeHead(302, { Location: spaUrl });
+    res.writeHead(302, {
+      Location: spaUrl,
+      'Cache-Control': 'private, no-store',
+    });
     res.end();
     return;
   }

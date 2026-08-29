@@ -1,7 +1,39 @@
 import { escapeHtml } from '@/utils/sanitize';
+import { debounce } from '@/utils';
 import { t } from '@/services/i18n';
-
-export type SearchResultType = 'country' | 'news' | 'hotspot' | 'market' | 'prediction' | 'conflict' | 'base' | 'pipeline' | 'cable' | 'datacenter' | 'earthquake' | 'outage' | 'nuclear' | 'irradiator' | 'techcompany' | 'ailab' | 'startup' | 'techevent' | 'techhq' | 'accelerator' | 'exchange' | 'financialcenter' | 'centralbank' | 'commodityhub';
+import { trackSearchUsed } from '@/services/analytics';
+import { getAllCommands, type Command } from '@/config/commands';
+import { isMobileDevice } from '@/utils';
+import { setTrustedHtml, trustedHtml } from '@/utils/dom-utils';
+import { createFocusTrap, type FocusTrap } from '@/utils/focus-trap';
+import {
+  ALL_CHANNEL_TIP_KEYS,
+  SEARCH_SCOPES,
+  commandMatchesSearchScope,
+  idleChipCommandIds,
+  panelCommandTargetId,
+  resolveIdleSelectionTerm,
+  type SearchScope,
+} from '@/components/search-scope';
+import {
+  overlayHistory,
+  type OverlayCloseOrigin,
+  type OverlayId,
+} from '@/utils/overlay-history';
+import {
+  querySearchIndex,
+  searchSourceItemsEqual,
+  type SearchIndexQueryResult,
+} from '@/components/search-engine';
+import { decorateSearchResultOptions } from '@/components/search-result-options';
+import {
+  searchMatchIdentity,
+  type SearchCommandMatch,
+  type SearchMatch,
+  type SearchResult,
+  type SearchResultType,
+  type SearchableSource,
+} from '@/components/search-types';
 
 export type {
   SearchMatch,
@@ -58,12 +90,30 @@ function resolveCategoryLabel(cmd: Command): string {
 
 const RECENT_SEARCHES_KEY = 'worldmonitor_recent_searches';
 const MAX_RECENT = 8;
-const MAX_RESULTS = 24;
 
 interface SearchModalOptions {
   placeholder?: string;
-  hint?: string;
 }
+
+// Trailing-debounce window for per-keystroke search (#4537). Long enough to
+// coalesce fast typing, short enough to feel responsive on settle.
+const SEARCH_DEBOUNCE_MS = 180;
+
+const SCOPE_ICONS: Record<SearchScope, string> = {
+  all: '\u2318',
+  signals: '\u25C9',
+  map: '\u2316',
+  panels: '\u25A6',
+  actions: '\u26A1',
+};
+
+const SCOPE_LABELS: Record<SearchScope, string> = {
+  all: 'All intel',
+  signals: 'Signals',
+  map: 'Map',
+  panels: 'Panels',
+  actions: 'Actions',
+};
 
 export class SearchModal {
   private container: HTMLElement;
@@ -95,13 +145,42 @@ export class SearchModal {
   private selectedIndex = 0;
   private recentSearches: string[] = [];
   private onSelect?: (result: SearchResult) => void;
+  private onCommand?: (command: Command) => void;
+  private onHumanInteraction?: () => void;
+  private onQueryChange?: (rawInput: string) => void;
+  private onFlightSearch?: (callsign: string) => void;
+  private currentFlightCallsign: string | null = null;
+  private flightSearchFired = false;
   private placeholder: string;
-  private hint: string;
+  private activePanelIds: Set<string> = new Set();
+  /**
+   * Panels the user *could* enable on this variant (entitled superset),
+   * vs `activePanelIds` which is the currently-enabled subset. A panel in
+   * `available` but not `active` is rendered with an "Add" affordance and
+   * gets enabled on selection. When unset (size 0) we fall back to
+   * active-only gating for back-compat.
+   */
+  private availablePanelIds: Set<string> = new Set();
+  /**
+   * Caller-supplied predicate that returns true iff a `layer:<key>` command
+   * can actually execute right now (current renderer supports the layer +
+   * DeckGL gate for DeckGL-only layers). Hooked from SearchManager so
+   * renderer knowledge lives in one place. Defaults to "always true" when
+   * not set (back-compat for any instantiator that doesn't wire it).
+   */
+  private layerExecutableFn: (layerKey: string) => boolean = () => true;
+  private commandVisibleFn: (command: Command) => boolean = () => true;
+  private resultVisibleFn: (result: SearchResult) => boolean = () => true;
+  private isMobile: boolean;
+  /** When true, results area shows the full command list (opt-in). Sourced from getAllCommands(); no separate list to maintain. */
+  private showingAllCommands = false;
+  private activeScope: SearchScope = 'all';
+  private quickLaunchExamples: string[] = [];
 
   constructor(container: HTMLElement, options?: SearchModalOptions) {
     this.container = container;
     this.placeholder = options?.placeholder || t('modals.search.placeholder');
-    this.hint = options?.hint || t('modals.search.hint');
+    this.isMobile = isMobileDevice();
     this.loadRecentSearches();
   }
 
@@ -400,22 +479,17 @@ export class SearchModal {
 
   private createModal(): void {
     this.overlay = document.createElement('div');
-    this.overlay.className = 'search-overlay';
-    this.overlay.innerHTML = `
-      <div class="search-modal">
-        <div class="search-header">
-          <span class="search-icon">⌘</span>
-          <input type="text" class="search-input" placeholder="${this.placeholder}" autofocus />
-          <kbd class="search-kbd">ESC</kbd>
-        </div>
-        <div class="search-results"></div>
-        <div class="search-footer">
-          <span><kbd>↑↓</kbd> ${t('modals.search.navigate')}</span>
-          <span><kbd>↵</kbd> ${t('modals.search.select')}</span>
-          <span><kbd>esc</kbd> ${t('modals.search.close')}</span>
-        </div>
-      </div>
-    `;
+    this.overlay.setAttribute('role', 'dialog');
+    this.overlay.setAttribute('aria-modal', 'true');
+    this.overlay.setAttribute('aria-label', 'World Monitor intelligence command deck');
+    this.overlay.dataset.searchScope = this.activeScope;
+    // Claim human authority in capture phase, before a click can close the
+    // palette or start a new selection. Keyboard-generated clicks have no
+    // pointerdown, while pointer gestures may not produce a click, so retain
+    // both event types; cancellation is intentionally idempotent.
+    const notifyHumanInteraction = (): void => this.onHumanInteraction?.();
+    this.overlay.addEventListener('pointerdown', notifyHumanInteraction, { capture: true });
+    this.overlay.addEventListener('click', notifyHumanInteraction, { capture: true });
 
     if (this.isMobile) {
       this.overlay.className = 'search-overlay search-mobile';
@@ -616,49 +690,13 @@ export class SearchModal {
       return;
     }
 
-    // Collect matches grouped by type
-    const byType = new Map<SearchResultType, (SearchResult & { _score: number })[]>();
+    this.onQueryChange?.(rawInput);
 
-    for (const source of this.sources) {
-      for (const item of source.items) {
-        const titleLower = item.title.toLowerCase();
-        const subtitleLower = item.subtitle?.toLowerCase() || '';
-
-        if (titleLower.includes(query) || subtitleLower.includes(query)) {
-          const isPrefix = titleLower.startsWith(query) || subtitleLower.startsWith(query);
-          const result = {
-            type: source.type,
-            id: item.id,
-            title: item.title,
-            subtitle: item.subtitle,
-            data: item.data,
-            _score: isPrefix ? 2 : 1,
-          } as SearchResult & { _score: number };
-
-          if (!byType.has(source.type)) byType.set(source.type, []);
-          byType.get(source.type)!.push(result);
-        }
-      }
-    }
-
-    // Prioritize: news first, then other dynamic data, then static infrastructure
-    const priority: SearchResultType[] = [
-      'news', 'prediction', 'market', 'earthquake', 'outage',  // Dynamic/timely
-      'conflict', 'hotspot', 'country',  // Current events + countries
-      'base', 'pipeline', 'cable', 'datacenter', 'nuclear', 'irradiator',  // Infrastructure
-      'techcompany', 'ailab', 'startup', 'techevent', 'techhq', 'accelerator'  // Tech
-    ];
-
-    // Take top matches from each type, news gets more slots
-    this.results = [];
-    for (const type of priority) {
-      const matches = byType.get(type) || [];
-      matches.sort((a, b) => b._score - a._score);
-      const limit = type === 'news' ? 6 : type === 'country' ? 4 : 3;
-      this.results.push(...matches.slice(0, limit));
-      if (this.results.length >= MAX_RESULTS) break;
-    }
-    this.results = this.results.slice(0, MAX_RESULTS);
+    const matches = this.search(rawInput, this.activeScope);
+    this.currentFlightCallsign = matches.flightCallsign;
+    this.flightSearchFired = false;
+    this.commandResults = matches.commandMatches;
+    this.results = matches.entityMatches.map((match) => match.result);
 
     trackSearchUsed(query.length, this.results.length + this.commandResults.length);
     this.selectedIndex = 0;
@@ -689,7 +727,7 @@ export class SearchModal {
   private renderRecent(): void {
     if (!this.resultsList) return;
 
-    this.resultsList.innerHTML = `<div class="search-section-header">${t('modals.search.recent')}</div>`;
+    setTrustedHtml(this.resultsList, trustedHtml(`<div class="search-section-header">${t('modals.search.recent')}</div>`, "legacy direct innerHTML migration"));
 
     this.recentSearches.forEach((term, i) => {
       const item = document.createElement('div');
@@ -698,7 +736,7 @@ export class SearchModal {
 
       const icon = document.createElement('span');
       icon.className = 'search-result-icon';
-      icon.textContent = '🕐';
+      icon.textContent = '\u{1F553}';
 
       const title = document.createElement('span');
       title.className = 'search-result-title';
@@ -708,11 +746,10 @@ export class SearchModal {
       item.appendChild(title);
 
       item.addEventListener('click', () => {
-        if (this.input) this.input.value = term;
-        this.handleSearch();
+        this.applyProgrammaticQuery(term);
       });
 
-      this.resultsList!.appendChild(item);
+      this.resultsList?.appendChild(item);
     });
 
     this.appendSeeAllCommandsLink();
@@ -721,11 +758,56 @@ export class SearchModal {
   private renderEmpty(): void {
     if (!this.resultsList) return;
 
-    this.resultsList.innerHTML = `
-      <div class="search-empty">
-        <div class="search-empty-icon">🔍</div>
-        <div>${t('modals.search.empty')}</div>
-        <div class="search-empty-hint">${this.hint}</div>
+    // All-channel tips are driven by ALL_CHANNEL_TIP_KEYS (pre-deck inventory).
+    // Channel scopes keep a narrower, task-focused set.
+    const hasFlight = this.sources.some((source) => source.type === 'flight');
+    const tipMeta: Record<string, { icon: string }> = {
+      'commands.tips.map': { icon: '\u2316' },
+      'commands.tips.panel': { icon: '\u25A6' },
+      'commands.tips.brief': { icon: '\u25C9' },
+      'commands.tips.layers': { icon: '\u26A1' },
+      'commands.tips.time': { icon: '\u23F1\uFE0F' },
+      'commands.tips.settings': { icon: '\u2699\uFE0F' },
+      'commands.tips.flight': { icon: '\u2708\uFE0F' },
+    };
+    const toTip = (key: string) => ({
+      icon: tipMeta[key]?.icon ?? '\u2022',
+      key,
+      exampleKey: `${key}Example`,
+    });
+    const flightTip = hasFlight ? [toTip('commands.tips.flight')] : [];
+    const allChannelTips = ALL_CHANNEL_TIP_KEYS
+      .filter((key) => key !== 'commands.tips.flight' || hasFlight)
+      .map((key) => toTip(key));
+    const allTips: Record<SearchScope, { icon: string; key: string; exampleKey: string }[]> = {
+      all: allChannelTips,
+      signals: [
+        toTip('commands.tips.brief'),
+        ...flightTip,
+      ],
+      map: [
+        toTip('commands.tips.map'),
+        { icon: '\u25C8', key: 'commands.tips.layers', exampleKey: 'commands.tips.layersExample' },
+      ],
+      panels: [
+        toTip('commands.tips.panel'),
+      ],
+      actions: [
+        toTip('commands.tips.time'),
+        toTip('commands.tips.settings'),
+      ],
+    };
+    // All shows the full pre-deck pool (up to 7 with flight). Scoped channels stay compact.
+    const tipLimit = this.activeScope === 'all'
+      ? (this.isMobile ? 3 : 7)
+      : (this.isMobile ? 2 : 4);
+    const tips = allTips[this.activeScope].slice(0, tipLimit);
+    this.quickLaunchExamples = tips.map((tip) => t(tip.exampleKey));
+
+    let html = `
+      <div class="search-section-header search-launch-header">
+        <span>${t('modals.search.empty')}</span>
+        <span>${escapeHtml(SCOPE_LABELS[this.activeScope])} channel</span>
       </div>
       <div class="search-launch-grid">`;
     tips.forEach((tip, i) => {
@@ -887,7 +969,7 @@ export class SearchModal {
       }
       setTrustedHtml(this.resultsList, trustedHtml(`
         <div class="search-empty">
-          <div class="search-empty-icon">∅</div>
+          <div class="search-empty-icon">\u2205</div>
           <div>${t('modals.search.noResults')}</div>
         </div>
       `, "legacy direct innerHTML migration"));
@@ -896,42 +978,72 @@ export class SearchModal {
     }
 
     const icons: Record<SearchResultType, string> = {
-      country: '🏳️',
-      news: '📰',
-      hotspot: '📍',
-      market: '📈',
-      prediction: '🎯',
-      conflict: '⚔️',
-      base: '🏛️',
-      pipeline: '🛢',
-      cable: '🌐',
-      datacenter: '🖥️',
-      earthquake: '🌍',
-      outage: '📡',
-      nuclear: '☢️',
-      irradiator: '⚛️',
-      techcompany: '🏢',
-      ailab: '🧠',
-      startup: '🚀',
-      techevent: '📅',
-      techhq: '🦄',
-      accelerator: '🚀',
-      exchange: '🏛️',
-      financialcenter: '💰',
-      centralbank: '🏦',
-      commodityhub: '📦',
+      country: '\u{1F3F3}\uFE0F',
+      news: '\u{1F4F0}',
+      hotspot: '\u{1F4CD}',
+      market: '\u{1F4C8}',
+      prediction: '\u{1F3AF}',
+      conflict: '\u2694\uFE0F',
+      base: '\u{1F3DB}\uFE0F',
+      pipeline: '\u{1F6E2}',
+      cable: '\u{1F310}',
+      datacenter: '\u{1F5A5}\uFE0F',
+      earthquake: '\u{1F30D}',
+      outage: '\u{1F4E1}',
+      nuclear: '\u2622\uFE0F',
+      irradiator: '\u269B\uFE0F',
+      techcompany: '\u{1F3E2}',
+      ailab: '\u{1F9E0}',
+      startup: '\u{1F680}',
+      techevent: '\u{1F4C5}',
+      techhq: '\u{1F984}',
+      accelerator: '\u{1F680}',
+      exchange: '\u{1F3DB}\uFE0F',
+      financialcenter: '\u{1F4B0}',
+      centralbank: '\u{1F3E6}',
+      commodityhub: '\u{1F4E6}',
+      flight: '✈',
     };
 
-    this.resultsList.innerHTML = this.results.map((result, i) => `
-      <div class="search-result-item ${i === this.selectedIndex ? 'selected' : ''}" data-index="${i}">
-        <span class="search-result-icon">${icons[result.type]}</span>
-        <div class="search-result-content">
-          <div class="search-result-title">${this.highlightMatch(result.title)}</div>
-          ${result.subtitle ? `<div class="search-result-subtitle">${escapeHtml(result.subtitle)}</div>` : ''}
-        </div>
-        <span class="search-result-type">${escapeHtml(t(`modals.search.types.${result.type}`) || result.type)}</span>
-      </div>
-    `).join('');
+    let html = '';
+    let globalIndex = 0;
+
+    if (this.commandResults.length > 0) {
+      html += `<div class="search-section-header">${t('modals.search.commands')}</div>`;
+      for (const { command } of this.commandResults) {
+        const addable = this.isAddablePanel(command);
+        const addLabel = t('modals.search.addPanel', { defaultValue: 'Add' });
+        const typeLabel = addable ? addLabel : resolveCategoryLabel(command);
+        const ariaLabel = addable ? ` aria-label="${escapeHtml(`${addLabel}: ${resolveCommandLabel(command)}`)}"` : '';
+        html += `
+          <div class="search-result-item command-item ${addable ? 'command-addable' : ''} ${globalIndex === this.selectedIndex ? 'selected' : ''}" data-index="${globalIndex}" data-command="${escapeHtml(command.id)}"${ariaLabel}>
+            <span class="search-result-icon">${escapeHtml(command.icon)}</span>
+            <div class="search-result-content">
+              <div class="search-result-title">${escapeHtml(resolveCommandLabel(command))}</div>
+            </div>
+            <span class="search-result-type${addable ? ' search-result-type-add' : ''}">${escapeHtml(typeLabel)}</span>
+          </div>`;
+        globalIndex++;
+      }
+      if (this.results.length > 0) {
+        html += `<div class="search-section-header">${t('modals.search.results')}</div>`;
+      }
+    }
+
+    for (const result of this.results) {
+      html += `
+        <div class="search-result-item ${globalIndex === this.selectedIndex ? 'selected' : ''}" data-index="${globalIndex}">
+          <span class="search-result-icon">${icons[result.type]}</span>
+          <div class="search-result-content">
+            <div class="search-result-title">${this.highlightMatch(result.title)}</div>
+            ${result.subtitle ? `<div class="search-result-subtitle">${escapeHtml(result.subtitle)}</div>` : ''}
+          </div>
+          <span class="search-result-type">${escapeHtml(t(`modals.search.types.${result.type}`) || result.type)}</span>
+        </div>`;
+      globalIndex++;
+    }
+
+    setTrustedHtml(this.resultsList, trustedHtml(html, "legacy direct innerHTML migration"));
 
     this.resultsList.querySelectorAll('.search-result-item').forEach((el) => {
       el.addEventListener('click', () => {
@@ -1025,6 +1137,16 @@ export class SearchModal {
     const escapedQuery = escapeHtml(query);
     const regex = new RegExp(`(${escapedQuery.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi');
     return escapedText.replace(regex, '<mark>$1</mark>');
+  }
+
+  // Run a pending debounced search synchronously when the input has changed since
+  // the last search, so keyboard nav/selection acts on current results.
+  private flushPendingSearch(): void {
+    const current = (this.input?.value.toLowerCase() ?? '').trim();
+    if (current !== this.lastSearchedQuery) {
+      this.debouncedSearch.cancel();
+      this.handleSearch();
+    }
   }
 
   private handleKeydown(e: KeyboardEvent): void {

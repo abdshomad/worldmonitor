@@ -33,6 +33,12 @@ const LAYER_KEYS: (keyof MapLayers)[] = [
   'accelerators',
   'techHQs',
   'techEvents',
+  'tradeRoutes',
+  'iranAttacks',
+  'gpsJamming',
+  'satellites',
+  'ciiChoropleth',
+  'resilienceScore',
 ];
 
 const TIME_RANGES: TimeRange[] = ['1h', '6h', '24h', '48h', '7d', 'all'];
@@ -46,6 +52,8 @@ export interface ParsedMapUrlState {
   timeRange?: TimeRange;
   layers?: MapLayers;
   country?: string;
+  expanded?: boolean;
+  chokepoint?: string;
 }
 
 const clamp = (value: number, min: number, max: number): number =>
@@ -98,9 +106,6 @@ export function parseMapUrlState(
     ? chokepointParam.trim().toLowerCase()
     : undefined;
 
-  const countryParam = params.get('country');
-  const country = countryParam && /^[A-Z]{2}$/i.test(countryParam.trim()) ? countryParam.trim().toUpperCase() : undefined;
-
   const layersParam = params.get('layers');
   let layers: MapLayers | undefined;
   if (layersParam !== null) {
@@ -113,6 +118,10 @@ export function parseMapUrlState(
           .map((layer) => layer.trim())
           .filter(Boolean)
       );
+      if (requested.has('satelliteImagery')) {
+        requested.delete('satelliteImagery');
+        requested.add('satellites');
+      }
       LAYER_KEYS.forEach((key) => {
         layers![key] = requested.has(key);
       });
@@ -131,6 +140,8 @@ export function parseMapUrlState(
     timeRange,
     layers,
     country,
+    expanded,
+    chokepoint,
   };
 }
 
@@ -143,6 +154,8 @@ export function buildMapUrl(
     timeRange: TimeRange;
     layers: MapLayers;
     country?: string;
+    expanded?: boolean;
+    chokepoint?: string;
   }
 ): string {
   let url: URL;
@@ -168,6 +181,14 @@ export function buildMapUrl(
 
   if (state.country) {
     params.set('country', state.country);
+  }
+
+  if (state.expanded) {
+    params.set('expanded', '1');
+  }
+
+  if (state.chokepoint) {
+    params.set('chokepoint', state.chokepoint);
   }
 
   url.search = params.toString();

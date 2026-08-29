@@ -1,13 +1,16 @@
 import { Panel } from './Panel';
-import { escapeHtml } from '@/utils/sanitize';
+import { escapeHtml, unsafeRawHtml } from '@/utils/sanitize';
 import { fetchCachedTheaterPosture, type CachedTheaterPosture } from '@/services/cached-theater-posture';
-import { fetchMilitaryVessels } from '@/services/military-vessels';
+import { getMilitaryVesselsModule, isVesselRuntimeStoppedError } from '@/services/military-vessels-lazy';
 import { recalcPostureWithVessels, type TheaterPostureSummary } from '@/services/military-surge';
+import { isDesktopRuntime } from '@/services/runtime';
 import { t } from '../services/i18n';
+import type { NewsItem, DeductContextDetail } from '@/types';
+import { buildNewsContext } from '@/utils/news-context';
+import { bindActivationKeys } from '@/utils/activation';
 
 export class StrategicPosturePanel extends Panel {
   private postures: TheaterPostureSummary[] = [];
-  private refreshInterval: ReturnType<typeof setInterval> | null = null;
   private vesselTimeouts: ReturnType<typeof setTimeout>[] = [];
   private loadingElapsedInterval: ReturnType<typeof setInterval> | null = null;
   private loadingStartTime: number = 0;
@@ -15,21 +18,23 @@ export class StrategicPosturePanel extends Panel {
   private lastTimestamp: string = '';
   private isStale: boolean = false;
 
-  constructor() {
+  constructor(private getLatestNews?: () => NewsItem[]) {
     super({
       id: 'strategic-posture',
       title: t('panels.strategicPosture'),
       showCount: false,
       trackActivity: true,
       infoTooltip: t('components.strategicPosture.infoTooltip'),
+      defaultRowSpan: 2,
     });
     this.init();
+    this.content.addEventListener('click', this.handleContentClick);
+    bindActivationKeys(this.content, '.posture-theater');
   }
 
   private init(): void {
     this.showLoading();
-    this.fetchAndRender();
-    this.startAutoRefresh();
+    void this.fetchAndRender();
     // Re-augment with vessels after stream has had time to populate
     // AIS data accumulates gradually - check at 30s, 60s, 90s, 120s
     this.vesselTimeouts.push(setTimeout(() => this.reaugmentVessels(), 30 * 1000));
@@ -38,20 +43,21 @@ export class StrategicPosturePanel extends Panel {
     this.vesselTimeouts.push(setTimeout(() => this.reaugmentVessels(), 120 * 1000));
   }
 
-  private startAutoRefresh(): void {
-    this.refreshInterval = setInterval(() => this.fetchAndRender(), 5 * 60 * 1000);
+  private isPanelVisible(): boolean {
+    return !this.element.classList.contains('hidden');
   }
 
   private async reaugmentVessels(): Promise<void> {
-    if (this.postures.length === 0) return;
+    if (!this.isPanelVisible() || this.postures.length === 0) return;
     console.log('[StrategicPosturePanel] Re-augmenting with vessels...');
     await this.augmentWithVessels();
+    if (!this.element?.isConnected) return;
     this.render();
   }
 
   public override showLoading(): void {
     this.loadingStartTime = Date.now();
-    this.setContent(`
+    this.setSafeContent(unsafeRawHtml(`
       <div class="posture-panel">
         <div class="posture-loading">
           <div class="posture-loading-radar">
@@ -78,7 +84,7 @@ export class StrategicPosturePanel extends Panel {
           <div class="posture-loading-note">${t('components.strategicPosture.initialLoadNote')}</div>
         </div>
       </div>
-    `);
+    `, 'legacy Panel.setContent() migration'));
     this.startLoadingTimer();
   }
 
@@ -118,11 +124,26 @@ export class StrategicPosturePanel extends Panel {
   }
 
   private async fetchAndRender(): Promise<void> {
+    // A deferred panel runs its constructor BEFORE panel-layout inserts the
+    // element into the grid, and `init()` starts this fetch from that
+    // constructor. Bootstrap hydration and the posture circuit breaker both
+    // resolve on the microtask queue, so the response routinely lands while the
+    // element is still detached — and the `isConnected` guard below then
+    // discarded the render with no retry, stranding the panel on "Scanning
+    // Theaters" until the 15-minute scheduled refresh. Wait for the mount
+    // instead (same idiom as LatestBriefPanel / McpDataPanel).
+    if (!this.element?.isConnected) {
+      this.runWhenConnected(() => { void this.fetchAndRender(); });
+      return;
+    }
+    if (!this.isPanelVisible()) return;
+
     try {
       // Fetch aircraft data from server
       this.showLoadingStage('aircraft');
       const data = await fetchCachedTheaterPosture(this.signal);
-      if (!data || data.postures.length === 0) {
+      if (!this.element?.isConnected) return;
+      if (!data || !data.postures?.length) {
         this.showNoData();
         return;
       }
@@ -138,6 +159,7 @@ export class StrategicPosturePanel extends Panel {
       // Try to augment with vessel data (client-side)
       this.showLoadingStage('vessels');
       await this.augmentWithVessels();
+      if (!this.element?.isConnected) return;
 
       this.showLoadingStage('analysis');
       this.updateBadges();
@@ -145,7 +167,9 @@ export class StrategicPosturePanel extends Panel {
 
       // If we rendered stale localStorage data, re-fetch fresh after a short delay
       if (this.isStale) {
-        setTimeout(() => this.fetchAndRender(), 3000);
+        setTimeout(() => {
+          void this.fetchAndRender();
+        }, 3000);
       }
     } catch (error) {
       if (this.isAbortError(error)) return;
@@ -156,6 +180,7 @@ export class StrategicPosturePanel extends Panel {
 
   private async augmentWithVessels(): Promise<void> {
     try {
+      const { fetchMilitaryVessels } = await getMilitaryVesselsModule();
       const { vessels } = await fetchMilitaryVessels();
       console.log(`[StrategicPosturePanel] Got ${vessels.length} total military vessels`);
       if (vessels.length === 0) {
@@ -207,6 +232,9 @@ export class StrategicPosturePanel extends Panel {
       recalcPostureWithVessels(this.postures);
       console.log('[StrategicPosturePanel] Augmented with', vessels.length, 'vessels, posture levels recalculated');
     } catch (error) {
+      // Deliberate teardown of the lazy vessel runtime — leave the cached
+      // posture as-is rather than logging a misleading fetch failure.
+      if (isVesselRuntimeStoppedError(error)) return;
       console.warn('[StrategicPosturePanel] Failed to fetch vessels:', error);
       // Restore cached vessel counts if live fetch failed
       this.restoreVesselCounts();
@@ -258,7 +286,7 @@ export class StrategicPosturePanel extends Panel {
   }
 
   public updatePostures(data: CachedTheaterPosture): void {
-    if (!data || data.postures.length === 0) {
+    if (!data || !data.postures?.length) {
       this.showNoData();
       return;
     }
@@ -270,6 +298,7 @@ export class StrategicPosturePanel extends Panel {
     this.lastTimestamp = data.timestamp;
     this.isStale = data.stale || false;
     this.augmentWithVessels().then(() => {
+      if (!this.element?.isConnected) return;
       this.updateBadges();
       this.render();
     });
@@ -287,13 +316,13 @@ export class StrategicPosturePanel extends Panel {
     }
   }
 
-  public refresh(): void {
-    this.fetchAndRender();
+  public async refresh(): Promise<void> {
+    return this.fetchAndRender();
   }
 
   private showNoData(): void {
     this.stopLoadingTimer();
-    this.setContent(`
+    this.setSafeContent(unsafeRawHtml(`
       <div class="posture-panel">
         <div class="posture-no-data">
           <div class="posture-no-data-icon pulse">📡</div>
@@ -311,16 +340,16 @@ export class StrategicPosturePanel extends Panel {
               <span>${t('components.strategicPosture.aisVesselStream')}</span>
             </div>
           </div>
-          <button class="posture-retry-btn">↻ ${t('components.strategicPosture.retryNow')}</button>
+          <button class="posture-retry-btn" data-panel-retry>↻ ${t('components.strategicPosture.retryNow')}</button>
         </div>
       </div>
-    `);
-    this.content.querySelector('.posture-retry-btn')?.addEventListener('click', () => this.refresh());
+    `, 'legacy Panel.setContent() migration'));
+    this.setRetryCallback(() => this.refresh());
   }
 
   private showFetchError(): void {
     this.stopLoadingTimer();
-    this.setContent(`
+    this.setSafeContent(unsafeRawHtml(`
       <div class="posture-panel">
         <div class="posture-no-data">
           <div class="posture-no-data-icon">⚠️</div>
@@ -331,11 +360,11 @@ export class StrategicPosturePanel extends Panel {
           <div class="posture-error-hint">
             <strong>${t('components.strategicPosture.rateLimitedTip')}</strong>
           </div>
-          <button class="posture-retry-btn">↻ ${t('components.strategicPosture.tryAgain')}</button>
+          <button class="posture-retry-btn" data-panel-retry>↻ ${t('components.strategicPosture.tryAgain')}</button>
         </div>
       </div>
-    `);
-    this.content.querySelector('.posture-retry-btn')?.addEventListener('click', () => this.refresh());
+    `, 'legacy Panel.setContent() migration'));
+    this.setRetryCallback(() => this.refresh());
   }
 
   private getPostureBadge(level: string): string {
@@ -377,7 +406,7 @@ export class StrategicPosturePanel extends Panel {
       if (p.totalVessels > 0) chips.push(`<span class="posture-chip naval">⚓ ${p.totalVessels}</span>`);
 
       return `
-        <div class="posture-theater posture-compact" data-lat="${p.centerLat}" data-lon="${p.centerLon}" title="${t('components.strategicPosture.clickToView', { name: escapeHtml(displayName) })}">
+        <div class="posture-theater posture-compact" role="button" tabindex="0" data-lat="${p.centerLat}" data-lon="${p.centerLon}" title="${t('components.strategicPosture.clickToView', { name: escapeHtml(displayName) })}">
           <span class="posture-name">${escapeHtml(p.shortName)}</span>
           <div class="posture-chips">${chips.join('')}</div>
           ${this.getPostureBadge(p.postureLevel)}
@@ -415,7 +444,7 @@ export class StrategicPosturePanel extends Panel {
     const hasNaval = navalChips.length > 0;
 
     return `
-      <div class="posture-theater posture-expanded ${p.postureLevel}" data-lat="${p.centerLat}" data-lon="${p.centerLon}" title="${t('components.strategicPosture.clickToViewMap')}">
+      <div class="posture-theater posture-expanded ${p.postureLevel}" role="button" tabindex="0" data-lat="${p.centerLat}" data-lon="${p.centerLon}" title="${t('components.strategicPosture.clickToViewMap')}">
         <div class="posture-theater-header">
           <span class="posture-name">${escapeHtml(displayName)}</span>
           ${this.getPostureBadge(p.postureLevel)}
@@ -430,6 +459,7 @@ export class StrategicPosturePanel extends Panel {
           ${p.strikeCapable ? `<span class="posture-strike">⚡ ${t('components.strategicPosture.strike')}</span>` : ''}
           ${this.getTrendIcon(p.trend, p.changePercent)}
           ${p.targetNation ? `<span class="posture-focus">→ ${escapeHtml(p.targetNation)}</span>` : ''}
+          ${isDesktopRuntime() ? `<button class="posture-deduce-btn" title="Deduce Situation with AI" style="background: none; border: none; cursor: pointer; opacity: 0.7; font-size: 1.1em; transition: opacity 0.2s; margin-left: auto;" data-theater='${escapeHtml(JSON.stringify(p))}'>\u{1F9E0}</button>` : ''}
         </div>
       </div>
     `;
@@ -453,50 +483,97 @@ export class StrategicPosturePanel extends Panel {
     const html = `
       <div class="posture-panel">
         ${staleWarning}
+
+        <details class="posture-emoji-key">
+          <summary>💡 ${t('components.strategicPosture.emojiKeyLabel')}</summary>
+          <div class="posture-emoji-key-body">
+            <div class="posture-emoji-key-section">${t('components.strategicPosture.emojiKeyAir')}</div>
+            <div class="posture-emoji-key-item"><span>✈️</span><span>${t('components.strategicPosture.units.fighters')}</span></div>
+            <div class="posture-emoji-key-item"><span>⛽</span><span>${t('components.strategicPosture.units.tankers')}</span></div>
+            <div class="posture-emoji-key-item"><span>📡</span><span>${t('components.strategicPosture.units.awacs')}</span></div>
+            <div class="posture-emoji-key-item"><span>🔍</span><span>${t('components.strategicPosture.units.recon')}</span></div>
+            <div class="posture-emoji-key-item"><span>📦</span><span>${t('components.strategicPosture.units.transport')}</span></div>
+            <div class="posture-emoji-key-item"><span>💣</span><span>${t('components.strategicPosture.units.bombers')}</span></div>
+            <div class="posture-emoji-key-item"><span>🛸</span><span>${t('components.strategicPosture.units.drones')}</span></div>
+            <div class="posture-emoji-key-section">${t('components.strategicPosture.emojiKeyNaval')}</div>
+            <div class="posture-emoji-key-item"><span>🚢</span><span>${t('components.strategicPosture.units.carriers')}</span></div>
+            <div class="posture-emoji-key-item"><span>⚓</span><span>${t('components.strategicPosture.units.destroyers')}</span></div>
+            <div class="posture-emoji-key-item"><span>🛥️</span><span>${t('components.strategicPosture.units.frigates')}</span></div>
+            <div class="posture-emoji-key-item"><span>🦈</span><span>${t('components.strategicPosture.units.submarines')}</span></div>
+            <div class="posture-emoji-key-item"><span>🚤</span><span>${t('components.strategicPosture.units.patrol')}</span></div>
+            <div class="posture-emoji-key-item"><span>⚓</span><span>${t('components.strategicPosture.units.auxiliary')}</span></div>
+          </div>
+        </details>
+
         ${sorted.map((p) => this.renderTheater(p)).join('')}
 
         <div class="posture-footer">
           <span class="posture-updated">${this.isStale ? '⚠️ ' : ''}${t('components.strategicPosture.updated')} ${updatedTime}</span>
-          <button class="posture-refresh-btn" title="${t('components.strategicPosture.refresh')}">↻</button>
+          <button class="posture-refresh-btn" title="${t('components.strategicPosture.refresh')}" aria-label="${t('components.strategicPosture.refresh')}">↻</button>
         </div>
       </div>
     `;
 
-    this.setContent(html);
-    this.attachEventListeners();
+    this.setSafeContent(unsafeRawHtml(html, 'legacy Panel.setContent() migration'));
   }
 
-  private attachEventListeners(): void {
-    this.content.querySelector('.posture-refresh-btn')?.addEventListener('click', () => {
+  private handleContentClick = (e: Event): void => {
+    const target = e.target as HTMLElement | null;
+    if (!target) return;
+
+    if (target.closest('.posture-refresh-btn')) {
       this.refresh();
-    });
+      return;
+    }
 
-    const theaters = this.content.querySelectorAll('.posture-theater');
-    theaters.forEach((el) => {
-      el.addEventListener('click', () => {
-        const lat = parseFloat((el as HTMLElement).dataset.lat || '0');
-        const lon = parseFloat((el as HTMLElement).dataset.lon || '0');
-        console.log('[StrategicPosturePanel] Theater clicked:', {
-          lat,
-          lon,
-          dataLat: (el as HTMLElement).dataset.lat,
-          dataLon: (el as HTMLElement).dataset.lon,
-          element: (el as HTMLElement).textContent?.slice(0, 30),
-          hasHandler: !!this.onLocationClick,
-        });
-        if (this.onLocationClick && !isNaN(lat) && !isNaN(lon)) {
-          console.log('[StrategicPosturePanel] Calling onLocationClick with:', lat, lon);
-          this.onLocationClick(lat, lon);
-        } else {
-          console.warn('[StrategicPosturePanel] No handler or invalid coords!', {
-            hasHandler: !!this.onLocationClick,
-            lat,
-            lon,
-          });
+    const deduceBtn = target.closest<HTMLElement>('.posture-deduce-btn');
+    if (deduceBtn) {
+      e.stopPropagation();
+      try {
+        const theaterDataStr = deduceBtn.dataset.theater;
+        if (!theaterDataStr) return;
+
+        const p = JSON.parse(theaterDataStr);
+        const query = `What is the expected strategic impact of the current military posture in the ${p.shortName} theater?`;
+        let geoContext = `Theater: ${p.shortName} (${p.theaterName}). Military Assets: ${p.totalAircraft} aircraft, ${p.totalVessels} naval vessels. Readiness Level: ${p.postureLevel}. Assets breakdown: ${p.fighters} fighters, ${p.bombers} bombers, ${p.carriers} carriers, ${p.submarines} submarines. Focus/Target: ${p.targetNation || 'Unknown'}.`;
+
+        if (this.getLatestNews) {
+          const newsCtx = buildNewsContext(this.getLatestNews);
+          if (newsCtx) geoContext += `\n\n${newsCtx}`;
         }
-      });
+
+        const detail: DeductContextDetail = { query, geoContext, autoSubmit: true };
+        document.dispatchEvent(new CustomEvent('wm:deduct-context', { detail }));
+      } catch (err) {
+        console.error('[StrategicPosturePanel] Failed to dispatch deduction event', err);
+      }
+      return;
+    }
+
+    const el = target.closest<HTMLElement>('.posture-theater');
+    if (!el || !this.content.contains(el)) return;
+
+    const lat = parseFloat(el.dataset.lat || '0');
+    const lon = parseFloat(el.dataset.lon || '0');
+    console.log('[StrategicPosturePanel] Theater clicked:', {
+      lat,
+      lon,
+      dataLat: el.dataset.lat,
+      dataLon: el.dataset.lon,
+      element: el.textContent?.slice(0, 30),
+      hasHandler: !!this.onLocationClick,
     });
-  }
+    if (this.onLocationClick && !Number.isNaN(lat) && !Number.isNaN(lon)) {
+      console.log('[StrategicPosturePanel] Calling onLocationClick with:', lat, lon);
+      this.onLocationClick(lat, lon);
+    } else {
+      console.warn('[StrategicPosturePanel] No handler or invalid coords!', {
+        hasHandler: !!this.onLocationClick,
+        lat,
+        lon,
+      });
+    }
+  };
 
   public setLocationClickHandler(handler: (lat: number, lon: number) => void): void {
     console.log('[StrategicPosturePanel] setLocationClickHandler called, handler:', typeof handler);
@@ -509,8 +586,15 @@ export class StrategicPosturePanel extends Panel {
     return this.postures;
   }
 
+  public override show(): void {
+    const wasHidden = this.element.classList.contains('hidden');
+    super.show();
+    if (wasHidden) {
+      void this.fetchAndRender();
+    }
+  }
+
   public destroy(): void {
-    if (this.refreshInterval) clearInterval(this.refreshInterval);
     this.stopLoadingTimer();
     this.vesselTimeouts.forEach(t => clearTimeout(t));
     this.vesselTimeouts = [];

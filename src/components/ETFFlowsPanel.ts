@@ -1,32 +1,13 @@
 import { Panel } from './Panel';
+import { getRpcBaseUrl } from '@/services/rpc-client';
 import { t } from '@/services/i18n';
-import { escapeHtml } from '@/utils/sanitize';
+import { escapeHtml, unsafeRawHtml } from '@/utils/sanitize';
 
-interface ETFData {
-  ticker: string;
-  issuer: string;
-  price: number;
-  priceChange: number;
-  volume: number;
-  avgVolume: number;
-  volumeRatio: number;
-  direction: 'inflow' | 'outflow' | 'neutral';
-  estFlow: number;
-}
+import type { ListEtfFlowsResponse } from '@/generated/client/worldmonitor/market/v1/service_client';
+import { getHydratedData } from '@/services/bootstrap';
+import { MarketServiceClient } from '@/services/generated-rpc-clients';
 
-interface ETFFlowsResult {
-  timestamp: string;
-  summary: {
-    etfCount: number;
-    totalVolume: number;
-    totalEstFlow: number;
-    netDirection: string;
-    inflowCount: number;
-    outflowCount: number;
-  };
-  etfs: ETFData[];
-  unavailable?: boolean;
-}
+type ETFFlowsResult = ListEtfFlowsResponse;
 
 function formatVolume(v: number): string {
   if (Math.abs(v) >= 1e9) return `${(v / 1e9).toFixed(1)}B`;
@@ -51,38 +32,44 @@ export class ETFFlowsPanel extends Panel {
   private data: ETFFlowsResult | null = null;
   private loading = true;
   private error: string | null = null;
-  private refreshInterval: ReturnType<typeof setInterval> | null = null;
-
   constructor() {
-    super({ id: 'etf-flows', title: t('panels.etfFlows'), showCount: false });
-    void this.fetchData();
-    this.refreshInterval = setInterval(() => this.fetchData(), 3 * 60000);
+    super({ id: 'etf-flows', title: t('panels.etfFlows'), showCount: false, infoTooltip: t('components.etfFlows.infoTooltip') });
   }
 
-  public destroy(): void {
-    if (this.refreshInterval) {
-      clearInterval(this.refreshInterval);
-      this.refreshInterval = null;
-    }
-  }
-
-  private async fetchData(): Promise<void> {
-    try {
-      const res = await fetch('/api/etf-flows', { signal: this.signal });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      this.data = await res.json();
+  public async fetchData(): Promise<void> {
+    const hydrated = getHydratedData('etfFlows') as ETFFlowsResult | undefined;
+    if (hydrated?.etfs?.length) {
+      this.data = hydrated;
       this.error = null;
-    } catch (err) {
-      if (this.isAbortError(err)) return;
-      this.error = err instanceof Error ? err.message : 'Failed to fetch';
-    } finally {
       this.loading = false;
       this.renderPanel();
+      void this.refreshFromRpc();
+      return;
     }
+    await this.refreshFromRpc();
   }
 
-  private isUpstreamUnavailable(): boolean {
-    return this.data?.unavailable === true;
+  private async refreshFromRpc(): Promise<void> {
+    try {
+      const client = new MarketServiceClient(getRpcBaseUrl(), { fetch: (...args) => globalThis.fetch(...args) });
+      const fresh = await client.listEtfFlows({});
+      if (!this.element?.isConnected) return;
+      if (fresh.etfs?.length || !this.data) {
+        this.data = fresh;
+        this.error = null;
+        this.loading = false;
+        this.renderPanel();
+      }
+    } catch (err) {
+      if (this.isAbortError(err)) return;
+      if (!this.element?.isConnected) return;
+      if (!this.data) {
+        console.warn('[ETFFlows] Fetch error:', err);
+        this.error = t('components.etfFlows.unavailable');
+        this.loading = false;
+        this.renderPanel();
+      }
+    }
   }
 
   private renderPanel(): void {
@@ -92,22 +79,18 @@ export class ETFFlowsPanel extends Panel {
     }
 
     if (this.error || !this.data) {
-      this.showError(this.error || t('common.noDataShort'));
-      return;
-    }
-
-    if (this.isUpstreamUnavailable()) {
-      this.showError(t('common.upstreamUnavailable'));
+      this.showError(this.error || t('common.noDataShort'), () => void this.fetchData());
       return;
     }
 
     const d = this.data;
-    if (!d.etfs.length) {
-      this.setContent(`<div class="panel-loading-text">${t('components.etfFlows.unavailable')}</div>`);
+    if (!d.etfs?.length) {
+      const msg = d.rateLimited ? t('components.etfFlows.rateLimited') : t('components.etfFlows.unavailable');
+      this.setSafeContent(unsafeRawHtml(`<div class="panel-loading-text">${msg}</div>`, 'legacy Panel.setContent() migration'));
       return;
     }
 
-    const s = d.summary;
+    const s = d.summary || { etfCount: 0, totalVolume: 0, totalEstFlow: 0, netDirection: 'NEUTRAL', inflowCount: 0, outflowCount: 0 };
     const dirClass = s.netDirection.includes('INFLOW') ? 'flow-inflow' : s.netDirection.includes('OUTFLOW') ? 'flow-outflow' : 'flow-neutral';
 
     const rows = d.etfs.map(etf => `
@@ -144,11 +127,11 @@ export class ETFFlowsPanel extends Panel {
           <table class="etf-table">
             <thead>
               <tr>
-                <th>${t('components.etfFlows.table.ticker')}</th>
-                <th>${t('components.etfFlows.table.issuer')}</th>
-                <th>${t('components.etfFlows.table.estFlow')}</th>
-                <th>${t('components.etfFlows.table.volume')}</th>
-                <th>${t('components.etfFlows.table.change')}</th>
+                <th scope="col">${t('components.etfFlows.table.ticker')}</th>
+                <th scope="col">${t('components.etfFlows.table.issuer')}</th>
+                <th scope="col">${t('components.etfFlows.table.estFlow')}</th>
+                <th scope="col">${t('components.etfFlows.table.volume')}</th>
+                <th scope="col">${t('components.etfFlows.table.change')}</th>
               </tr>
             </thead>
             <tbody>${rows}</tbody>
@@ -157,6 +140,6 @@ export class ETFFlowsPanel extends Panel {
       </div>
     `;
 
-    this.setContent(html);
+    this.setSafeContent(unsafeRawHtml(html, 'legacy Panel.setContent() migration'));
   }
 }

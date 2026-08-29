@@ -1,24 +1,55 @@
 import { Panel } from './Panel';
 import { t } from '@/services/i18n';
-import type { MarketData, CryptoData } from '@/types';
+import type { MarketData, CryptoData, TokenData } from '@/types';
 import { formatPrice, formatChange, getChangeClass, getHeatmapClass } from '@/utils';
-import { escapeHtml } from '@/utils/sanitize';
+import { escapeHtml, unsafeRawHtml } from '@/utils/sanitize';
+import { miniSparkline } from '@/utils/sparkline';
+import { SITE_VARIANT } from '@/config';
+import { createWatchlistButton } from './watchlist-modal';
+import {
+  renderChinaCorporateDisclosureSignals,
+  type ChinaCorporateDisclosureSnapshot,
+} from './market-disclosures';
+import {
+  composeMarketPanelContent,
+  groupUnavailableSymbols,
+  type UnavailableSymbolGroup,
+} from './market-panel-content';
+import type {
+  MarketQuoteUnavailable,
+  MarketQuoteUnavailableReason,
+} from '@/generated/client/worldmonitor/market/v1/service_client';
+import { openMarketChartModal } from './market-chart-modal';
+import { navigateToStockResearch } from '@/features/stock-research/stock-research-overlay';
+import { normalizeStockResearchSymbol } from '@/features/stock-research/stock-research-route';
+import {
+  bindMarketChartActivation,
+  getMarketChartRowAttributes,
+} from './market-chart-interactions';
 
-function miniSparkline(data: number[] | undefined, change: number | null, w = 50, h = 16): string {
-  if (!data || data.length < 2) return '';
-  const min = Math.min(...data);
-  const max = Math.max(...data);
-  const range = max - min || 1;
-  const color = change != null && change >= 0 ? 'var(--green)' : 'var(--red)';
-  const points = data.map((v, i) => {
-    const x = (i / (data.length - 1)) * w;
-    const y = h - ((v - min) / range) * (h - 2) - 1;
-    return `${x.toFixed(1)},${y.toFixed(1)}`;
-  }).join(' ');
-  return `<svg width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" class="mini-sparkline"><polyline points="${points}" fill="none" stroke="${color}" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+// Not in the `common` namespace on purpose: `common` ships whole inside the
+// budgeted first-paint shell bundle, and this notice only ever renders after a
+// market fetch has completed.
+const UNAVAILABLE_REASON_KEYS: Record<MarketQuoteUnavailableReason, string> = {
+  MARKET_QUOTE_UNAVAILABLE_REASON_UNSPECIFIED: 'components.markets.unavailable.notFound',
+  MARKET_QUOTE_UNAVAILABLE_REASON_NOT_FOUND: 'components.markets.unavailable.notFound',
+  MARKET_QUOTE_UNAVAILABLE_REASON_PROVIDER_ERROR: 'components.markets.unavailable.providerError',
+  MARKET_QUOTE_UNAVAILABLE_REASON_PROVIDER_RATE_LIMITED: 'components.markets.unavailable.rateLimited',
+  MARKET_QUOTE_UNAVAILABLE_REASON_PROVIDER_NOT_CONFIGURED: 'components.markets.unavailable.notConfigured',
+  MARKET_QUOTE_UNAVAILABLE_REASON_REQUEST_LIMIT_EXCEEDED: 'components.markets.unavailable.requestLimit',
+  MARKET_QUOTE_UNAVAILABLE_REASON_UPSTREAM_BUDGET_EXHAUSTED: 'components.markets.unavailable.budget',
+  MARKET_QUOTE_UNAVAILABLE_REASON_SEED_UNAVAILABLE: 'components.markets.unavailable.seed',
+};
+
+function unavailableSymbolLine(group: UnavailableSymbolGroup): string {
+  // An unrecognized reason (a server ahead of this bundle) still names the
+  // symbols rather than dropping the line — silence is the bug being fixed.
+  const reason = t(UNAVAILABLE_REASON_KEYS[group.reason] ?? 'components.markets.unavailable.notFound');
+  const symbols = group.symbols.join(', ');
+  return group.overflow > 0
+    ? t('components.markets.unavailable.symbolsMore', { symbols, count: group.overflow, reason })
+    : t('components.markets.unavailable.symbols', { symbols, reason });
 }
-
-
 
 export class MarketPanel extends Panel {
   private _markets: MarketData[] = [];
@@ -27,14 +58,33 @@ export class MarketPanel extends Panel {
   private _disclosures: ChinaCorporateDisclosureSnapshot | null = null;
 
   constructor() {
-    super({ id: 'markets', title: t('panels.markets') });
+    super({ id: 'markets', title: t('panels.markets'), infoTooltip: t('components.markets.infoTooltip') });
+    this.header.appendChild(createWatchlistButton());
+
+    // Delegated once on the persistent content element (each render only swaps
+    // innerHTML): click or Enter/Space on a plottable ticker opens its terminal chart.
+    // Rows are marked role="button" purely on having a plottable series, so
+    // every one of them must lead somewhere. The research route only accepts
+    // /^[A-Z][A-Z0-9.-]{0,14}$/, which rejects the caret-prefixed indices
+    // (^GSPC, ^DJI, ^IXIC …) and digit-leading Asian tickers (0700.HK,
+    // 600519.SS …) that lead this panel — those keep the chart modal rather
+    // than becoming announced-but-inert controls.
+    bindMarketChartActivation(this.content, () => this._markets, (stock) => {
+      if (normalizeStockResearchSymbol(stock.symbol)) navigateToStockResearch(stock.symbol, stock);
+      else openMarketChartModal(stock);
+    });
   }
 
-  public renderMarkets(data: MarketData[]): void {
-    if (data.length === 0) {
-      this.showError(t('common.failedMarketData'));
-      return;
-    }
+  public renderMarkets(
+    data: MarketData[],
+    rateLimited?: boolean,
+    unavailable?: readonly MarketQuoteUnavailable[],
+  ): void {
+    this._markets = data;
+    this._marketsRateLimited = Boolean(rateLimited);
+    this._marketsUnavailable = unavailable ?? [];
+    this._renderMarketsAndDisclosures();
+  }
 
   public renderDisclosures(snapshot: ChinaCorporateDisclosureSnapshot | null | undefined): void {
     this._disclosures = snapshot ?? null;
@@ -104,7 +154,15 @@ export class HeatmapPanel extends Panel {
   private _staleValuationSymbols: Set<string> = new Set();
 
   constructor() {
-    super({ id: 'heatmap', title: t('panels.heatmap') });
+    super({ id: 'heatmap', title: t('panels.heatmap'), infoTooltip: t('components.heatmap.infoTooltip') });
+    this.content.addEventListener('click', (e) => {
+      const btn = (e.target as HTMLElement).closest<HTMLElement>('[data-tab]');
+      const tab = btn?.dataset.tab;
+      if (tab === 'performance' || tab === 'valuations') {
+        this._tab = tab;
+        this._render();
+      }
+    });
   }
 
   public renderHeatmap(
@@ -116,8 +174,52 @@ export class HeatmapPanel extends Panel {
     this._render();
   }
 
-    if (validData.length === 0) {
-      this.showError(t('common.failedSectorData'));
+  public updateValuations(
+    valuations: Record<string, SectorValuation> | undefined,
+    staleSymbols?: string[],
+  ): void {
+    // undefined = caller has no valuations to push (e.g. fresh fetch returned
+    // a payload without the field). Leave prior state intact so returning
+    // users don't see the Valuations tab vanish mid-session.
+    if (valuations === undefined) return;
+    this._staleValuationSymbols = new Set((staleSymbols ?? []).map((s) => s.toUpperCase()));
+    if (Object.keys(valuations).length === 0) {
+      this._valuations = {};
+      if (this._tab === 'valuations') this._tab = 'performance';
+      this._render();
+      return;
+    }
+    // A record replayed from the seeder's last-good snapshot can arrive with
+    // null-valued keys omitted. `SectorValuation` declares them `number | null`,
+    // and every formatter guards with `=== null`, so a MISSING key would slip
+    // through and reach `undefined.toFixed()`. Coerce to the declared shape.
+    const normalized: Record<string, SectorValuation> = {};
+    for (const [symbol, value] of Object.entries(valuations)) {
+      normalized[symbol] = {
+        trailingPE: value?.trailingPE ?? null,
+        forwardPE: value?.forwardPE ?? null,
+        beta: value?.beta ?? null,
+        ytdReturn: value?.ytdReturn ?? null,
+        threeYearReturn: value?.threeYearReturn ?? null,
+        fiveYearReturn: value?.fiveYearReturn ?? null,
+      };
+    }
+    this._valuations = normalized;
+    this._render();
+  }
+
+  private _buildTabBar(): string {
+    const hasValuations = Object.keys(this._valuations).length > 0;
+    if (!hasValuations) return '';
+    return `<div style="display:flex;gap:4px;margin-bottom:8px">
+      <button class="panel-tab${this._tab === 'performance' ? ' active' : ''}" data-tab="performance" style="font-size:calc(11px * var(--wm-panel-effective-scale, 1));padding:3px 10px">Performance</button>
+      <button class="panel-tab${this._tab === 'valuations' ? ' active' : ''}" data-tab="valuations" style="font-size:calc(11px * var(--wm-panel-effective-scale, 1));padding:3px 10px">Valuations</button>
+    </div>`;
+  }
+
+  private _render(): void {
+    if (this._heatmapData.length === 0) {
+      this.showRetrying(t('common.failedSectorData'));
       return;
     }
 
@@ -135,12 +237,17 @@ export class HeatmapPanel extends Panel {
     const data = this._heatmapData;
     const tileHtml =
       '<div class="heatmap">' +
-      validData
-        .map(
-          (sector) => `
-        <div class="heatmap-cell ${getHeatmapClass(sector.change!)}">
+      data
+        .map((sector) => {
+          const change = sector.change ?? 0;
+          const tickerHtml = sector.symbol
+            ? `<div class="sector-ticker">${escapeHtml(sector.symbol)}</div>`
+            : '';
+          return `
+        <div class="heatmap-cell ${getHeatmapClass(change)}">
+          ${tickerHtml}
+          <div class="sector-change ${getChangeClass(change)}">${formatChange(change)}</div>
           <div class="sector-name">${escapeHtml(sector.name)}</div>
-          <div class="sector-change ${getChangeClass(sector.change!)}">${formatChange(sector.change!)}</div>
         </div>
       `;
         })
@@ -398,14 +505,111 @@ export class CommoditiesPanel extends Panel {
   private _physicalPremiums: PhysicalPremium[] = [];
 
   constructor() {
-    super({ id: 'commodities', title: t('panels.commodities') });
+    super({ id: 'commodities', title: t('panels.commodities'), infoTooltip: t('components.commodities.infoTooltip') });
+
+    this.content.addEventListener('click', (e) => {
+      const btn = (e.target as HTMLElement).closest<HTMLElement>('[data-tab]');
+      const tab = btn?.dataset.tab;
+      if (
+        tab === 'commodities' ||
+        tab === 'physical' ||
+        tab === 'fx' ||
+        (tab === 'xau' && SITE_VARIANT === 'commodity')
+      ) {
+        this._tab = tab as CommoditiesTab;
+        this._render();
+      }
+    });
   }
 
-  public renderCommodities(data: Array<{ display: string; price: number | null; change: number | null; sparkline?: number[] }>): void {
-    const validData = data.filter((d) => d.price !== null);
+  public renderCommodities(data: Array<{ symbol?: string; display: string; price: number | null; change: number | null; sparkline?: number[] }>): void {
+    this._commodityData = data;
+    this._render();
+  }
 
-    if (validData.length === 0) {
-      this.showError(t('common.failedCommodities'));
+  public updateFxRates(rates: EcbFxRateItem[]): void {
+    this._fxRates = rates;
+    this._render();
+  }
+
+  public updatePhysicalPremiums(response: GetPhysicalPremiumsResponse): void {
+    this._physicalPremiums = response.premiums;
+    this._render();
+  }
+
+  private _buildTabBar(hasPhysical: boolean, hasFx: boolean, hasXau: boolean): string {
+    const firstTabLabel = t('components.commodities.commodities');
+    const tabs: string[] = [
+      `<button class="panel-tab${this._tab === 'commodities' ? ' active' : ''}" data-tab="commodities" style="font-size:calc(11px * var(--wm-panel-effective-scale, 1));padding:3px 10px">${firstTabLabel}</button>`,
+    ];
+    if (hasPhysical) tabs.push(`<button class="panel-tab${this._tab === 'physical' ? ' active' : ''}" data-tab="physical" style="font-size:calc(11px * var(--wm-panel-effective-scale, 1));padding:3px 10px">${t('components.commodities.physicalPremiums')}</button>`);
+    if (hasFx) tabs.push(`<button class="panel-tab${this._tab === 'fx' ? ' active' : ''}" data-tab="fx" style="font-size:calc(11px * var(--wm-panel-effective-scale, 1));padding:3px 10px">EUR FX</button>`);
+    if (hasXau) tabs.push(`<button class="panel-tab${this._tab === 'xau' ? ' active' : ''}" data-tab="xau" style="font-size:calc(11px * var(--wm-panel-effective-scale, 1));padding:3px 10px">XAU/FX</button>`);
+    return tabs.length > 1 ? `<div style="display:flex;gap:4px;margin-bottom:8px">${tabs.join('')}</div>` : '';
+  }
+
+  private _renderPhysicalPremiums(): string {
+    const rows = this._physicalPremiums.map((premium) => {
+      if (!premium.physical || !premium.paper) return '';
+      const metalKey = premium.metal === 'gold' ? 'gold' : 'silver';
+      const metal = t(`components.commodities.metals.${metalKey}`);
+      const unit = premium.physical.unit === 'kilogram' ? 'kg' : 'g';
+      const physicalPrice = premium.physical.price.toLocaleString(undefined, { maximumFractionDigits: 2 });
+      const paperPrice = premium.paper.price.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+      const premiumUsd = `${premium.premiumUsdPerOz >= 0 ? '+' : '-'}$${Math.abs(premium.premiumUsdPerOz).toFixed(2)}`;
+      const premiumPct = `${premium.premiumPct >= 0 ? '+' : ''}${premium.premiumPct.toFixed(2)}%`;
+      return `<div class="commodity-item physical-premium-item">
+        <div class="commodity-name">${escapeHtml(metal)}</div>
+        <div class="commodity-price">${escapeHtml(t('components.commodities.physical'))}: CNY ${escapeHtml(physicalPrice)}/${unit}</div>
+        <div class="commodity-price">${escapeHtml(t('components.commodities.paper'))}: $${escapeHtml(paperPrice)}/oz</div>
+        <div class="commodity-change ${getChangeClass(premium.premiumPct)}">${escapeHtml(t('components.commodities.premium'))}: ${escapeHtml(premiumUsd)}/oz (${escapeHtml(premiumPct)})</div>
+        <div style="margin-top:4px;font-size:calc(9px * var(--wm-panel-effective-scale, 1));color:var(--text-dim)" title="${escapeHtml(premium.physical.source)}">${escapeHtml(premium.physical.source)}<br>${escapeHtml(t('components.commodities.asOf', { date: premium.physical.asOf }))}</div>
+      </div>`;
+    });
+    return `<div class="commodities-grid">${rows.join('')}</div>`;
+  }
+
+  private _renderXau(): string {
+    const gcf = this._commodityData.find(d => d.symbol === 'GC=F' && d.price !== null);
+    if (!gcf?.price) return `<div style="padding:8px;color:var(--text-dim);font-size:calc(12px * var(--wm-panel-effective-scale, 1))">Gold price unavailable</div>`;
+
+    const goldUsd = gcf.price;
+    const fxMap = new Map(this._commodityData.filter(d => d.symbol?.endsWith('=X')).map(d => [d.symbol!, d]));
+
+    const rows = XAU_CURRENCY_CONFIG.map(cfg => {
+      const fx = fxMap.get(cfg.symbol);
+      if (!fx?.price || !Number.isFinite(fx.price)) return null;
+      const xauPrice = cfg.multiply ? goldUsd * fx.price : goldUsd / fx.price;
+      if (!Number.isFinite(xauPrice) || xauPrice <= 0) return null;
+      const formatted = Math.round(xauPrice).toLocaleString();
+      return `<div class="commodity-item">
+        <div class="commodity-name">${escapeHtml(cfg.flag)} XAU/${escapeHtml(cfg.label)}</div>
+        <div class="commodity-price" style="font-size:calc(11px * var(--wm-panel-effective-scale, 1))">${escapeHtml(formatted)}</div>
+      </div>`;
+    }).filter(Boolean);
+
+    if (rows.length === 0) {
+      const placeholders = XAU_CURRENCY_CONFIG.map(cfg =>
+        `<div class="commodity-item">
+          <div class="commodity-name">${escapeHtml(cfg.flag)} XAU/${escapeHtml(cfg.label)}</div>
+          <div class="commodity-price" style="font-size:calc(11px * var(--wm-panel-effective-scale, 1))">--</div>
+        </div>`
+      ).join('');
+      return `<div class="commodities-grid">${placeholders}</div><div style="margin-top:6px;font-size:calc(9px * var(--wm-panel-effective-scale, 1));color:var(--text-dim)">FX rates unavailable</div>`;
+    }
+    return `<div class="commodities-grid">${rows.join('')}</div><div style="margin-top:6px;font-size:calc(9px * var(--wm-panel-effective-scale, 1));color:var(--text-dim)">Computed from GC=F + Yahoo FX</div>`;
+  }
+
+  private _render(): void {
+    const hasPhysical = this._physicalPremiums.length > 0;
+    const hasFx = this._fxRates.length > 0;
+    const hasXau = SITE_VARIANT === 'commodity' && this._commodityData.some(d => d.symbol === 'GC=F' && d.price !== null);
+    if (this._tab === 'xau' && !hasXau) this._tab = 'commodities';
+    if (this._tab === 'physical' && !hasPhysical) this._tab = 'commodities';
+    const tabBar = this._buildTabBar(hasPhysical, hasFx, hasXau);
+
+    if (this._tab === 'physical' && hasPhysical) {
+      this.setSafeContent(unsafeRawHtml(tabBar + this._renderPhysicalPremiums(), 'legacy Panel.setContent() migration'));
       return;
     }
 
@@ -467,12 +671,12 @@ export class CommoditiesPanel extends Panel {
 
 export class CryptoPanel extends Panel {
   constructor() {
-    super({ id: 'crypto', title: t('panels.crypto') });
+    super({ id: 'crypto', title: t('panels.crypto'), infoTooltip: t('components.crypto.infoTooltip') });
   }
 
   public renderCrypto(data: CryptoData[]): void {
     if (data.length === 0) {
-      this.showError(t('common.failedCryptoData'));
+      this.showRetrying(t('common.failedCryptoData'));
       return;
     }
 

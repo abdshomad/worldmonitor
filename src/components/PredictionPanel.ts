@@ -1,6 +1,6 @@
 import { Panel } from './Panel';
-import type { PredictionMarket } from '@/types';
-import { escapeHtml, sanitizeUrl } from '@/utils/sanitize';
+import type { PredictionMarket } from '@/services/prediction';
+import { escapeHtml, sanitizeUrl, unsafeRawHtml } from '@/utils/sanitize';
 import { t } from '@/services/i18n';
 
 export class PredictionPanel extends Panel {
@@ -42,15 +42,37 @@ export class PredictionPanel extends Panel {
           ? `<a href="${safeUrl}" target="_blank" rel="noopener" class="prediction-question prediction-link">${escapeHtml(p.title)}</a>`
           : `<div class="prediction-question">${escapeHtml(p.title)}</div>`;
 
-        return `
-      <div class="prediction-item">
-        ${titleHtml}
-        ${volumeStr ? `<div class="prediction-volume">${t('components.predictions.vol')}: ${volumeStr}</div>` : ''}
+        let expiryStr = '';
+        if (p.endDate) {
+          const d = new Date(p.endDate);
+          if (Number.isFinite(d.getTime())) {
+            expiryStr = d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+          }
+        }
+
+        const isKalshi = p.source === 'kalshi';
+        const sourceLabel = isKalshi ? 'Kalshi' : 'Polymarket';
+        const srcClass = isKalshi ? 'kalshi' : 'polymarket';
+        const { label: convLabel, cls: convCls } = this.convictionLabel(yesPercent);
+
+        const yesStrong = yesPercent >= 60 ? ' prediction-bar-strong' : '';
+        const noStrong = noPercent >= 60 ? ' prediction-bar-strong' : '';
+
+        return `<div class="prediction-item prediction-src-${srcClass}">
+        <div class="prediction-head">
+          <span class="prediction-source" data-source="${srcClass}">${sourceLabel}</span>
+          ${titleHtml}
+        </div>
+        <div class="prediction-meta">
+          ${volumeStr ? `<span>${t('components.predictions.vol')}: ${volumeStr}</span>` : ''}
+          ${expiryStr ? `<span>${t('components.predictions.closes')}: ${expiryStr}</span>` : ''}
+          <span class="prediction-conviction ${convCls}">${convLabel}</span>
+        </div>
         <div class="prediction-bar">
-          <div class="prediction-yes" style="width: ${yesPercent}%">
+          <div class="prediction-yes${yesStrong}" style="width:${yesPercent}%">
             <span class="prediction-label">${t('components.predictions.yes')} ${yesPercent}%</span>
           </div>
-          <div class="prediction-no" style="width: ${noPercent}%">
+          <div class="prediction-no${noStrong}" style="width:${noPercent}%">
             <span class="prediction-label">${t('components.predictions.no')} ${noPercent}%</span>
           </div>
         </div>

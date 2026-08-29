@@ -1,4 +1,5 @@
-import type { ClusteredEvent, RelatedAsset, AssetType, RelatedAssetContext } from '@/types';
+import type { ClusteredEvent, RelatedAsset, AssetType, RelatedAssetContext, NuclearFacility } from '@/types';
+import { tokenizeForMatch, matchKeyword } from '@/utils/keyword-match';
 import { t } from '@/services/i18n';
 import {
   INTEL_HOTSPOTS,
@@ -300,6 +301,42 @@ export function getNearbyInfrastructure(
   lat: number, lon: number, types: AssetType[]
 ): RelatedAsset[] {
   return findNearbyAssets({ lat, lon, label: 'country-centroid' }, types);
+}
+
+/**
+ * Country-aware infrastructure search for Country Deep Dive.
+ * Uses country field/operator when available, falls back to proximity.
+ * If the country has zero facilities of a type, shows nearby ones instead.
+ */
+export function getCountryInfrastructure(
+  lat: number, lon: number, countryCode: string, types: AssetType[]
+): RelatedAsset[] {
+  const results: RelatedAsset[] = [];
+  const codeLower = countryCode.toLowerCase();
+
+  for (const type of types) {
+    let countryAssets: RelatedAsset[] = [];
+
+    if (type === 'nuclear') {
+      ensureNuclearFacilities();
+      const byOperator = (nuclearFacilities ?? [])
+        .filter(f => f.operator?.toLowerCase() === codeLower)
+        .map(f => ({ id: f.id, name: f.name, type, distanceKm: haversineDistanceKm(lat, lon, f.lat, f.lon) }));
+      if (byOperator.length > 0) {
+        countryAssets = byOperator.sort((a, b) => a.distanceKm - b.distanceKm);
+      }
+    }
+
+    if (countryAssets.length > 0) {
+      results.push(...countryAssets);
+    } else {
+      // Country has no facilities of this type (or no country match), show nearby ones
+      const nearby = findNearbyAssets({ lat, lon, label: 'country-centroid' }, [type]);
+      results.push(...nearby);
+    }
+  }
+
+  return results;
 }
 
 export { haversineDistanceKm };

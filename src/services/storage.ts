@@ -86,6 +86,13 @@ async function withTransaction<T>(
         if (mode === 'readwrite') throw new DOMException('IndexedDB write failed — connection closing', 'InvalidStateError');
         return undefined as T;
       }
+      // Environments without IndexedDB (private mode, some webviews) hit
+      // this branch. Degrade silently for reads; throw a typed error on
+      // writes so callers can opt into different handling.
+      if (err instanceof IndexedDBUnavailableError) {
+        if (mode === 'readwrite') throw err;
+        return undefined as T;
+      }
       throw err;
     }
   }
@@ -230,7 +237,10 @@ export async function cleanOldSnapshots(): Promise<void> {
       const request = store.index('by_time').openCursor(IDBKeyRange.upperBound(cutoff));
       request.onsuccess = () => {
         const cursor = request.result;
-        if (cursor) { cursor.delete(); cursor.continue(); }
+        if (!cursor) return;
+        // iOS Safari kills in-flight IDB transactions when the tab backgrounds;
+        // cleanup is idempotent so swallow TransactionInactiveError and resume next run.
+        try { cursor.delete(); cursor.continue(); } catch { /* tx died mid-cleanup */ }
       };
       void tx;
     },

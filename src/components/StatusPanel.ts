@@ -1,9 +1,9 @@
 import { SITE_VARIANT } from '@/config';
-import { h, replaceChildren } from '@/utils/dom-utils';
+import { h } from '@/utils/dom-utils'; // kept for Panel base class compat
 
-type StatusLevel = 'ok' | 'warning' | 'error' | 'disabled';
+export type StatusLevel = 'ok' | 'warning' | 'error' | 'disabled';
 
-interface FeedStatus {
+export interface FeedStatus {
   name: string;
   lastUpdate: Date | null;
   status: StatusLevel;
@@ -28,34 +28,56 @@ const TECH_FEEDS = new Set([
 ]);
 const TECH_APIS = new Set([
   'RSS Proxy', 'Finnhub', 'CoinGecko', 'Tech Events API', 'Service Status', 'Polymarket',
-  'Cyber Threats API'
+  'Cyber Threats API', 'Signal Aggregator'
 ]);
 
 const WORLD_FEEDS = new Set([
   'Politics', 'Middleeast', 'Tech', 'Ai', 'Finance',
   'Gov', 'Intel', 'Layoffs', 'Thinktanks', 'Energy',
   'Polymarket', 'Weather', 'NetBlocks', 'Shipping', 'Military',
-  'Cyber Threats'
+  'Cyber Threats', 'GPS Jam'
 ]);
 const WORLD_APIS = new Set([
   'RSS2JSON', 'Finnhub', 'CoinGecko', 'Polymarket', 'USGS', 'FRED',
   'AISStream', 'GDELT Doc', 'EIA', 'USASpending', 'PizzINT', 'FIRMS',
-  'Cyber Threats API'
+  'Global Procurement',
+  'Cyber Threats API', 'BIS', 'WTO', 'SupplyChain', 'OFAC', 'Signal Aggregator'
 ]);
 
 import { t } from '../services/i18n';
 import { Panel } from './Panel';
 
+/** Compact digest coverage summary rendered as the panel's status row (#7085). */
+export interface DigestCoverageSummary {
+  state: 'complete' | 'partial' | 'stale' | 'unavailable' | 'unknown';
+  itemsServed: number;
+  publisherCount: number;
+  feedsCompleted: number;
+  feedsTotal: number;
+  categoriesCompleted: number;
+  categoriesTotal: number;
+  missingCategories: string[];
+}
+
+const DIGEST_COVERAGE_EXPLANATIONS: Record<DigestCoverageSummary['state'], string> = {
+  complete: 'every configured category was covered in this cycle',
+  partial: 'some categories had no completed feed in this cycle',
+  stale: 'older accepted content is being served after a failed rebuild',
+  unavailable: 'no digest content could be served',
+  unknown: 'the digest did not report coverage',
+};
+
 export class StatusPanel extends Panel {
-  private isOpen = false;
   private feeds: Map<string, FeedStatus> = new Map();
   private apis: Map<string, ApiStatus> = new Map();
+  private digestCoverage: DigestCoverageSummary | null = null;
+  private digestCoverageRow: HTMLElement | null = null;
   private allowedFeeds!: Set<string>;
   private allowedApis!: Set<string>;
+  public onUpdate: (() => void) | null = null;
 
   constructor() {
     super({ id: 'status', title: t('panels.status') });
-    // Title is hidden in CSS, we use custom header
     this.init();
   }
 
@@ -63,76 +85,75 @@ export class StatusPanel extends Panel {
     this.allowedFeeds = SITE_VARIANT === 'tech' ? TECH_FEEDS : WORLD_FEEDS;
     this.allowedApis = SITE_VARIANT === 'tech' ? TECH_APIS : WORLD_APIS;
 
-    const panel = h('div', { className: 'status-panel hidden' },
-      h('div', { className: 'status-panel-header' },
-        h('span', null, t('panels.status')),
-        h('button', {
-          className: 'status-panel-close',
-          onClick: () => { this.isOpen = false; panel.classList.add('hidden'); },
-        }, '×'),
-      ),
-      h('div', { className: 'status-panel-content' },
-        h('div', { className: 'status-section' },
-          h('div', { className: 'status-section-title' }, t('components.status.dataFeeds')),
-          h('div', { className: 'feeds-list' }),
-        ),
-        h('div', { className: 'status-section' },
-          h('div', { className: 'status-section-title' }, t('components.status.apiStatus')),
-          h('div', { className: 'apis-list' }),
-        ),
-        h('div', { className: 'status-section' },
-          h('div', { className: 'status-section-title' }, t('components.status.storage')),
-          h('div', { className: 'storage-info' }),
-        ),
-      ),
-      h('div', { className: 'status-panel-footer' },
-        h('span', { className: 'last-check' }, t('components.status.updatedJustNow')),
-      ),
-    );
-
-    this.element = h('div', { className: 'status-panel-container' },
-      h('button', {
-        className: 'status-panel-toggle',
-        title: t('components.status.systemStatus'),
-        onClick: () => {
-          this.isOpen = !this.isOpen;
-          panel.classList.toggle('hidden', !this.isOpen);
-          if (this.isOpen) this.updateDisplay();
-        },
-      },
-        h('span', { className: 'status-icon' }, '◉'),
-      ),
-      panel,
-    );
-
+    this.element = h('div', { className: 'status-panel-container' });
     this.initDefaultStatuses();
   }
 
   private initDefaultStatuses(): void {
-    // Initialize all allowed feeds/APIs as disabled
-    // They get enabled when App.ts reports data
     this.allowedFeeds.forEach(name => {
       this.feeds.set(name, { name, lastUpdate: null, status: 'disabled', itemCount: 0 });
     });
-
     this.allowedApis.forEach(name => {
       this.apis.set(name, { name, status: 'disabled' });
     });
   }
 
-  public updateFeed(name: string, status: Partial<FeedStatus>): void {
-    // Only track feeds relevant to current variant
-    if (!this.allowedFeeds.has(name)) return;
+  public getFeeds(): Map<string, FeedStatus> { return this.feeds; }
+  public getApis(): Map<string, ApiStatus> { return this.apis; }
 
+  /**
+   * #7085 digest coverage row: one text line stating what the served digest
+   * covers and why it may be degraded. Text only — never color alone — with
+   * an accessible name and a short explanation, announced politely.
+   */
+  public updateDigestCoverage(coverage: DigestCoverageSummary): void {
+    this.digestCoverage = coverage;
+    const explanation = DIGEST_COVERAGE_EXPLANATIONS[coverage.state];
+    const missing = coverage.missingCategories.length > 0
+      ? ` (no completed feed: ${coverage.missingCategories.slice(0, 4).join(', ')}${coverage.missingCategories.length > 4 ? ', …' : ''})`
+      : '';
+    const text = coverage.state === 'unavailable' || coverage.state === 'unknown'
+      ? `Digest coverage: ${coverage.state} — ${explanation}`
+      : `Digest coverage: ${coverage.state} — ${coverage.publisherCount} publishers, ${coverage.itemsServed} items, feeds ${coverage.feedsCompleted}/${coverage.feedsTotal}, categories ${coverage.categoriesCompleted}/${coverage.categoriesTotal}${missing} (${explanation})`;
+    if (!this.digestCoverageRow) {
+      this.digestCoverageRow = h('div', {
+        className: 'digest-coverage-row',
+        role: 'status',
+        'aria-live': 'polite',
+        'aria-label': 'Digest coverage status',
+      });
+      this.element.appendChild(this.digestCoverageRow);
+    }
+    this.ensureCoverageRowMounted();
+    this.digestCoverageRow.textContent = text;
+  }
+
+  /**
+   * Nothing else mounts this panel — it is otherwise a write-only data sink
+   * (no getElement() callers), so the row must reach the document from here
+   * or it renders into a detached node no user or screen reader can see.
+   * The site footer always exists by the first digest load (layout Phase 1
+   * precedes data loading), so a missing footer only means a non-dashboard
+   * document; the row then stays detached rather than throwing.
+   */
+  private ensureCoverageRowMounted(): void {
+    if (this.element.isConnected) return;
+    document.querySelector('.site-footer')?.appendChild(this.element);
+  }
+
+  public getDigestCoverage(): DigestCoverageSummary | null {
+    return this.digestCoverage;
+  }
+
+  public updateFeed(name: string, status: Partial<FeedStatus>): void {
+    if (!this.allowedFeeds.has(name)) return;
     const existing = this.feeds.get(name) || { name, lastUpdate: null, status: 'ok' as const, itemCount: 0 };
     this.feeds.set(name, { ...existing, ...status, lastUpdate: new Date() });
     this.onUpdate?.();
   }
 
   public updateApi(name: string, status: Partial<ApiStatus>): void {
-    // Only track APIs relevant to current variant
     if (!this.allowedApis.has(name)) return;
-
     const existing = this.apis.get(name) || { name, status: 'ok' as const };
     this.apis.set(name, { ...existing, ...status });
     this.onUpdate?.();
@@ -142,8 +163,7 @@ export class StatusPanel extends Panel {
     const existing = this.feeds.get(name);
     if (existing) {
       this.feeds.set(name, { ...existing, status: 'disabled', itemCount: 0, lastUpdate: null });
-      this.updateStatusIcon();
-      if (this.isOpen) this.updateDisplay();
+      this.onUpdate?.();
     }
   }
 
@@ -151,83 +171,7 @@ export class StatusPanel extends Panel {
     const existing = this.apis.get(name);
     if (existing) {
       this.apis.set(name, { ...existing, status: 'disabled' });
-      this.updateStatusIcon();
-      if (this.isOpen) this.updateDisplay();
-    }
-  }
-
-  private updateStatusIcon(): void {
-    const icon = this.element.querySelector('.status-icon')!;
-    // Only count enabled feeds/APIs (not 'disabled') for status indicator
-    const enabledFeeds = [...this.feeds.values()].filter(f => f.status !== 'disabled');
-    const enabledApis = [...this.apis.values()].filter(a => a.status !== 'disabled');
-
-    const hasError = enabledFeeds.some(f => f.status === 'error') ||
-      enabledApis.some(a => a.status === 'error');
-    const hasWarning = enabledFeeds.some(f => f.status === 'warning') ||
-      enabledApis.some(a => a.status === 'warning');
-
-    icon.className = 'status-icon';
-    if (hasError) {
-      icon.classList.add('error');
-      icon.textContent = '◉';
-    } else if (hasWarning) {
-      icon.classList.add('warning');
-      icon.textContent = '◉';
-    } else {
-      icon.classList.add('ok');
-      icon.textContent = '◉';
-    }
-  }
-
-  private updateDisplay(): void {
-    const feedsList = this.element.querySelector('.feeds-list')!;
-    const apisList = this.element.querySelector('.apis-list')!;
-    const storageInfo = this.element.querySelector('.storage-info')!;
-    const lastCheck = this.element.querySelector('.last-check')!;
-
-    replaceChildren(feedsList,
-      ...[...this.feeds.values()].map(feed =>
-        h('div', { className: 'status-row' },
-          h('span', { className: `status-dot ${feed.status}` }),
-          h('span', { className: 'status-name' }, feed.name),
-          h('span', { className: 'status-detail' }, `${feed.itemCount} items`),
-          h('span', { className: 'status-time' }, feed.lastUpdate ? this.formatTime(feed.lastUpdate) : 'Never'),
-        ),
-      ),
-    );
-
-    replaceChildren(apisList,
-      ...[...this.apis.values()].map(api =>
-        h('div', { className: 'status-row' },
-          h('span', { className: `status-dot ${api.status}` }),
-          h('span', { className: 'status-name' }, api.name),
-          api.latency ? h('span', { className: 'status-detail' }, `${api.latency}ms`) : false,
-        ),
-      ),
-    );
-
-    this.updateStorageInfo(storageInfo);
-    lastCheck.textContent = t('components.status.updatedAt', { time: this.formatTime(new Date()) });
-  }
-
-  private async updateStorageInfo(container: Element): Promise<void> {
-    try {
-      if ('storage' in navigator && 'estimate' in navigator.storage) {
-        const estimate = await navigator.storage.estimate();
-        const used = estimate.usage ? (estimate.usage / 1024 / 1024).toFixed(2) : '0';
-        const quota = estimate.quota ? (estimate.quota / 1024 / 1024).toFixed(0) : 'N/A';
-        replaceChildren(container,
-          h('div', { className: 'status-row' },
-            h('span', { className: 'status-name' }, 'IndexedDB'),
-            h('span', { className: 'status-detail' }, `${used} MB / ${quota} MB`),
-          ),
-        );
-      } else {
-        replaceChildren(container, h('div', { className: 'status-row' }, t('components.status.storageUnavailable')));
-      }
-    } catch {
-      replaceChildren(container, h('div', { className: 'status-row' }, t('components.status.storageUnavailable')));
+      this.onUpdate?.();
     }
   }
 

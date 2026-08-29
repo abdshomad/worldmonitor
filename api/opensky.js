@@ -1,73 +1,67 @@
-// OpenSky Network API proxy - v3
-// Note: OpenSky seems to block some cloud provider IPs
-import { getCorsHeaders, isDisallowedOrigin } from './_cors.js';
+import { createRelayHandler } from './_relay.js';
+import { getHeaderApiKey, isDesktopOrigin, validateApiKey } from './_api-key.js';
+import { getCorsHeaders } from './_cors.js';
+import { timingSafeIncludes } from './_crypto.js';
+import { jsonResponse } from './_json-response.js';
 
 export const config = { runtime: 'edge' };
 
+const relayHandler = createRelayHandler({
+  relayPath: '/opensky',
+  timeout: 20000,
+  // Product access is checked before the generic relay. Keeping this false is
+  // intentional: the authenticated local sidecar validates against its own
+  // WORLDMONITOR_API_KEY, which is not present in the sidecar's cloud allowlist.
+  requireApiKey: false,
+  cacheHeaders: () => ({
+    'Cache-Control': 'private, no-store',
+    'CDN-Cache-Control': 'no-store',
+  }),
+  extraHeaders: (response) => {
+    const xCache = response.headers.get('x-cache');
+    return xCache ? { 'X-Cache': xCache } : {};
+  },
+});
+
+const LOCAL_SIDECAR_ORIGIN = /^http:\/\/127\.0\.0\.1:\d{1,5}$/;
+const CANONICAL_PRODUCT_ORIGIN = 'https://worldmonitor.app';
+
+function isAuthenticatedSidecarHop(origin) {
+  return (process.env.LOCAL_API_MODE || '').includes('sidecar')
+    && LOCAL_SIDECAR_ORIGIN.test(origin);
+}
+
+async function hasProductAccess(req, origin) {
+  if (isAuthenticatedSidecarHop(origin)) {
+    const localProductKey = process.env.WORLDMONITOR_API_KEY || '';
+    return timingSafeIncludes(getHeaderApiKey(req), localProductKey ? [localProductKey] : []);
+  }
+
+  if (!isDesktopOrigin(origin) && origin !== CANONICAL_PRODUCT_ORIGIN) return false;
+  const auth = await validateApiKey(req, { forceKey: true });
+  return auth.valid && auth.kind === 'enterprise';
+}
+
+function noStore(response) {
+  response.headers.set('Cache-Control', 'private, no-store');
+  response.headers.set('CDN-Cache-Control', 'no-store');
+  return response;
+}
+
 export default async function handler(req) {
-  const cors = getCorsHeaders(req);
-  if (isDisallowedOrigin(req)) {
-    return new Response(JSON.stringify({ error: 'Origin not allowed' }), { status: 403, headers: cors });
+  const origin = req.headers.get('Origin') || '';
+  if (!await hasProductAccess(req, origin)) {
+    return noStore(jsonResponse({ error: 'Not found' }, 404, getCorsHeaders(req, 'GET, OPTIONS')));
   }
-  const url = new URL(req.url);
 
-  // Build OpenSky API URL with bounding box params
-  const params = new URLSearchParams();
-  ['lamin', 'lomin', 'lamax', 'lomax'].forEach(key => {
-    const val = url.searchParams.get(key);
-    if (val) params.set(key, val);
-  });
-
-  const openskyUrl = `https://opensky-network.org/api/states/all${params.toString() ? '?' + params.toString() : ''}`;
-
-  try {
-    // Try fetching with different headers to avoid blocks
-    const response = await fetch(openskyUrl, {
-      headers: {
-        'Accept': 'application/json',
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-        'Accept-Language': 'en-US,en;q=0.9',
-        'Accept-Encoding': 'gzip, deflate, br',
-        'Connection': 'keep-alive',
-      },
-    });
-
-    if (response.status === 429) {
-      return Response.json({ error: 'Rate limited', time: Date.now(), states: null }, {
-        status: 429,
-        headers: cors,
-      });
-    }
-
-    // Check if response is OK
-    if (!response.ok) {
-      const text = await response.text();
-      return Response.json({
-        error: `OpenSky HTTP ${response.status}: ${text.substring(0, 200)}`,
-        time: Date.now(),
-        states: null
-      }, {
-        status: response.status,
-        headers: cors,
-      });
-    }
-
-    const data = await response.json();
-    return Response.json(data, {
-      status: response.status,
-      headers: {
-        ...cors,
-        'Cache-Control': 'public, max-age=30, s-maxage=30, stale-while-revalidate=15',
-      },
-    });
-  } catch (error) {
-    return Response.json({
-      error: `Fetch failed: ${error.name} - ${error.message}`,
-      time: Date.now(),
-      states: null
-    }, {
-      status: 500,
-      headers: cors,
-    });
+  // `_cors.js` intentionally rejects production loopback Origins. The local
+  // sidecar already authenticated the native transport and replaced the
+  // renderer Origin, so normalize only this trusted hop before relay CORS.
+  let relayRequest = req;
+  if (isAuthenticatedSidecarHop(origin)) {
+    const headers = new Headers(req.headers);
+    headers.set('Origin', 'tauri://localhost');
+    relayRequest = new Request(req, { headers });
   }
+  return noStore(await relayHandler(relayRequest));
 }

@@ -1,5 +1,6 @@
 import type { ClusteredEvent, VelocityMetrics, VelocityLevel, SentimentType } from '@/types';
 import { mlWorker } from './ml-worker';
+import { effectivePubDateMs } from './feed-date';
 
 const HOUR_MS = 60 * 60 * 1000;
 const ELEVATED_THRESHOLD = 3;

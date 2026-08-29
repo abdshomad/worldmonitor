@@ -1,5 +1,7 @@
 import { getSnapshotTimestamps, getSnapshotAt, type DashboardSnapshot } from '@/services/storage';
 import { t } from '@/services/i18n';
+import { setTrustedHtml, trustedHtml } from '@/utils/dom-utils';
+
 
 export class PlaybackControl {
   private element: HTMLElement;
@@ -11,25 +13,25 @@ export class PlaybackControl {
   constructor() {
     this.element = document.createElement('div');
     this.element.className = 'playback-control';
-    this.element.innerHTML = `
-      <button class="playback-toggle" title="${t('components.playback.toggleMode')}">
+    setTrustedHtml(this.element, trustedHtml(`
+      <button class="playback-toggle" title="${t('components.playback.toggleMode')}" aria-label="${t('components.playback.toggleMode')}">
         <span class="playback-icon">⏪</span>
       </button>
       <div class="playback-panel hidden">
         <div class="playback-header">
           <span>${t('components.playback.historicalPlayback')}</span>
-          <button class="playback-close">×</button>
+          <button class="playback-close" aria-label="${t('components.playback.close')}">×</button>
         </div>
         <div class="playback-slider-container">
-          <input type="range" class="playback-slider" min="0" max="100" value="100">
+          <input type="range" class="playback-slider" min="0" max="100" value="100" aria-label="${t('components.playback.historicalPlayback')}">
           <div class="playback-time">${t('components.playback.live')}</div>
         </div>
         <div class="playback-controls">
-          <button class="playback-btn" data-action="start">⏮</button>
-          <button class="playback-btn" data-action="prev">◀</button>
+          <button class="playback-btn" data-action="start" aria-label="${t('components.playback.skipToStart')}">⏮</button>
+          <button class="playback-btn" data-action="prev" aria-label="${t('components.playback.previous')}">◀</button>
           <button class="playback-btn playback-live" data-action="live">${t('components.playback.live')}</button>
-          <button class="playback-btn" data-action="next">▶</button>
-          <button class="playback-btn" data-action="end">⏭</button>
+          <button class="playback-btn" data-action="next" aria-label="${t('components.playback.next')}">▶</button>
+          <button class="playback-btn" data-action="end" aria-label="${t('components.playback.skipToEnd')}">⏭</button>
         </div>
       </div>
     `, "legacy direct innerHTML migration"));

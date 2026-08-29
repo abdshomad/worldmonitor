@@ -235,11 +235,11 @@ interface TechEventMarker {
 
 // View presets with longitude, latitude, zoom
 const VIEW_PRESETS: Record<DeckMapView, { longitude: number; latitude: number; zoom: number }> = {
-  global: { longitude: 0, latitude: 20, zoom: 1.5 },
+  global: SITE_VARIANT === 'indonesia' ? { longitude: 118, latitude: -2.5, zoom: 4.8 } : { longitude: 0, latitude: 20, zoom: 1.5 },
   america: { longitude: -95, latitude: 38, zoom: 3 },
   mena: { longitude: 45, latitude: 28, zoom: 3.5 },
   eu: { longitude: 15, latitude: 50, zoom: 3.5 },
-  asia: { longitude: 105, latitude: 35, zoom: 3 },
+  asia: { longitude: 118, latitude: -2.5, zoom: 4.8 },
   latam: { longitude: -60, latitude: -15, zoom: 3 },
   africa: { longitude: 20, latitude: 5, zoom: 3 },
   oceania: { longitude: 135, latitude: -25, zoom: 3.5 },
@@ -251,8 +251,7 @@ type ViewportMovementEventData = {
   worldMonitorViewportGeneration?: unknown;
 };
 
-const MAP_INTERACTION_MODE: MapInteractionMode =
-  import.meta.env.VITE_MAP_INTERACTION_MODE === 'flat' ? 'flat' : '3d';
+const MAP_INTERACTION_MODE: MapInteractionMode = 'flat';
 
 const HAPPY_DARK_STYLE = '/map-styles/happy-dark.json';
 const HAPPY_LIGHT_STYLE = '/map-styles/happy-light.json';
@@ -5685,11 +5684,6 @@ export class DeckGLMap {
         }).join('')}
       </div>
     `, "legacy direct innerHTML migration"));
-
-    const authorBadge = document.createElement('div');
-    authorBadge.className = 'map-author-badge';
-    authorBadge.textContent = '© Elie Habib · Someone™';
-    toggles.appendChild(authorBadge);
 
     this.container.appendChild(toggles);
 

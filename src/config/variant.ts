@@ -14,9 +14,9 @@ export function isSiteVariant(value: string | null | undefined): value is SiteVa
 
 const buildVariant = (() => {
   try {
-    return import.meta.env.VITE_VARIANT || 'full';
+    return import.meta.env.VITE_VARIANT || 'indonesia';
   } catch {
-    return 'full';
+    return 'indonesia';
   }
 })();
 
@@ -45,6 +45,7 @@ export const SITE_VARIANT: string = (() => {
   if (h.startsWith('happy.')) return 'happy';
   if (h.startsWith('commodity.')) return 'commodity';
   if (h.startsWith('energy.')) return 'energy';
+  if (h.startsWith('world.')) return 'full';
 
   if (h === 'localhost' || h === '127.0.0.1') {
     const stored = loadStoredVariant();
@@ -52,5 +53,5 @@ export const SITE_VARIANT: string = (() => {
     return buildVariant;
   }
 
-  return 'full';
+  return 'indonesia';
 })();

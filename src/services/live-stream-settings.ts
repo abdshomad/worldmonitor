@@ -26,7 +26,7 @@ function writeBool(key: string, value: boolean): void {
 }
 
 export function getLiveStreamsAlwaysOn(): boolean {
-  return readBool(STORAGE_KEY_LIVE_STREAMS_ALWAYS_ON, false);
+  return readBool(STORAGE_KEY_LIVE_STREAMS_ALWAYS_ON, true);
 }
 
 export function setLiveStreamsAlwaysOn(alwaysOn: boolean): void {

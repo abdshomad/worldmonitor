@@ -451,7 +451,7 @@ export class LiveNewsPanel extends Panel {
     this.playerElementId = `live-news-player-${Date.now()}`;
     this.channels = loadChannelsFromStorage();
     if (this.channels.length === 0) this.channels = getDefaultLiveChannels();
-    const savedChannelId = loadFromStorage<string>(STORAGE_KEYS.activeChannel, '');
+    const savedChannelId = loadFromStorage<string>(STORAGE_KEYS.activeChannel, 'kompas-tv');
     const savedChannel = savedChannelId ? this.channels.find(c => c.id === savedChannelId) : null;
     this.activeChannel = savedChannel ?? this.channels[0]!;
     this.createLiveButton();

@@ -32,6 +32,8 @@
     { "symbol": "AUDUSD=X", "name": "AUD/USD", "display": "AUD/USD" },
     { "symbol": "USDCHF=X", "name": "USD/CHF", "display": "USD/CHF" },
     { "symbol": "USDCAD=X", "name": "USD/CAD", "display": "USD/CAD" },
-    { "symbol": "USDTRY=X", "name": "USD/TRY", "display": "USD/TRY" }
+    { "symbol": "USDTRY=X", "name": "USD/TRY", "display": "USD/TRY" },
+    { "symbol": "USDIDR=X", "name": "USD/IDR", "display": "USD/IDR" },
+    { "symbol": "EURIDR=X", "name": "EUR/IDR", "display": "EUR/IDR" }
   ]
 }

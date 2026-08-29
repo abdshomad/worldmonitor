@@ -192,6 +192,7 @@ const DASHBOARD_REFERENCE_LINKS = [
 
 export const VARIANT_SWITCHER_DASHBOARD_URLS = {
   full: 'https://worldmonitor.app/dashboard',
+  indonesia: 'https://indonesia.worldmonitor.app/dashboard',
   tech: 'https://tech.worldmonitor.app/dashboard',
   finance: 'https://finance.worldmonitor.app/dashboard',
   commodity: 'https://commodity.worldmonitor.app/dashboard',
@@ -924,6 +925,15 @@ export class PanelLayoutManager implements AppModule {
           variantSwitcherHref(v, SITE_VARIANT, local);
         const vTarget = (v: string) => !local && SITE_VARIANT !== v && inIframe ? 'target="_blank" rel="noopener"' : '';
         return `
+            <a href="${vHref('indonesia')}"
+               class="variant-option ${SITE_VARIANT === 'indonesia' ? 'active' : ''}"
+               data-variant="indonesia"
+               ${vTarget('indonesia')}
+               title="Indonesia${SITE_VARIANT === 'indonesia' ? ` ${t('common.currentVariant')}` : ''}">
+              <span class="variant-icon">🇮🇩</span>
+              <span class="variant-label">Indonesia</span>
+            </a>
+            <span class="variant-divider"></span>
             <a href="${vHref('full')}"
                class="variant-option ${SITE_VARIANT === 'full' ? 'active' : ''}"
                data-variant="full"
@@ -2827,10 +2837,11 @@ export class PanelLayoutManager implements AppModule {
     const { MapContainer } = await mapModulePromise;
     if (this.ctx.isDestroyed) return;
     markLcpDebug('wm:map:container-construct');
+    const isIdVariant = SITE_VARIANT === 'indonesia';
     this.ctx.map = new MapContainer(mapContainer, {
-      zoom: this.ctx.isMobile ? 2.5 : 1.0,
-      pan: { x: 0, y: 0 },
-      view: this.ctx.isMobile ? this.ctx.resolvedLocation : 'global',
+      zoom: isIdVariant ? (this.ctx.isMobile ? 3.8 : 4.8) : (this.ctx.isMobile ? 2.5 : 1.0),
+      pan: isIdVariant ? { x: -330, y: -10 } : { x: 0, y: 0 },
+      view: this.ctx.isMobile ? this.ctx.resolvedLocation : (isIdVariant ? 'asia' : 'global'),
       layers: this.ctx.mapLayers,
       timeRange: '7d',
     }, preferGlobe, {

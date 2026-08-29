@@ -25,6 +25,7 @@ const PLATFORM_PATTERNS = {
 // two drift apart.
 export const SUPPORTED_VARIANTS = new Set([
   'full',
+  'indonesia',
   'world',
   'tech',
   'finance',

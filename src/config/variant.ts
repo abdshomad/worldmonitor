@@ -4,7 +4,7 @@
  * `/api/download` accepts — `tests/desktop-one-binary-model.test.mjs` fails if
  * the two drift apart.
  */
-export const SITE_VARIANTS = ['full', 'tech', 'finance', 'happy', 'commodity', 'energy'] as const;
+export const SITE_VARIANTS = ['full', 'indonesia', 'tech', 'finance', 'happy', 'commodity', 'energy'] as const;
 
 export type SiteVariant = (typeof SITE_VARIANTS)[number];
 
@@ -39,6 +39,7 @@ export const SITE_VARIANT: string = (() => {
   }
 
   const h = location.hostname;
+  if (h.startsWith('indonesia.') || h.startsWith('id.')) return 'indonesia';
   if (h.startsWith('tech.')) return 'tech';
   if (h.startsWith('finance.')) return 'finance';
   if (h.startsWith('happy.')) return 'happy';

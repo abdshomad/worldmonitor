@@ -72,6 +72,7 @@ function variantInventory(hasDefaultProcurement: boolean): WebMcpVariantInventor
 
 export const WEBMCP_VARIANT_INVENTORIES = Object.freeze({
   full: variantInventory(true),
+  indonesia: variantInventory(true),
   tech: variantInventory(true),
   finance: variantInventory(true),
   happy: variantInventory(false),

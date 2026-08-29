@@ -535,8 +535,15 @@ export const FULL_FEEDS: Record<string, Feed[]> = {
     // Pakistan (#5954)
     { name: 'Dawn', url: rss('https://www.dawn.com/feeds/home/') },
     { name: 'Geo News', url: rss('https://news.google.com/rss/search?q=site:geo.tv+when:2d&hl=en-US&gl=US&ceid=US:en') },
-    // SE Asia security (#5954)
     { name: 'Jakarta Post', url: rss('https://news.google.com/rss/search?q=site%3Athejakartapost.com%20when%3A3d&hl=en-US&gl=US&ceid=US:en') },
+    { name: 'Antara News', url: rss('https://www.antaranews.com/rss/terkini.xml'), lang: 'id' },
+    { name: 'Antara Politik & Hukum', url: rss('https://www.antaranews.com/rss/politik-hukum.xml'), lang: 'id' },
+    { name: 'Antara Ekonomi', url: rss('https://www.antaranews.com/rss/ekonomi.xml'), lang: 'id' },
+    { name: 'Tempo Nasional', url: rss('https://rss.tempo.co/nasional'), lang: 'id' },
+    { name: 'Tempo Bisnis', url: rss('https://rss.tempo.co/bisnis'), lang: 'id' },
+    { name: 'CNBC Indonesia', url: rss('https://www.cnbcindonesia.com/news/rss'), lang: 'id' },
+    { name: 'CNN Indonesia', url: rss('https://www.cnnindonesia.com/nasional/rss'), lang: 'id' },
+    { name: 'BMKG Gempabumi', url: rss('https://data.bmkg.go.id/DataMKG/TEKTONIK/gempaterkini.xml') },
     { name: 'Rappler', url: rss('https://www.rappler.com/feed/') },
     { name: 'The Star (Malaysia)', url: rss('https://news.google.com/rss/search?q=site%3Athestar.com.my%20when%3A3d&hl=en-US&gl=US&ceid=US:en') },
     { name: 'Irrawaddy', url: rss('https://www.irrawaddy.com/feed/') },

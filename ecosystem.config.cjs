@@ -11,6 +11,7 @@ module.exports = {
         PORT: '2023',
         DEV_PORT: '2023',
         HOST: '0.0.0.0',
+        VITE_VARIANT: 'indonesia',
       },
       instances: 1,
       autorestart: true,

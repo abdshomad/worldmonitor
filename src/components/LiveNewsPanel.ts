@@ -347,8 +347,11 @@ export const BUILTIN_IDS = new Set([
 
 export function loadChannelsFromStorage(): LiveChannel[] {
   const stored = loadFromStorage<StoredLiveChannels>(STORAGE_KEYS.liveChannels, DEFAULT_STORED);
-  const order = stored.order?.length ? stored.order : DEFAULT_STORED.order;
+  const defaultIds = DEFAULT_LIVE_CHANNELS.map((c) => c.id);
+  const hasCurrentDefaults = stored.order?.some((id) => defaultIds.includes(id));
+  const order = (stored.order?.length && hasCurrentDefaults) ? stored.order : DEFAULT_STORED.order;
   const channelMap = new Map<string, LiveChannel>();
+  for (const c of INDONESIA_LIVE_CHANNELS) channelMap.set(c.id, { ...c });
   for (const c of FULL_LIVE_CHANNELS) channelMap.set(c.id, { ...c });
   for (const c of TECH_LIVE_CHANNELS) channelMap.set(c.id, { ...c });
   for (const c of OPTIONAL_LIVE_CHANNELS) channelMap.set(c.id, { ...c });
@@ -365,7 +368,7 @@ export function loadChannelsFromStorage(): LiveChannel[] {
     const ch = channelMap.get(id);
     if (ch) result.push(ch);
   }
-  return result;
+  return result.length > 0 ? result : getDefaultLiveChannels();
 }
 
 export function saveChannelsToStorage(channels: LiveChannel[]): void {

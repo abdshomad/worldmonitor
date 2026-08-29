@@ -182,13 +182,6 @@ const WEB_CLERK_PRO_ONLY_PANELS = new Set([
 const LATE_REGISTERED_PANEL_KEYS = new Set(['live-news']);
 const CW_PRO_GATE_TAB_RECOVERY_KEY = 'worldmonitor-cw-pro-gate-tab-recovery-v1';
 
-const DASHBOARD_REFERENCE_LINKS = [
-  { label: 'Countries', path: '/countries/' },
-  { label: 'Chokepoints', path: '/chokepoints/' },
-  { label: 'Crises', path: '/crises/' },
-  { label: 'Tools', path: '/tools/' },
-] as const;
-
 export const VARIANT_SWITCHER_DASHBOARD_URLS = {
   full: 'https://worldmonitor.app/dashboard',
   indonesia: 'https://indonesia.worldmonitor.app/dashboard',
@@ -904,10 +897,6 @@ export class PanelLayoutManager implements AppModule {
       }
     })();
     const bootShellFootprint = import.meta.env.DEV ? captureBootShellFootprint(this.ctx.container) : null;
-    const referenceLinksHtml = DASHBOARD_REFERENCE_LINKS.map(({ label, path }) => {
-      const href = this.ctx.isDesktopApp ? `https://www.worldmonitor.app${path}` : path;
-      return `<a href="${href}" target="_blank" rel="noopener">${label}</a>`;
-    }).join('');
 
     markLcpDebug('wm:layout:render-start');
     document.documentElement.classList.add('wm-layout-hydrated');
@@ -1067,18 +1056,7 @@ export class PanelLayoutManager implements AppModule {
           <span class="mobile-menu-item-icon">${getCurrentTheme() === 'dark' ? '☀️' : '🌙'}</span>
           <span class="mobile-menu-item-label">${getCurrentTheme() === 'dark' ? 'Light Mode' : 'Dark Mode'}</span>
         </button>
-        <a class="mobile-menu-item" href="https://x.com/eliehabib" target="_blank" rel="noopener">
-          <span class="mobile-menu-item-icon"><svg class="x-logo" width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg></span>
-          <span class="mobile-menu-item-label">@eliehabib</span>
-        </a>
         <div class="mobile-menu-divider"></div>
-        <div class="mobile-menu-footer-links">
-          ${referenceLinksHtml}
-          <a href="${this.ctx.isDesktopApp ? 'https://www.worldmonitor.app/pro#pricing' : '/pro#pricing'}" target="_blank" rel="noopener">Pricing</a>
-          <a href="${this.ctx.isDesktopApp ? 'https://worldmonitor.app/blog/' : 'https://www.worldmonitor.app/blog/'}" target="_blank" rel="noopener">Blog</a>
-          <a href="${this.ctx.isDesktopApp ? 'https://worldmonitor.app/docs' : 'https://www.worldmonitor.app/docs'}" target="_blank" rel="noopener">Docs</a>
-          <a href="https://status.worldmonitor.app/" target="_blank" rel="noopener">Status</a>
-        </div>
         <div class="mobile-menu-version">v${__APP_VERSION__}</div>
       </nav>
       <div class="region-sheet-backdrop" id="regionSheetBackdrop"></div>
@@ -1152,27 +1130,6 @@ export class PanelLayoutManager implements AppModule {
           <span class="mobile-tab-icon" aria-hidden="true">•••</span><span>More</span>
         </button>
       </nav>
-      <footer class="site-footer">
-        <div class="site-footer-brand">
-          <img src="/favico/android-chrome-96x96.png" alt="" width="28" height="28" loading="lazy" decoding="async" class="site-footer-icon" />
-          <div class="site-footer-brand-text">
-            <span class="site-footer-name">WORLD MONITOR</span>
-            <span class="site-footer-sub">v${__APP_VERSION__} &middot; <a href="https://x.com/eliehabib" target="_blank" rel="noopener" class="site-footer-credit">@eliehabib</a></span>
-          </div>
-        </div>
-        <nav aria-label="World Monitor references">
-          ${referenceLinksHtml}
-          <a href="${this.ctx.isDesktopApp ? 'https://www.worldmonitor.app/pro#pricing' : '/pro#pricing'}" target="_blank" rel="noopener">Pricing</a>
-          <a href="${this.ctx.isDesktopApp ? 'https://worldmonitor.app/blog/' : 'https://www.worldmonitor.app/blog/'}" target="_blank" rel="noopener">Blog</a>
-          <a href="${this.ctx.isDesktopApp ? 'https://worldmonitor.app/docs' : 'https://www.worldmonitor.app/docs'}" target="_blank" rel="noopener">Docs</a>
-          <a href="https://status.worldmonitor.app/" target="_blank" rel="noopener">Status</a>
-          <a href="https://github.com/koala73/worldmonitor" target="_blank" rel="noopener">GitHub</a>
-          <a href="https://discord.gg/re63kWKxaz" target="_blank" rel="noopener">Discord</a>
-          <a href="https://x.com/worldmonitorai" target="_blank" rel="noopener">X</a>
-          ${this.ctx.isDesktopApp ? '' : `<span id="footerDownloadMount"></span>`}
-        </nav>
-        <span class="site-footer-copy">&copy; ${new Date().getFullYear()} World Monitor</span>
-      </footer>
     `, "legacy direct innerHTML migration"));
     // Mark AFTER the innerHTML swap so the timestamp reflects when the new shell
     // DOM is actually live — placing it before setTrustedHtml recorded a time

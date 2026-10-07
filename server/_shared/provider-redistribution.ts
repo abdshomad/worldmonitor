@@ -1,3 +1,5 @@
+// @ts-expect-error — JS module, no declaration file
+import { getHeaderApiKey } from '../../api/_api-key.js';
 import {
   INTERNAL_MCP_VERIFIED_HEADER,
   getInternalMcpVerifiedNonce,
@@ -18,8 +20,17 @@ export function requiresRedistributableProviders(request: Request | undefined): 
   const verifiedMcpMarker = request.headers.get(INTERNAL_MCP_VERIFIED_HEADER);
   if (verifiedMcpMarker && verifiedMcpMarker === getInternalMcpVerifiedNonce()) return true;
 
-  const apiKey = request.headers.get('X-WorldMonitor-Key')
-    ?? request.headers.get('X-Api-Key')
-    ?? '';
+  const apiKey = getHeaderApiKey(request);
   return apiKey.length > 0 && !apiKey.startsWith('wms_');
+}
+
+/**
+ * Direct RPC responses are programmatic surfaces even when the caller presents
+ * a browser-session token. Anonymous clients can mint and replay `wms_` tokens,
+ * so that prefix cannot grant access to display-only provider values.
+ */
+export function requiresRedistributableProvidersForDirectRpc(
+  request: Request | undefined,
+): boolean {
+  return request !== undefined;
 }

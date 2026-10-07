@@ -14,10 +14,12 @@ import {
 } from '../../../../src/generated/server/worldmonitor/prediction/v1/service_server';
 
 import filterParamContracts from '../../../../shared/openapi-filter-param-contracts.json';
-import { clampInt } from '../../../_shared/constants';
+import { resolvePageSize } from '../../../_shared/constants';
 import { getCachedJson } from '../../../_shared/redis';
 
 const BOOTSTRAP_KEY = 'prediction:markets-bootstrap:v1';
+const COUNTRY_INDEX_KEY = 'prediction:markets-country-index:v1';
+const COUNTRY_CATEGORY_PREFIX = 'country:';
 
 const TECH_CATEGORY_TAGS = filterParamContracts.predictionMarketTechCategories;
 const FINANCE_CATEGORY_TAGS = filterParamContracts.predictionMarketFinanceCategories;
@@ -35,6 +37,11 @@ interface BootstrapData {
   geopolitical?: BootstrapMarket[];
   tech?: BootstrapMarket[];
   finance?: BootstrapMarket[];
+  fetchedAt?: number;
+}
+
+interface CountryIndexData {
+  countries?: Record<string, BootstrapMarket[]>;
   fetchedAt?: number;
 }
 
@@ -88,9 +95,37 @@ export const listPredictionMarkets: PredictionServiceHandler['listPredictionMark
   try {
     const category = (req.category || '').slice(0, 50);
     const query = (req.query || '').slice(0, 100);
-    const limit = clampInt(req.pageSize, 50, 1, 100);
+    const limit = resolvePageSize(req.pageSize, 50, 100);
+    const isCountryCategory = category.startsWith(COUNTRY_CATEGORY_PREFIX);
+    const countryCode = isCountryCategory
+      ? category.slice(COUNTRY_CATEGORY_PREFIX.length).trim().toUpperCase()
+      : '';
 
-    const bootstrap = await getCachedJson(BOOTSTRAP_KEY) as BootstrapData | null;
+    if (isCountryCategory) {
+      if (!/^[A-Z]{2}$/.test(countryCode)) {
+        return { markets: [], pagination: undefined, fetchedAt: 0, dataAvailable: false };
+      }
+      const countryIndex = await getCachedJson(COUNTRY_INDEX_KEY, true) as CountryIndexData | null;
+      if (countryIndex) {
+        const countryMarkets = Array.isArray(countryIndex.countries?.[countryCode])
+          ? countryIndex.countries[countryCode]
+          : [];
+        let markets = countryMarkets.map((market) => toProtoMarket(market, ''));
+        if (query) {
+          const q = query.toLowerCase();
+          markets = markets.filter((m) => m.title.toLowerCase().includes(q));
+        }
+        return {
+          markets: markets.slice(0, limit),
+          pagination: undefined,
+          fetchedAt: Number(countryIndex.fetchedAt ?? 0),
+          dataAvailable: true,
+        };
+      }
+      return { markets: [], pagination: undefined, fetchedAt: 0, dataAvailable: false };
+    }
+
+    const bootstrap = await getCachedJson(BOOTSTRAP_KEY, true) as BootstrapData | null;
     if (!bootstrap) return { markets: [], pagination: undefined, fetchedAt: 0, dataAvailable: false };
 
     const fetchedAt = Number(bootstrap.fetchedAt ?? 0);

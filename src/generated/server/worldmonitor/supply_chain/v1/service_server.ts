@@ -57,6 +57,8 @@ export interface ChokepointInfo {
   transitSummary?: TransitSummary;
   flowEstimate?: FlowEstimate;
   warRiskTier: WarRiskTier;
+  navigationalWarningsAvailable: boolean;
+  aisSnapshotAvailable: boolean;
 }
 
 export interface DirectionalDwt {
@@ -78,6 +80,7 @@ export interface TransitSummary {
   riskSummary: string;
   riskReportAction: string;
   dataAvailable: boolean;
+  todayCountsAvailable: boolean;
 }
 
 export interface TransitDayCount {
@@ -292,12 +295,14 @@ export interface GetCountryCostShockResponse {
 
 export interface GetCountryProductsRequest {
   iso2: string;
+  hs4?: string;
 }
 
 export interface GetCountryProductsResponse {
   iso2: string;
   products: CountryProduct[];
   fetchedAt: string;
+  evidence?: CountryProductEvidence;
 }
 
 export interface CountryProduct {
@@ -306,6 +311,11 @@ export interface CountryProduct {
   totalValue: number;
   topExporters: ProductExporter[];
   year: number;
+  denominatorBasis?: string;
+  fetchedAt?: string;
+  partnerBasis?: string;
+  omittedPartnerCount?: number;
+  omittedPartnerShare?: number;
 }
 
 export interface ProductExporter {
@@ -313,6 +323,31 @@ export interface ProductExporter {
   partnerIso2: string;
   value: number;
   share: number;
+  netWeightKg?: number;
+  netWeightEstimated?: boolean;
+  quantity?: number;
+  quantityUnitCode?: number;
+  scale?: ExporterScale;
+}
+
+export interface ExporterScale {
+  worldExportsUsd: number;
+  worldExportsKg?: number;
+  rank: number;
+  year: number;
+  reporterCount: number;
+  unrankedReporterCount?: number;
+}
+
+export interface CountryProductEvidence {
+  state: string;
+  source: string;
+  requestedHs4s: string[];
+  missingHs4s: string[];
+  lastAttemptAt: string;
+  lastAttemptState: string;
+  recoveredHs4s: string[];
+  worldExportsFetchedAt?: string;
 }
 
 export interface GetMultiSectorCostShockRequest {
@@ -703,6 +738,124 @@ export interface GetChinaCorridorControlTowersResponse {
   upstreamUnavailable: boolean;
 }
 
+export interface GetCountryVulnerabilitiesRequest {
+  iso2: string;
+}
+
+export interface GetCountryVulnerabilitiesResponse {
+  iso2: string;
+  country: string;
+  vulnerabilities: CommodityVulnerability[];
+  generatedAt: string;
+  methodologyVersion: string;
+  upstreamUnavailable: boolean;
+}
+
+export interface CommodityVulnerability {
+  countryIso2: string;
+  countryName: string;
+  commodityId: string;
+  commodity: string;
+  score?: number;
+  band: string;
+  components?: VulnerabilityComponents;
+  coverage: string[];
+  state: string;
+  reasons: string[];
+  methodologyVersion: string;
+}
+
+export interface VulnerabilityComponents {
+  sourceConcentration?: VulnerabilitySourceConcentration;
+  transitExposure?: VulnerabilityTransitExposure;
+  buffer?: VulnerabilityBuffer;
+}
+
+export interface VulnerabilitySourceConcentration {
+  value?: number;
+  importHhi?: number;
+  mineHhi?: number;
+  refineryHhi?: number;
+  productionHhi?: number;
+  productionCoverage: string;
+  coverage: string;
+  inputs: VulnerabilityInput[];
+}
+
+export interface VulnerabilityInput {
+  sourceKey: string;
+  sourceName: string;
+  sourceUrl: string;
+  value?: number;
+  year?: number;
+  fetchedAt: string;
+  stale: boolean;
+  detail: string;
+}
+
+export interface VulnerabilityTransitExposure {
+  value?: number;
+  chokepoints: VulnerabilityTransitRoute[];
+}
+
+export interface VulnerabilityTransitRoute {
+  id: string;
+  name: string;
+  transitShare?: number;
+  weightedTransitShare?: number;
+  status: string;
+  inputs: VulnerabilityInput[];
+}
+
+export interface VulnerabilityBuffer {
+  state: string;
+  vulnerability?: number;
+  kind: string;
+  inputs: VulnerabilityInput[];
+}
+
+export interface GetChokepointDependenciesRequest {
+  chokepointId: string;
+  pageSize: number;
+}
+
+export interface GetChokepointDependenciesResponse {
+  chokepointId: string;
+  chokepoint: string;
+  dependencies: ChokepointDependency[];
+  generatedAt: string;
+  methodologyVersion: string;
+  upstreamUnavailable: boolean;
+}
+
+export interface ChokepointDependency {
+  countryIso2: string;
+  countryName: string;
+  commodityId: string;
+  commodity: string;
+  transitShare?: number;
+  weightedTransitShare?: number;
+  score?: number;
+  band: string;
+  state: string;
+  reasons: string[];
+  methodologyVersion: string;
+}
+
+export interface ListVulnerabilityRankingsRequest {
+  commodityId: string;
+  band: string;
+  state: string;
+  pageSize: number;
+}
+
+export interface ListVulnerabilityRankingsResponse {
+  vulnerabilities: CommodityVulnerability[];
+  generatedAt: string;
+  methodologyVersion: string;
+  upstreamUnavailable: boolean;
+}
+
 export type CorridorStatus = "CORRIDOR_STATUS_UNSPECIFIED" | "CORRIDOR_STATUS_ACTIVE" | "CORRIDOR_STATUS_PROPOSED" | "CORRIDOR_STATUS_UNAVAILABLE";
 
 export type DependencyFlag = "DEPENDENCY_FLAG_UNSPECIFIED" | "DEPENDENCY_FLAG_SINGLE_SOURCE_CRITICAL" | "DEPENDENCY_FLAG_SINGLE_CORRIDOR_CRITICAL" | "DEPENDENCY_FLAG_COMPOUND_RISK" | "DEPENDENCY_FLAG_DIVERSIFIABLE";
@@ -780,6 +933,9 @@ export interface SupplyChainServiceHandler {
   getFuelShortageDetail(ctx: ServerContext, req: GetFuelShortageDetailRequest): Promise<GetFuelShortageDetailResponse>;
   listEnergyDisruptions(ctx: ServerContext, req: ListEnergyDisruptionsRequest): Promise<ListEnergyDisruptionsResponse>;
   getChinaCorridorControlTowers(ctx: ServerContext, req: GetChinaCorridorControlTowersRequest): Promise<GetChinaCorridorControlTowersResponse>;
+  getCountryVulnerabilities(ctx: ServerContext, req: GetCountryVulnerabilitiesRequest): Promise<GetCountryVulnerabilitiesResponse>;
+  getChokepointDependencies(ctx: ServerContext, req: GetChokepointDependenciesRequest): Promise<GetChokepointDependenciesResponse>;
+  listVulnerabilityRankings(ctx: ServerContext, req: ListVulnerabilityRankingsRequest): Promise<ListVulnerabilityRankingsResponse>;
 }
 
 export function createSupplyChainServiceRoutes(
@@ -1187,6 +1343,7 @@ export function createSupplyChainServiceRoutes(
           const params = url.searchParams;
           const body: GetCountryProductsRequest = {
             iso2: params.get("iso2") ?? "",
+            hs4: params.get("hs4") ?? "",
           };
           if (options?.validateRequest) {
             const bodyViolations = options.validateRequest("getCountryProducts", body);
@@ -1769,6 +1926,151 @@ export function createSupplyChainServiceRoutes(
 
           const result = await handler.getChinaCorridorControlTowers(ctx, body);
           return new Response(JSON.stringify(result as GetChinaCorridorControlTowersResponse), {
+            status: 200,
+            headers: { "Content-Type": "application/json" },
+          });
+        } catch (err: unknown) {
+          if (err instanceof ValidationError) {
+            return new Response(JSON.stringify({ violations: err.violations }), {
+              status: 400,
+              headers: { "Content-Type": "application/json" },
+            });
+          }
+          if (options?.onError) {
+            return options.onError(err, req);
+          }
+          const message = err instanceof Error ? err.message : String(err);
+          return new Response(JSON.stringify({ message }), {
+            status: 500,
+            headers: { "Content-Type": "application/json" },
+          });
+        }
+      },
+    },
+    {
+      method: "GET",
+      path: "/api/supply-chain/v1/get-country-vulnerabilities",
+      handler: async (req: Request): Promise<Response> => {
+        try {
+          const pathParams: Record<string, string> = {};
+          const url = new URL(req.url, "http://localhost");
+          const params = url.searchParams;
+          const body: GetCountryVulnerabilitiesRequest = {
+            iso2: params.get("iso2") ?? "",
+          };
+          if (options?.validateRequest) {
+            const bodyViolations = options.validateRequest("getCountryVulnerabilities", body);
+            if (bodyViolations) {
+              throw new ValidationError(bodyViolations);
+            }
+          }
+
+          const ctx: ServerContext = {
+            request: req,
+            pathParams,
+            headers: Object.fromEntries(req.headers.entries()),
+          };
+
+          const result = await handler.getCountryVulnerabilities(ctx, body);
+          return new Response(JSON.stringify(result as GetCountryVulnerabilitiesResponse), {
+            status: 200,
+            headers: { "Content-Type": "application/json" },
+          });
+        } catch (err: unknown) {
+          if (err instanceof ValidationError) {
+            return new Response(JSON.stringify({ violations: err.violations }), {
+              status: 400,
+              headers: { "Content-Type": "application/json" },
+            });
+          }
+          if (options?.onError) {
+            return options.onError(err, req);
+          }
+          const message = err instanceof Error ? err.message : String(err);
+          return new Response(JSON.stringify({ message }), {
+            status: 500,
+            headers: { "Content-Type": "application/json" },
+          });
+        }
+      },
+    },
+    {
+      method: "GET",
+      path: "/api/supply-chain/v1/get-chokepoint-dependencies",
+      handler: async (req: Request): Promise<Response> => {
+        try {
+          const pathParams: Record<string, string> = {};
+          const url = new URL(req.url, "http://localhost");
+          const params = url.searchParams;
+          const body: GetChokepointDependenciesRequest = {
+            chokepointId: params.get("chokepointId") ?? "",
+            pageSize: Number(params.get("pageSize") ?? "0"),
+          };
+          if (options?.validateRequest) {
+            const bodyViolations = options.validateRequest("getChokepointDependencies", body);
+            if (bodyViolations) {
+              throw new ValidationError(bodyViolations);
+            }
+          }
+
+          const ctx: ServerContext = {
+            request: req,
+            pathParams,
+            headers: Object.fromEntries(req.headers.entries()),
+          };
+
+          const result = await handler.getChokepointDependencies(ctx, body);
+          return new Response(JSON.stringify(result as GetChokepointDependenciesResponse), {
+            status: 200,
+            headers: { "Content-Type": "application/json" },
+          });
+        } catch (err: unknown) {
+          if (err instanceof ValidationError) {
+            return new Response(JSON.stringify({ violations: err.violations }), {
+              status: 400,
+              headers: { "Content-Type": "application/json" },
+            });
+          }
+          if (options?.onError) {
+            return options.onError(err, req);
+          }
+          const message = err instanceof Error ? err.message : String(err);
+          return new Response(JSON.stringify({ message }), {
+            status: 500,
+            headers: { "Content-Type": "application/json" },
+          });
+        }
+      },
+    },
+    {
+      method: "GET",
+      path: "/api/supply-chain/v1/list-vulnerability-rankings",
+      handler: async (req: Request): Promise<Response> => {
+        try {
+          const pathParams: Record<string, string> = {};
+          const url = new URL(req.url, "http://localhost");
+          const params = url.searchParams;
+          const body: ListVulnerabilityRankingsRequest = {
+            commodityId: params.get("commodityId") ?? "",
+            band: params.get("band") ?? "",
+            state: params.get("state") ?? "",
+            pageSize: Number(params.get("pageSize") ?? "0"),
+          };
+          if (options?.validateRequest) {
+            const bodyViolations = options.validateRequest("listVulnerabilityRankings", body);
+            if (bodyViolations) {
+              throw new ValidationError(bodyViolations);
+            }
+          }
+
+          const ctx: ServerContext = {
+            request: req,
+            pathParams,
+            headers: Object.fromEntries(req.headers.entries()),
+          };
+
+          const result = await handler.listVulnerabilityRankings(ctx, body);
+          return new Response(JSON.stringify(result as ListVulnerabilityRankingsResponse), {
             status: 200,
             headers: { "Content-Type": "application/json" },
           });

@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { GLOSSARY_TERMS, GLOSSARY_CATEGORIES } from '../blog-site/src/data/glossary.ts';
@@ -37,14 +38,20 @@ describe('glossary data integrity', () => {
     }
   });
 
-  it('the short definition restates the term (answer-block shape)', () => {
+  it('short definitions stay answer-shaped and ≤25 words (#7381)', () => {
     // AEO/citation surfaces read the first sentence as a standalone answer;
-    // it should name the thing it defines, not open with a pronoun.
+    // it should name the thing it defines, not open with a pronoun, and stay
+    // short enough to quote before the body elaborates.
     for (const t of GLOSSARY_TERMS) {
       const needle = (t.abbr || t.term.split(' ')[0]).toLowerCase();
       assert.ok(
         t.short.toLowerCase().includes(needle),
         `short definition for ${t.slug} should name the term (looked for "${needle}")`
+      );
+      const wordCount = t.short.trim().split(/\s+/).length;
+      assert.ok(
+        wordCount <= 25,
+        `short definition for ${t.slug} is ${wordCount} words (max 25)`
       );
     }
   });
@@ -107,5 +114,28 @@ describe('glossary data integrity', () => {
       const blob = [t.short, ...t.body].join(' ');
       assert.ok(!forbidden.test(blob), `${t.slug} implies a forecast-calibration capability that does not exist yet`);
     }
+  });
+
+  it('describes the Pentagon Pizza Index the way the relay scores it', () => {
+    // The page earns most of the glossary's search impressions. It once said
+    // the index fed Strategic Risk, which it does not; its thresholds must
+    // match the documented rule in docs/algorithms.mdx.
+    const pizza = GLOSSARY_TERMS.find((t) => t.slug === 'pentagon-pizza-index');
+    const blob = [pizza.short, ...pizza.body].join(' ');
+    const algorithms = readFileSync(new URL('../docs/algorithms.mdx', import.meta.url), 'utf8');
+    for (const [page, doc] of [
+      ['150% as busy as its usual level', '150% of its hourly usual busyness'],
+      ['25 busyness points above its forecast', '25 busyness points above its forecast'],
+      ['three consecutive 15-minute readings', 'three consecutive fresh observations'],
+      ['adds up to 25 points', 'min(25, (percentage_of_usual − 100) / 5)'],
+    ]) {
+      assert.ok(blob.includes(page), `the page must state: ${page}`);
+      assert.ok(algorithms.includes(doc), `docs/algorithms.mdx no longer says: ${doc}`);
+    }
+    assert.doesNotMatch(blob, /fused into the Strategic Risk/i);
+    assert.match(blob, /not military readiness/);
+    assert.ok(pizza.metaTitle.length <= 60 && pizza.metaTitle.endsWith('| World Monitor'));
+    assert.ok(pizza.metaDescription.length <= 160);
+    assert.ok(pizza.learnMore.some((link) => link.href === 'https://www.worldmonitor.app/dashboard'));
   });
 });

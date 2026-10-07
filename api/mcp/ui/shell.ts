@@ -120,11 +120,12 @@ const SHARED_STYLE_TOKENS = `
 // The shared bridge + helper library. Injected once per shell. It exposes a
 // small helper set (q/num/listState/clampPct/pctText/setText/el/cssVar) in closure scope
 // that a widget's `renderBody` uses, then calls the widget-defined
-// `renderData(data)` on every tool-result. NOTE: no `${` / backtick here.
+// `renderData(data, renderContext)` on every tool-result. NOTE: no `${` / backtick here.
 const SHARED_BRIDGE_HEAD = `
 (function () {
   "use strict";
   var parentWin = window.parent;
+  var hostCapabilities = {};
 
   function post(msg) {
     try { parentWin.postMessage(msg, "*"); } catch (e) { /* host gone */ }
@@ -216,20 +217,30 @@ const SHARED_BRIDGE_HEAD = `
     notify("ui/notifications/size-changed", { height: h });
   }
 
-  function extractToolData(result) {
-    if (!result || typeof result !== "object") return null;
+  function extractToolResult(result) {
+    if (!result || typeof result !== "object") return { data: null, renderContext: { kind: "unknown" } };
     if (result.structuredContent && typeof result.structuredContent === "object") {
-      return result.structuredContent;
+      var structured = result.structuredContent;
+      var kind = "unknown";
+      if (!Array.isArray(structured)) {
+        if (Object.prototype.hasOwnProperty.call(structured, "projection")) kind = "projection-wrapped";
+        else if (!Object.prototype.hasOwnProperty.call(structured, "_attribution") && !softError(structured)) kind = "ordinary-structured";
+      }
+      return { data: structured, renderContext: { kind: kind } };
     }
     if (Array.isArray(result.content)) {
       for (var i = 0; i < result.content.length; i++) {
         var c = result.content[i];
         if (c && c.type === "text" && typeof c.text === "string") {
-          try { return JSON.parse(c.text); } catch (e) { /* not JSON */ }
+          try { return { data: JSON.parse(c.text), renderContext: { kind: "text-fallback" } }; } catch (e) { /* not JSON */ }
         }
       }
     }
-    return null;
+    return { data: null, renderContext: { kind: "unknown" } };
+  }
+
+  function extractToolData(result) {
+    return extractToolResult(result).data;
   }
 
   function applyTheme(hostContext) {
@@ -271,10 +282,10 @@ const SHARED_BRIDGE_HEAD = `
     if (empty) { empty.textContent = msg; empty.style.display = "block"; }
   }
 
-  function safeRender(data) {
+  function safeRender(data, renderContext) {
     var errMsg = softError(data);
     if (errMsg) { showError(errMsg); reportSize(); return; }
-    try { renderData(data); } catch (e) { /* never break the host on a bad payload */ }
+    try { renderData(data, renderContext); } catch (e) { /* never break the host on a bad payload */ }
     reportSize();
   }
 `;
@@ -284,14 +295,37 @@ const SHARED_BRIDGE_HEAD = `
 // old `__APP_NAME__` token can't leak it into the served HTML. `appName` is
 // JSON.stringified at the call site — it becomes a string literal in the
 // emitted JS.
+export const PANEL_USAGE_BRIDGE = `
+  function showPanelUsage(result) {
+    var usage = result && result._meta && result._meta["worldmonitor/usage"];
+    var notice = document.getElementById("panel-usage");
+    if (!usage || usage.unit !== "requests" || typeof usage.resetsAt !== "string" ||
+        (usage.remaining !== null && (typeof usage.remaining !== "number" || !Number.isFinite(usage.remaining) || usage.remaining < 0))) {
+      if (notice) notice.hidden = true;
+      return;
+    }
+    if (!notice) {
+      notice = document.createElement("p");
+      notice.id = "panel-usage";
+      notice.setAttribute("role", "status");
+      document.getElementById("root").prepend(notice);
+    }
+    notice.hidden = false;
+    notice.textContent = (usage.remaining === null ? "Unlimited allowance" : usage.remaining + " of " + usage.limit + " requests remaining") +
+      ", at the last panel request. Resets " + new Date(usage.resetsAt).toLocaleString() + ". Opening this panel uses 1 request; its rendered details are included.";
+  }
+`;
+
 function renderBridgeTail(appName: string): string {
   return `
+  ${PANEL_USAGE_BRIDGE}
   window.addEventListener("message", function (event) {
     if (event.source !== parentWin) return;
     var msg = event.data;
     if (!msg || typeof msg !== "object" || msg.jsonrpc !== "2.0") return;
 
     if (msg.id === 1 && msg.result) {
+      hostCapabilities = msg.result.hostCapabilities && typeof msg.result.hostCapabilities === "object" ? msg.result.hostCapabilities : {};
       applyTheme(msg.result.hostContext);
       notify("ui/notifications/initialized", {});
       reportSize();
@@ -300,8 +334,23 @@ function renderBridgeTail(appName: string): string {
 
     switch (msg.method) {
       case "ui/notifications/tool-result": {
-        var data = extractToolData(msg.params && msg.params.result ? msg.params.result : msg.params);
-        if (data) safeRender(data);
+        var result = msg.params && msg.params.result ? msg.params.result : msg.params;
+        showPanelUsage(result);
+        var extracted = extractToolResult(result);
+        if (result && result.isError === true) {
+          var message = softError(extracted.data);
+          message = typeof message === "string" ? message.replace(/[\\x00-\\x1f\\x7f]/g, "").trim().slice(0, 1000) : "";
+          if (!message && Array.isArray(result.content)) {
+            for (var i = 0; i < result.content.length; i++) {
+              var block = result.content[i];
+              if (!block || block.type !== "text" || typeof block.text !== "string") continue;
+              message = block.text.replace(/[\\x00-\\x1f\\x7f]/g, "").trim().slice(0, 1000);
+              if (message) break;
+            }
+          }
+          extracted = { data: { error: message || "Tool request failed." }, renderContext: { kind: "unknown" } };
+        }
+        safeRender(extracted.data, extracted.renderContext);
         break;
       }
       case "ui/notifications/tool-input":
@@ -339,7 +388,7 @@ export interface AppShellSpec {
   // Body markup placed inside <div class="wrap" id="root">. Owns its own
   // empty-state + card elements.
   body: string;
-  // JS body of `function renderData(data) { ... }`. Runs inside the shared
+  // JS body of `function renderData(data, renderContext) { ... }`. Runs inside the shared
   // bridge closure with access to q/num/listState/setText/el/cssVar/pctText/clampPct/
   // levelFor/collapseWs/paragraphs/httpUrl/countryName/probabilityBar. MUST
   // avoid backticks and `${`.
@@ -352,7 +401,7 @@ export interface AppShellSpec {
 export function buildAppHtml(spec: AppShellSpec): string {
   const bridge =
     SHARED_BRIDGE_HEAD +
-    '\n  function renderData(data) {\n' + spec.renderBody + '\n  }\n' +
+    '\n  function renderData(data, renderContext) {\n' + spec.renderBody + '\n  }\n' +
     renderBridgeTail(spec.appName);
 
   return `<!DOCTYPE html>

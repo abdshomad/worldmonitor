@@ -3,10 +3,11 @@
 # Multi-stage build for the World Monitor web app (frontend only).
 
 # Stage 1: Build the frontend with TypeScript + Vite.
-FROM node:24-alpine@sha256:d32cdf619f63fe0471182d08996dd516c6275bb5fd31ae06e55a570bd9e1ad43 AS builder
+FROM node:24-alpine@sha256:ebfe2f90462722a7a4de65e91990e97fe0d401c70e0e762c5b53302f905ec1c1 AS builder
 ARG BUILDKIT_SBOM_SCAN_STAGE=true
 
 WORKDIR /app
+ENV npm_config_install_links=true
 
 # Copy source and build.
 COPY . .
@@ -26,6 +27,12 @@ ARG VITE_WS_API_URL=https://api.worldmonitor.app
 ENV VITE_VARIANT=${VITE_VARIANT}
 ENV VITE_WS_API_URL=${VITE_WS_API_URL}
 
+# The crawlable-corpus step runs the source-attribution drift gate. Inventory
+# facts write untracked .js into api/, so the gate must see the pristine
+# checkout first (#7435). tsc + vite stay later so they copy the generated
+# assets into dist/.
+RUN npm run build:crawlable-corpus && npm run build:sitemap
+
 # Generated inventory assets are intentionally untracked. Recreate them in the
 # clean release image before Vite copies public/ into dist/.
 RUN node scripts/generate-inventory-facts.mjs
@@ -36,11 +43,10 @@ RUN node scripts/generate-inventory-facts.mjs
 # serves a 404 behind a live route. build:pro installs pro-test's own lockfile.
 RUN npm run build:pro
 
-# Build the crawlable static corpus, then tsc + vite build directly like the
-# sidecar image's builder. `npm run build` would chain build:blog
-# (blog-site has its own lockfile, not installed here) and the prebuild
-# openapi/agent-skills generators.
-RUN npm run build:crawlable-corpus && npm run build:sitemap && npx tsc && npx vite build
+# tsc + vite build directly like the sidecar image's builder. `npm run build`
+# would chain build:blog (blog-site has its own lockfile, not installed here)
+# and the prebuild openapi/agent-skills generators.
+RUN npx tsc && npx vite build
 RUN test -s dist/product-facts.json
 # Assert the /pro pages survived the public/ -> dist/ copy. build:pro succeeding
 # proves public/pro/ exists; it does NOT prove Vite copied it, and nginx routes
@@ -50,7 +56,7 @@ RUN test -s dist/pro/index.html && test -s dist/pro/welcome.html
 
 
 # Stage 2: Serve the built assets from nginx.
-FROM nginx:alpine@sha256:db35bfc6b2951e7f8a72db5db120288c127ffaeeb4a6d4b95a26fead017d5913 AS runtime
+FROM nginx:alpine@sha256:72ba65eb42c10344912a84ff42408db7d34f2feb642204570ab8fc5ffd29f1d3 AS runtime
 
 WORKDIR /usr/share/nginx/html
 

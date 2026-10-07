@@ -1,7 +1,9 @@
 import { describe, it, beforeEach, afterEach } from 'node:test';
 import { strict as assert } from 'node:assert';
 import { readFileSync } from 'node:fs';
+import Ajv2020 from 'ajv/dist/2020.js';
 
+import { SERVER_VERSION } from '../api/mcp/constants.ts';
 import { TOOL_REGISTRY, toolAccess } from '../api/mcp/registry/index.ts';
 
 const originalEnv = { ...process.env };
@@ -138,12 +140,15 @@ describe('api/mcp.ts — tools/list description compression (v1.7.0)', () => {
       return body.result.tools;
     }
 
-    it('compressDescriptions=true returns the public shape plus access metadata and no internal keys', async () => {
+    it('compressDescriptions=true returns the public shape plus access and weight metadata and no internal keys', async () => {
       const tools = await getRegistry();
       const t = tools.find(t => t.name === 'get_cyber_threats');
       assert.ok(t, 'get_cyber_threats must be registered');
       assert.deepEqual(Object.keys(t).sort(), ['_meta', 'annotations', 'description', 'inputSchema', 'name', 'outputSchema']);
-      assert.deepEqual(t._meta, { 'worldmonitor/access': 'free-account' });
+      assert.deepEqual(t._meta, {
+        'worldmonitor/access': 'free-account',
+        'worldmonitor/weight': 1,
+      });
     });
 
     it('every cache-tool result has inputSchema.properties.summary STRUCTURALLY equal to SUMMARY_SCHEMA (deepEqual not ===)', async () => {
@@ -156,13 +161,21 @@ describe('api/mcp.ts — tools/list description compression (v1.7.0)', () => {
       assert.deepEqual(cacheTool.inputSchema.properties.summary, SUMMARY_SCHEMA);
     });
 
-    it('every tool has inputSchema.properties.jmespath STRUCTURALLY equal to JMESPATH_SCHEMA (deepEqual not ===)', async () => {
+    it('EVERY tool has the JMESPath schema — the projection is universal', async () => {
       const JMESPATH_SCHEMA = { type: 'string', description: 'Optional JMESPath projection applied to the response. See initialize.instructions for grammar and examples.' };
       const tools = await getRegistry();
       for (const t of tools) {
         assert.ok(t.inputSchema?.properties?.jmespath, `tool "${t.name}" missing jmespath schema`);
         assert.deepEqual(t.inputSchema.properties.jmespath, JMESPATH_SCHEMA, `tool "${t.name}" jmespath shape differs`);
       }
+      // No roster of tools that omit it. A licence-bearing tool declares an
+      // `_attribution` extraction instead and the dispatcher re-attaches its
+      // sources after the projection runs — see shared/attribution-rider.ts
+      // and the gate in tests/mcp-attribution-rider.test.mjs.
+      assert.deepEqual(
+        tools.filter((t) => !('jmespath' in (t.inputSchema?.properties ?? {}))).map((t) => t.name),
+        [],
+      );
     });
 
     it('RPC tool result does NOT have summary in properties', async () => {
@@ -281,17 +294,20 @@ describe('api/mcp.ts — tools/list description compression (v1.7.0)', () => {
       const t = tools.find(t => t.name === 'get_country_risk');
       assert.ok(t, 'get_country_risk must be registered');
       assert.ok(t._meta && typeof t._meta === 'object', 'UI-linked tool must carry a _meta object');
-      assert.equal(t._meta.ui?.resourceUri, 'ui://worldmonitor/country-risk.html',
+      assert.equal(t._meta.ui?.resourceUri, 'ui://worldmonitor/country-risk-v3.html',
         'nested _meta.ui.resourceUri must point at the registered ui:// resource');
-      assert.equal(t._meta['ui/resourceUri'], 'ui://worldmonitor/country-risk.html',
+      assert.equal(t._meta['ui/resourceUri'], 'ui://worldmonitor/country-risk-v3.html',
         'the deprecated flat ui/resourceUri alias must mirror the nested form');
     });
 
-    it('a tool WITHOUT a UI surface carries only its access marker in _meta', async () => {
+    it('a tool WITHOUT a UI surface carries only the universal markers in _meta', async () => {
       const tools = await getRegistry();
       const t = tools.find(t => t.name === 'get_cyber_threats');
       assert.ok(t, 'get_cyber_threats must be registered');
-      assert.deepEqual(t._meta, { 'worldmonitor/access': 'free-account' });
+      assert.deepEqual(t._meta, {
+        'worldmonitor/access': 'free-account',
+        'worldmonitor/weight': 1,
+      });
     });
 
     it('describe_tool(get_country_risk) carries the same _meta.ui linkage (uncompressed path)', async () => {
@@ -305,8 +321,8 @@ describe('api/mcp.ts — tools/list description compression (v1.7.0)', () => {
       }));
       const body = await res.json();
       const full = JSON.parse(body.result.content[0].text);
-      assert.equal(full._meta?.ui?.resourceUri, 'ui://worldmonitor/country-risk.html');
-      assert.equal(full._meta?.['ui/resourceUri'], 'ui://worldmonitor/country-risk.html');
+      assert.equal(full._meta?.ui?.resourceUri, 'ui://worldmonitor/country-risk-v3.html');
+      assert.equal(full._meta?.['ui/resourceUri'], 'ui://worldmonitor/country-risk-v3.html');
     });
   });
 
@@ -358,6 +374,21 @@ describe('api/mcp.ts — tools/list description compression (v1.7.0)', () => {
       }
     });
 
+    it('discovery descriptions identify supply and economic data without unsupported capabilities', async () => {
+      const tools = await getToolsList();
+      const supply = tools.find(t => t.name === 'get_supply_vulnerabilities');
+      const chokepoint = tools.find(t => t.name === 'get_chokepoint_dependencies');
+      const economic = tools.find(t => t.name === 'get_economic_data');
+      assert.match(supply.description, /country.*commodity.*supply/i);
+      assert.match(chokepoint.description, /country.*commodity.*chokepoint/i);
+      for (const tool of [supply, chokepoint]) {
+        assert.match(tool.description, /absent score means insufficient.*never zero risk/i);
+      }
+      assert.match(economic.description, /rates.*calendars.*fuel prices/i);
+      const full = await callDescribeTool('get_economic_data');
+      assert.doesNotMatch(full.description, /energy storage/i);
+    });
+
     it('describe_tool({tool_name: "get_market_data"}) returns the FULL uncompressed description', async () => {
       const tools = await getToolsList();
       const compressed = tools.find(t => t.name === 'get_market_data');
@@ -375,6 +406,36 @@ describe('api/mcp.ts — tools/list description compression (v1.7.0)', () => {
       const fromList = tools.find(t => t.name === 'get_market_data');
       const fromDescribe = await callDescribeTool('get_market_data');
       assert.deepEqual(Object.keys(fromList).sort(), Object.keys(fromDescribe).sort());
+    });
+
+    it('describe_tool returns the complete country section definition within its existing budget', async () => {
+      const tools = await getToolsList();
+      const listed = tools.find(tool => tool.name === 'get_country_brief_section');
+      const definition = await callDescribeTool('get_country_brief_section');
+      const registered = TOOL_REGISTRY.find(tool => tool.name === 'get_country_brief_section');
+      assert.equal(definition._budget_exceeded, undefined);
+      assert.equal(definition.description, registered.description);
+      assert.deepEqual({ ...definition, description: listed.description }, listed);
+    });
+
+    it('country output schema requires raw evidence only for the raw Signals section', async () => {
+      const { assembleRawSignals, failedRawSignal, RAW_SIGNAL_FAMILIES } = await import('../shared/country-raw-signals.ts');
+      const time = '2026-10-05T12:00:00Z';
+      const sources = Object.fromEntries(RAW_SIGNAL_FAMILIES.map(family => [family, failedRawSignal(family, 'unavailable', time, 'Controlled failure')]));
+      const result = assembleRawSignals('US', sources, time);
+      const schema = TOOL_REGISTRY.find(tool => tool.name === 'get_country_brief_section').outputSchema;
+      const validate = new Ajv2020({ strict: false }).compile(schema);
+      assert.equal(validate(result), true);
+      for (const state of ['ready', 'locked', 'unavailable']) {
+        assert.equal(validate({ state, section: 'signalsRaw' }), false,
+          `raw Signals ${state} output must include source evidence`);
+      }
+      const missingFamily = structuredClone(result);
+      delete missingFamily.value.sources.thermal;
+      assert.equal(validate(missingFamily), false);
+      assert.equal(validate({ ...result, value: { countryCode: 'US' } }), false);
+      assert.equal(validate({ state: 'ready', section: 'facts', value: { capital: 'Washington' } }), true);
+      assert.equal(validate({ state: 'ready', value: {} }), false);
     });
 
     it('describe_tool result has inputSchema.properties.jmespath structurally equal to JMESPATH_SCHEMA (R7)', async () => {
@@ -407,14 +468,14 @@ describe('api/mcp.ts — tools/list description compression (v1.7.0)', () => {
     // ============================================================
     // U4: Version bump + SERVER_INSTRUCTIONS + server-card sync
     // ============================================================
-    it('serverInfo.version === "1.17.0"', async () => {
+    it('serverInfo.version === SERVER_VERSION', async () => {
       const res = await mod.default(new Request('https://worldmonitor.app/mcp', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'X-WorldMonitor-Key': VALID_KEY },
         body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'initialize', params: { protocolVersion: '2025-03-26', capabilities: {}, clientInfo: { name: 't', version: '1' } } }),
       }));
       const body = await res.json();
-      assert.equal(body.result?.serverInfo?.version, '1.17.0');
+      assert.equal(body.result?.serverInfo?.version, SERVER_VERSION);
     });
 
     it('initialize.result.instructions mentions describe_tool AND the TOOL_DESCRIPTION_MAX_BYTES cap value', async () => {
@@ -431,9 +492,9 @@ describe('api/mcp.ts — tools/list description compression (v1.7.0)', () => {
         'instructions should mention the TOOL_DESCRIPTION_MAX_BYTES cap');
     });
 
-    it('server-card.json version matches SERVER_VERSION (1.17.0) and tools[] matches the registry count', () => {
+    it('server-card.json version matches SERVER_VERSION and tools[] matches the registry count', () => {
       const card = JSON.parse(readFileSync(new URL('../public/.well-known/mcp/server-card.json', import.meta.url), 'utf8'));
-      assert.equal(card.serverInfo.version, '1.17.0');
+      assert.equal(card.serverInfo.version, SERVER_VERSION);
       // orank (ora.ai) agent-readiness scanner reads the card's `tools` as an
       // ARRAY (tools[]) for pre-connection preview — not the old {count,categories}
       // object. Keep it an array; the count now derives from the length.
@@ -465,7 +526,7 @@ describe('api/mcp.ts — tools/list description compression (v1.7.0)', () => {
       // Top-level mirrors must stay consistent with the nested MCP shapes.
       assert.equal(card.version, card.serverInfo.version, 'top-level version must mirror serverInfo.version');
       assert.equal(card.serverUrl, card.transport.endpoint, 'serverUrl must mirror transport.endpoint');
-      assert.equal(card.name, card.serverInfo.name, 'top-level name must mirror serverInfo.name');
+      assert.match(card.name, /^[a-zA-Z0-9.-]+\/[a-zA-Z0-9._-]+$/, 'top-level name must be reverse-DNS (Server Card schema)');
 
       // tools[] must be a name+description projection of the live registry,
       // plus the same access marker tools/list emits, in the same order.

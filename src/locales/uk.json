@@ -87,7 +87,7 @@
     "predictionMarkets": "Prediction Markets",
     "loadingMarkets": "Loading prediction markets...",
     "infrastructure": "Infrastructure Exposure",
-    "briefUnavailable": "AI brief unavailable — configure GROQ_API_KEY in Settings.",
+    "briefUnavailable": "AI brief unavailable — configure OPENROUTER_API_KEY in Settings.",
     "cached": "Cached",
     "fresh": "Fresh",
     "noMarkets": "No active markets for this country.",
@@ -147,6 +147,7 @@
       "suppliers": "Arms suppliers ({{start}}–{{end}})",
       "source": "Sources: World Bank and SIPRI Arms Transfers Database. TIV measures transfer volume, not financial value.",
       "sourceWorldBank": "Source: World Bank.",
+      "snapshotAssembled": "Знімок даних {{source}} сформовано {{time}}",
       "unavailable": "Not available",
       "coverage": "Mapped coverage",
       "supplierRetained": "Supplier data retained from the last successful importer refresh."
@@ -237,11 +238,13 @@
       "doNotTravel": "Do Not Travel",
       "reconsiderTravel": "Reconsider Travel",
       "exerciseCaution": "Exercise Caution",
+      "normalPrecautions": "Звичайні запобіжні заходи",
       "advisory": "Advisory",
       "activeSirens": "Active Sirens",
       "sirens24h": "Sirens / 24h",
       "aviationDisruptions": "Aviation Disruptions",
-      "gpsJammingZones": "GPS Jamming Zones"
+      "gpsJammingZones": "GPS Jamming Zones",
+      "temporalUnavailable": "Дані часових спостережень недоступні"
     },
     "fallback": {
       "instabilityIndex": "**Instability Index: {{score}}/100** ({{level}}, {{trend}})",
@@ -265,7 +268,7 @@
       "area": "Area"
     },
     "foodStocks": "Food stocks",
-    "foodStocksHelp": "USDA PSD commodity stocks-to-use by marketing year, with the world ratio alongside for context. FAOSTAT fills production only where PSD has no country coverage.",
+    "foodStocksHelp": "USDA PSD commodity stocks-to-use by marketing year, with the world ratio alongside for context. FAOSTAT Food Balances supplies production and domestic supply when PSD has no complete country balance.",
     "loadingFoodStocks": "Loading food stocks…",
     "foodStocksUnavailable": "Food stocks unavailable.",
     "foodStocksProLocked": "Upgrade to PRO for commodity stocks-to-use",
@@ -305,6 +308,71 @@
       "manufacturingShare": "Manufacturing employment",
       "source": "Sources: {{sources}}.",
       "retained": "{{stage}} data retained from the last successful refresh."
+    },
+    "fiveFactorScorecard": {
+      "title": "П'ятифакторна шкала стійкості",
+      "help": "Зафіксовані оцінки доказів v1 для продовольства, енергетики, демографії, технологій та оборони. Розгорніть рядок, щоб переглянути вхідні дані, походження джерел та причини відсутності даних.",
+      "loading": "Завантаження п'ятифакторної шкали…",
+      "unavailable": "П'ятифакторна шкала недоступна.",
+      "proLocked": "Оновіть до PRO для доступу до п'ятифакторної шкали стійкості",
+      "insufficient": "Недостатньо даних",
+      "notAvailable": "Недоступно",
+      "noEvidence": "Немає доступних доказів для цього фактора.",
+      "score": "{{score}}/5",
+      "coverage": "Покриття {{coverage}}%",
+      "methodologyVersion": "Методологія v{{version}}",
+      "methodologyLink": "Переглянути методологію",
+      "pillars": {
+        "food": "Їжа",
+        "energy": "Енергія",
+        "demographics": "Демографія",
+        "technology": "Технології",
+        "defense": "Оборона"
+      },
+      "reasons": {
+        "source-unavailable": "Джерело недоступне",
+        "country-unavailable": "Країна недоступна",
+        "invalid-value": "Некоректне значення джерела",
+        "stale": "Дані застарілі",
+        "coverage-below-floor": "Покриття нижче порогу оцінювання",
+        "required-group-missing": "Відсутня обов'язкова група доказів",
+        "missing-population": "Дані про населення недоступні",
+        "redistribution-blocked": "Перерозподіл джерела не дозволено",
+        "pillar-unavailable": "Стовп недоступний"
+      },
+      "inputs": {
+        "population": "Population",
+        "food_productionBalance": "Баланс виробництва",
+        "food_stocksToUse": "Запаси для використання",
+        "food_waterSecurity": "Водна безпека",
+        "food_importDiversity": "Різноманітність імпорту",
+        "energy_productionBalance": "Баланс виробництва",
+        "energy_lowCarbonShare": "Частка низьковуглецевої енергії",
+        "energy_gridEfficiency": "Ефективність електромережі",
+        "demographics_totalDependency": "Загальний коефіцієнт залежності",
+        "demographics_oldAgeDependency": "Коефіцієнт залежності осіб старшого віку",
+        "demographics_workingAgeProjection": "Прогноз частки працездатного населення",
+        "demographics_tertiaryEnrollment": "Рівень охоплення третинною освітою",
+        "demographics_researchersPerMillion": "Дослідники на мільйон населення",
+        "demographics_stemGraduateShare": "Частка випускників STEM",
+        "demographics_trainedIndustrialShare": "Частка кваліфікованих промислових кадрів",
+        "demographics_manufacturingEmploymentShare": "Частка зайнятості у виробництві",
+        "technology_internetUse": "Використання інтернету",
+        "technology_mobileSubscriptions": "Мобільні підписки",
+        "technology_fixedBroadband": "Стільовий широкополосний інтернет",
+        "technology_rdSpend": "Витрати на дослідження та розробки",
+        "technology_researchersPerMillion": "Дослідники на мільйон населення",
+        "technology_stemGraduateShare": "Частка випускників STEM",
+        "technology_electricityAccess": "Доступ до електроенергії",
+        "defense_expenditureUsd": "Витрати на оборону",
+        "defense_expenditurePctGdp": "Оборонне навантаження",
+        "defense_personnel": "Персонал збройних сил",
+        "defense_industrialBalance": "Баланс оборонної промисловості",
+        "defense_supplierDiversity": "Різноманітність постачальників озброєнь"
+      }
+    },
+    "defenseIndustrialBase": {
+      "proLocked": "Перейдіть на PRO для залежності від постачальників озброєння та військової потужності"
     }
   },
   "header": {
@@ -807,7 +875,7 @@
       "fresh": "Fresh",
       "noMarkets": "No prediction markets found",
       "predictionMarkets": "Prediction Markets",
-      "unavailable": "AI brief unavailable — configure GROQ_API_KEY in Settings."
+      "unavailable": "AI brief unavailable — configure OPENROUTER_API_KEY in Settings."
     },
     "countryBrief": {
       "identifying": "Identifying country...",
@@ -823,7 +891,7 @@
       "predictionMarkets": "Prediction Markets",
       "loadingMarkets": "Loading prediction markets...",
       "infrastructure": "Infrastructure Exposure",
-      "briefUnavailable": "AI brief unavailable — configure GROQ_API_KEY in Settings.",
+      "briefUnavailable": "AI brief unavailable — configure OPENROUTER_API_KEY in Settings.",
       "cached": "Cached",
       "fresh": "Fresh",
       "noMarkets": "No prediction markets found",
@@ -865,9 +933,8 @@
   "components": {
     "webcams": {
       "paused": "Webcams paused",
-      "pausedIdle": "Webcams paused — move mouse to resume",
       "play": "Play",
-      "previewStatus": "Live preview",
+      "previewStatus": "Готово до відтворення",
       "regions": {
         "all": "ALL",
         "mideast": "MIDEAST",
@@ -875,7 +942,11 @@
         "americas": "AMERICAS",
         "asia": "ASIA",
         "space": "SPACE"
-      }
+      },
+      "connecting": "Підключення…",
+      "unverified": "Не вдається підтвердити, що потік в прямому ефірі",
+      "offline": "{{city}} зараз у режимі офлайн",
+      "noFeeds": "Немає живих веб-камер у цьому регіоні"
     },
     "pinnedWebcams": {
       "pinFromMap": "Pin a webcam from the map"
@@ -1024,7 +1095,8 @@
       "refineryStage": "Refine",
       "stageUnavailable": "No published figures for this stage",
       "withheldNote": "W withheld",
-      "productionCaption": "Country shares of actual production. The map deposits layer shows where resources sit; this table shows who mines or refines them."
+      "productionCaption": "Country shares of actual production. The map deposits layer shows where resources sit; this table shows who mines or refines them.",
+      "productionProLocked": "Перейдіть на PRO для доступу до часток країн у видобутку та переробці з концентрацією (HHI) за етапом"
     },
     "tradePolicy": {
       "overview": "Overview",
@@ -1129,7 +1201,7 @@
       "infoTooltip": "<strong>Stablecoins</strong> Peg health, market cap, and 24h volume for major USD-pegged tokens (USDT, USDC, DAI, BUSD). A broken peg signals systemic risk."
     },
     "marketImplications": {
-      "infoTooltip": "<strong>AI Market Implications</strong> LLM-generated trade signals derived from live geopolitical, commodity, and macro state after each forecast cycle.<ul><li><strong>Direction</strong>: LONG / SHORT / HEDGE with confidence rating</li><li><strong>Timeframe</strong>: 1W, 2W, 1M, or 3M horizon</li><li><strong>Driver</strong>: Key catalyst behind the signal</li><li><strong>Risk</strong>: Caveat or invalidation condition</li></ul><em>For informational purposes only. Not investment advice.</em>",
+      "infoTooltip": "<strong>Ринкові наслідки AI</strong> Торгові сигнали, згенеровані ШМ на основі поточного геополітичного, сировинного та макроекономічного стану після кожного циклу прогнозування.<ul><li><strong>Напрямок</strong>: LONG / SHORT / HEDGE</li><li><strong>Горизонт</strong>: 1W, 2W, 1M або 3M</li><li><strong>Драйвер</strong>: Ключовий каталізатор сигналу</li><li><strong>Ризик</strong>: Застереження або умова інвалідації</li></ul><em>Виключно в інформаційних цілях. Не є інвестиційною рекомендацією.</em>",
       "title": "AI Market Implications",
       "directions": {
         "long": "LONG",
@@ -1144,7 +1216,8 @@
       "disclaimer": "AI-generated trade signals for informational purposes only. Not investment advice. Always do your own research.",
       "unavailable": "AI market implications are generated after each forecast run. Check back shortly.",
       "signals_few": "{{count}} сигнали",
-      "signals_many": "{{count}} сигналів"
+      "signals_many": "{{count}} сигналів",
+      "unscored": "Наративні сценарії, точність не оцінюється."
     },
     "status": {
       "updatedAt": "Updated {{time}}"
@@ -1160,10 +1233,18 @@
       "skipToEnd": "Skip to end"
     },
     "pizzint": {
+      "indexSource": "Індекс: World Monitor · дані закладів:",
+      "statusNormal": "НОРМА",
+      "statusNoData": "НЕМАЄ ДАНИХ",
+      "statusNoBaseline": "НЕМАЄ БАЗОВОГО РІВНЯ",
+      "vsUsual": "відносно норми",
       "title": "Pentagon Pizza Index",
       "defcon": "DEFCON {{level}}",
       "updated": "Updated {{timeAgo}}",
       "tensionsTitle": "Geopolitical Tensions",
+      "tensionsSource": "Напруженість: World Monitor на основі подій GDELT",
+      "insufficientData": "Недостатньо даних",
+      "pizzaUnavailable": "Дані про активність піцерій недоступні",
       "source": "Source:",
       "statusClosed": "CLOSED",
       "statusSpike": "SPIKE",
@@ -1175,11 +1256,11 @@
       "minutesAgo": "{{m}}m ago",
       "hoursAgo": "{{h}}h ago",
       "defconLabels": {
-        "1": "COCKED PISTOL - MAXIMUM READINESS",
-        "2": "FAST PACE - ARMED FORCES READY",
-        "3": "ROUND HOUSE - INCREASE FORCE READINESS",
-        "4": "DOUBLE TAKE - INCREASED INTELLIGENCE WATCH",
-        "5": "FADE OUT - LOWEST READINESS"
+        "1": "Максимальна активність",
+        "2": "Висока активність",
+        "3": "Підвищена активність",
+        "4": "Вище норми",
+        "5": "Нормальна активність"
       }
     },
     "strategicPosture": {
@@ -1260,9 +1341,6 @@
       "datacenter": "Datacenter",
       "base": "Base",
       "nuclear": "Nuclear"
-    },
-    "community": {
-      "joinDiscussion": "Help Shape What's Next"
     },
     "threatLabels": {
       "critical": "CRIT",
@@ -1503,7 +1581,7 @@
       "rankingStories": "Ranking important stories...",
       "analyzingSentiment": "Analyzing sentiment...",
       "generatingBrief": "Generating world brief...",
-      "infoTooltip": "<strong>AI-Powered Analysis</strong><br>• <strong>World Brief</strong>: AI summary (Groq/OpenRouter)<br>• <strong>Sentiment</strong>: News tone analysis<br>• <strong>Velocity</strong>: Fast-moving stories<br>• <strong>Focal Points</strong>: Correlates news entities with map signals (military, protests, outages)<br><em>Desktop only • Powered by Llama 3.3 + Focal Point Detection</em>",
+      "infoTooltip": "<strong>AI-Powered Analysis</strong><br>• <strong>World Brief</strong>: AI summary (OpenRouter)<br>• <strong>Sentiment</strong>: News tone analysis<br>• <strong>Velocity</strong>: Fast-moving stories<br>• <strong>Focal Points</strong>: Correlates news entities with map signals (military, protests, outages)<br><em>Desktop only • Powered by Llama 3.3 + Focal Point Detection</em>",
       "streamQualityLabel": "Video Quality",
       "streamQualityDesc": "Set quality for all live streams (lower saves bandwidth)",
       "globeRenderScaleOptions": {
@@ -1515,7 +1593,7 @@
       },
       "mapFlashLabel": "Live Event Pulse",
       "mapFlashDesc": "Flash locations on the map when breaking news arrives",
-      "aiFlowCloudLabel": "Cloud AI (Groq & OpenRouter)",
+      "aiFlowCloudLabel": "Cloud AI (OpenRouter)",
       "aiFlowCloudDesc": "Send headlines to cloud for AI summarization (recommended)",
       "aiFlowBrowserLabel": "Browser Local Model",
       "aiFlowBrowserDesc": "Run AI locally in your browser",
@@ -1573,9 +1651,12 @@
       "compiledFrom": "Compiled from {{stories}} stories across {{sources}} sources",
       "provenanceTitle": "Coverage provenance: how many ingested stories and distinct sources this brief was selected from",
       "briefFreshness": "Generated {{minutes}}m ago · newest source {{hours}}h old",
-      "briefStoryDetails": "Story details ({{count}})",
+      "briefStoryDetails": "Подробиці новини ({{count}})",
       "sources_few": "{{count}} джерела",
-      "sources_many": "{{count}} джерел"
+      "sources_many": "{{count}} джерел",
+      "streamIdleStopLabel": "Зупинити пряму трансляцію відео при бездіяльності",
+      "streamIdleStopDesc": "Зупиняє Live News і Live Webcams після цього часу без активності та показує повідомлення на панелі.",
+      "streamIdleStopNever": "Ніколи"
     },
     "settings": {
       "exportSettings": "Export Settings",
@@ -1907,6 +1988,16 @@
       "loading": "Connecting to Telegram relay...",
       "empty": "No messages available",
       "disabled": "Telegram relay not active",
+      "watchlistPlaceholder": "Додати публічний канал за @username",
+      "resolving": "Пошук каналу...",
+      "invalidUsername": "Використовуйте публічне ім’я @username у Telegram",
+      "resolveFailed": "Не вдалося знайти канал",
+      "watchlistLimit": "Можна стежити щонайбільше за {{count}} власними каналами",
+      "previewMembers": "{{count}} учасників",
+      "addChannel": "Додати канал",
+      "added": "Додано",
+      "remove": "Видалити",
+      "custom": "Власний",
       "filterAll": "All",
       "filterBreaking": "Breaking",
       "filterConflict": "Conflict",
@@ -1980,6 +2071,7 @@
       "etfs": "ETFs",
       "netInflow": "NET INFLOW",
       "netOutflow": "NET OUTFLOW",
+      "netNeutral": "ЧИСТИЙ НЕЙТРАЛ",
       "table": {
         "ticker": "Ticker",
         "issuer": "Issuer",
@@ -2008,7 +2100,60 @@
       "infoTooltip": "<strong>BTC Regime</strong> Composite signal dashboard for Bitcoin positioning and risk appetite:<ul><li><strong>Liquidity</strong>: Net Fed liquidity proxy</li><li><strong>Flow</strong>: BTC vs QQQ 5-day returns</li><li><strong>Regime</strong>: QQQ vs XLP rotation (risk-on/off)</li><li><strong>BTC Trend</strong>: Price vs SMA50/200, Mayer Multiple</li><li><strong>Hash Rate</strong>: 30-day network hash change</li><li><strong>Fear & Greed</strong>: Market sentiment index</li></ul>This panel is for regime and positioning, not broad macro data."
     },
     "forecast": {
-      "infoTooltip": "<strong>AI Forecasts</strong> AI-generated probability estimates for geopolitical and economic events:<ul><li>Cross-domain coverage: conflict, markets, supply chain, cyber, political</li><li>Each forecast shows estimated probability, confidence level, and time horizon</li><li>Calibrated against prediction market baselines where available</li></ul>Forecasts update as new intelligence signals arrive. Filter by domain using the tabs above."
+      "infoTooltip": "<strong>AI Forecasts</strong> AI-generated probability estimates for geopolitical and economic events:<ul><li>Cross-domain coverage: conflict, markets, supply chain, cyber, political</li><li>Each forecast shows estimated probability, confidence level, and time horizon</li><li>Calibrated against prediction market baselines where available</li></ul>Forecasts update as new intelligence signals arrive. Filter by domain using the tabs above.",
+      "record": {
+        "label": "Послужний список",
+        "labelHint": "Як оцінювалися опубліковані прогнози після їх розв'язання за останні {{days}} днів. Наведіть курсор на число, щоб дізнатися, що воно означає.",
+        "unavailable": "Наразі недоступно",
+        "insufficient": "Оцінених прогнозів поки що недостатньо",
+        "brier": "Оцінка Браєра {{score}} (n={{n}})",
+        "brierHint": "Оцінка Браєра за {{n}} оціненими прогнозами: середній квадрат розбіжності між прогнозованою ймовірністю та фактичним результатом. 0 — ідеал, 0,25 — як підкидання монети, що нижче, то краще.",
+        "baseRate": "Базова частота {{score}} (n={{n}})",
+        "baseRateHint": "Що отримав би той, хто завжди відповідає спостережуваною часткою «так», на тих самих {{n}} прогнозах ({{pct}}% розв'язалися як «так»). Перевершити її означає, що прогнози додають інформацію.",
+        "void": "Анульовано {{pct}}% ({{count}} з {{resolved}})",
+        "voidHint": "Розв'язані прогнози, які не вдалося оцінити, з {{resolved}} розв'язаних за період.",
+        "stale": "Застаріло",
+        "staleHint": "Остання оцінка {{date}}. Відтоді оцінювання не запускалося, тому ці числа старіші, ніж мали б бути.",
+        "fullRecord": "Повний список"
+      },
+      "reliability": {
+        "measured": "{{domain}} n={{n}} · Brier {{score}} проти базової ставки {{base}}",
+        "measuredHint": "Як опубліковані прогнози {{domain}} набрали балів на {{n}} оцінених прогнозах протягом останніх {{days}} днів. Базова ставка — це те, що набрала б відповідь, яка завжди відповідала б спостережуваній частоті «так» в домені. Менше — краще. Це рекорд домену, а не цього прогнозу.",
+        "unmeasured": "Ще не виміряно",
+        "unmeasuredHint": "Прогнози {{domain}} мають {{n}} оцінених результатів за останні {{days}} днів. Домену потрібно {{min}}, перш ніж буде показана його точність."
+      },
+      "resolution": {
+        "last": "Останнє: {{outcome}}",
+        "lastSr": "Попереднє вікно цього прогнозу завершилось як {{outcome}}.",
+        "history": "Недавні вікна, найновіші спочатку: {{list}}",
+        "outcome": {
+          "yes": "ТАК",
+          "no": "НІ",
+          "void": "СКАСОВАНО"
+        },
+        "void": {
+          "no_establishable_metric": "Джерело не мало показника для цього питання",
+          "value_source_never_settled": "Джерело ніколи не опублікувало остаточне значення",
+          "count_source_window_not_retained": "Джерело більше не зберігало вікно питання",
+          "unsupported_window": "Питання не вдалося перевірити за його джерелом",
+          "unsupported_metric_key": "Питання не вдалося перевірити за його джерелом",
+          "not_hard_spec": "Питання не вдалося перевірити за його джерелом",
+          "missing_threshold": "У питанні бракувало порогового значення",
+          "missing_deadline": "У питанні бракувало крайнього терміну",
+          "missing_generated_at": "У прогнозі бракувало дати початку",
+          "beyond_archive_horizon": "Архів новин більше не охоплював вікно питання",
+          "no_archive_evidence": "Архів новин не мав інформації на цю тему",
+          "all_judges_void": "Обидва судді вважали докази недостатніми",
+          "judge_disagreement": "Судді не дійшли згоди",
+          "judge_retry_exhausted": "Судді не винесли рішення",
+          "withheld_unpublished": "Прогнози цього типу більше не публікуються",
+          "other": "Не вдалося визначити результат"
+        }
+      },
+      "horizons": {
+        "label": "Також оцінено в: {{list}}",
+        "hint": "Основна ймовірність оцінюється на власному горизонті прогнозу. Проекція на кожному з цих горизонтів також оцінюється щодо свого джерела даних, використовуючи значення, вперше опубліковане для цього прогнозу. Значення проекцій не показуються, оскільки поточне значення може відрізнятися від оціненого."
+      }
     },
     "escalationCorrelation": {
       "infoTooltip": "<strong>Escalation Monitor</strong> Detects converging geopolitical signals:<ul><li>Correlates military movements, conflict events, and news spikes</li><li>Scores convergence zones by severity (critical/high/medium/low)</li><li>Tracks escalation or de-escalation trends over time</li></ul>Click a card to zoom to the region on the map."
@@ -2054,6 +2199,22 @@
       "metals": {
         "gold": "Gold",
         "silver": "Silver"
+      },
+      "divergence": {
+        "compositeValue": "Індекс фізичного стресу: {{value}} / 100",
+        "fiveDayTrend": "Тренд премії за п'ять торгових днів",
+        "regimes": {
+          "normal": "Нормальний",
+          "elevated": "Підвищений",
+          "stressed": "Напружений",
+          "extreme": "Екстремальний"
+        },
+        "states": {
+          "insufficientHistory": "Прогрівання: {{count}} / {{required}} торгових точок",
+          "staleInput": "Фізичний орієнтир застарілий",
+          "missingInput": "Сигнал дивергенції недоступний"
+        },
+        "twentyDayTrend": "Тренд премії за двадцять торгових днів"
       }
     },
     "crypto": {
@@ -2171,8 +2332,6 @@
     },
     "liveNews": {
       "notLive": "{{name}} is not currently live",
-      "cannotEmbed": "{{name}} can't be played here — it may be restricted in your region (error {{code}})",
-      "botCheck": "YouTube is requesting sign-in to play {{name}}",
       "signInToYouTube": "Sign in to YouTube",
       "openOnYouTube": "Open on YouTube",
       "playLiveFeed": "Play live feed",
@@ -2180,8 +2339,6 @@
       "manage": "Manage channels",
       "addChannel": "Add channel",
       "remove": "Remove",
-      "youtubeHandle": "YouTube handle (e.g. @Channel)",
-      "youtubeHandleOrUrl": "YouTube handle or URL",
       "displayName": "Display name (optional)",
       "channelSettings": "Channel Settings",
       "save": "Save",
@@ -2197,10 +2354,22 @@
       "regionMiddleEast": "Middle East",
       "regionAfrica": "Africa",
       "regionOceania": "Oceania",
-      "invalidHandle": "Enter a valid YouTube handle (e.g. @ChannelName)",
       "verifying": "Verifying…",
       "hlsUrl": "HLS Stream URL (optional)",
-      "invalidHlsUrl": "Enter a valid HLS stream URL (.m3u8)"
+      "invalidHlsUrl": "Enter a valid HLS stream URL (.m3u8)",
+      "embedBlocked": "YouTube зараз не відтворює {{name}} всередині інших сайтів",
+      "unavailable": "{{name}} зараз неможливо відтворити",
+      "noStream": "Для {{name}} ще не налаштовано трансляцію в прямому ефірі",
+      "needsChannelUrl": "Додайте {{name}} знову з його адресою каналу (youtube.com/channel/UC…) або адресою відео в прямому ефірі",
+      "connecting": "Підключення до {{name}}…",
+      "recording": "Запис",
+      "unverified": "Не вдається підтвердити, що цей потік є прямим ефіром",
+      "playNextChannel": "Відтворити наступний канал",
+      "channelOrVideoUrl": "Канал YouTube або адреса відео",
+      "channelUrlHint": "Вставте адресу каналу (youtube.com/channel/UC…) або адресу відео в прямому ефірі",
+      "youtubeChannel": "Канал YouTube",
+      "insecureStream": "{{name}} використовує небезпечний потік (http), який браузери блокують. Додайте його знову з безпечною адресою потоку (https)",
+      "httpsStreamHint": "Браузери блокують небезпечні потоки (http). Вставте безпечну адресу потоку (https)"
     },
     "map": {
       "showMap": "Show Map",
@@ -2310,7 +2479,7 @@
       "infoTooltip": "<strong>Economic Calendar</strong> Scheduled macroeconomic releases: CPI, NFP, GDP, PMI, and central bank decisions. Shows forecast vs actual vs prior. High-impact events highlighted. Source: economic data providers."
     },
     "fsi": {
-      "infoTooltip": "<strong>Financial Stress Indicator</strong> Kansas City Fed Financial Stress Index (KCFSI): measures stress in US financial markets using 11 indicators including yield spreads, volatility, and cross-correlations. Positive values indicate above-average stress. Source: Federal Reserve Bank of Kansas City.",
+      "infoTooltip": "<strong>Індикатор фінансового стресу</strong> Співвідношення WorldMonitor високодохідного кредиту до довгострокових казначейських облігацій США, скориговане на волатильність акцій і спред високодохідних облігацій: (HYG / TLT) / (VIX × HY spread / 100). Це не Індекс фінансового стресу Федерального резервного банку Канзас-Сіті. Значення 1.5 або вище означає низький стрес; нижче 0.3 — високий стрес.",
       "title": "Financial Stress Indicator",
       "usFsiValue": "US FSI VALUE",
       "cissTitle": "EU CISS (Euro Area Systemic Stress)",
@@ -2350,6 +2519,26 @@
         "unavailable": "FSI data unavailable",
         "failedToLoad": "Failed to load"
       }
+    },
+    "supplyVulnerability": {
+      "title": "Сировинна вразливість",
+      "help": "Вразливість країни за товаром на основі концентрації постачальників, морського транзиту та доступних стратегічних резервів.",
+      "loading": "Завантаження даних про сировинну вразливість…",
+      "unavailable": "Дані про сировинну вразливість недоступні",
+      "noCoverage": "Недостатньо доказів для цієї країни",
+      "unknown": "Невідомо",
+      "concentration": "Концентрація",
+      "transit": "Транзит",
+      "buffer": "Резерв",
+      "sources": "Джерела",
+      "methodology": "Методологія",
+      "hormuzTitle": "Сировинні залежності",
+      "dependentCountries": "Залежні країни",
+      "dependentCommodities": "Залежні товари",
+      "stateOk": "Актуально",
+      "stateStale": "Застарілі вхідні дані",
+      "stateInsufficient": "Недостатньо даних",
+      "proLocked": "Перейдіть на PRO для оцінки вразливості сировини"
     },
     "hormuzTracker": {
       "infoTooltip": "<strong>Hormuz Trade Tracker</strong> Live AIS vessel tracking through the Strait of Hormuz, the world's most critical oil chokepoint. Monitors tanker counts, disruption events, and weekly flow changes. Approximately 20% of global oil supply transits here daily.",
@@ -2631,7 +2820,14 @@
       "analyzing": "Analyzing...",
       "viewOnMap": "View on map",
       "signals_few": "{{count}} сигнали",
-      "signals_many": "{{count}} сигналів"
+      "signals_many": "{{count}} сигналів",
+      "waiting": "Очікування наступного оновлення даних. Ця панель оновлюється автоматично.",
+      "offline": "Очікування з’єднання. Ця панель оновиться автоматично після відновлення з’єднання.",
+      "updated": "Оновлено {{time}}",
+      "saved": "Останнє відоме оновлення {{time}} · Перевірка оновлень",
+      "savedOffline": "Останнє відоме оновлення {{time}} · Немає з’єднання",
+      "localSignals": "На основі завантажених сигналів панелі моніторингу",
+      "emptySaved": "В останньому відомому оновленні конвергенції не виявлено."
     },
     "thermalEscalation": {
       "title": "Thermal Escalation",
@@ -2772,6 +2968,70 @@
       "rubBase": "Банк Росії — рублів за 1 одиницю",
       "rubPerUnit": "Рублів за одиницю",
       "sourceCbr": "Джерело: Банк Росії"
+    },
+    "passkeyOffer": {
+      "title": "Зберегти пропуск?",
+      "body": "Наступного разу увійдіть за допомогою відбитка пальця, обличчя або PIN-коду пристрою — без необхідності запам'ятовувати пароль.",
+      "accept": "Зберегти пропуск",
+      "dismiss": "Не зараз",
+      "close": "Закрити",
+      "announce": "Збережіть пропуск, щоб входити швидше наступного разу.",
+      "busy": "Очікування вашого пристрою…",
+      "succeeded": "Пропуск збережено. Ви можете використовувати його при наступному вході.",
+      "retryable": "Це не завершилось. Ви можете спробувати ще раз.",
+      "failed": "Нам не вдалося зберегти пропуск на цьому пристрої."
+    },
+    "decisionBrief": {
+      "commodityTitle": "Довідка для рішень щодо сировини",
+      "commodity": "Сировина / продукт",
+      "blockedChokepoint": "Імовірно заблокований прохід",
+      "commodityCapture": "Зафіксувати порівняння сировини",
+      "title": "Зведення для ухвалення рішення",
+      "fuel": "Паливо",
+      "chokepoint": "Вузьке місце",
+      "baseline": "Базове порушення постачання",
+      "comparison": "Порівнюване порушення постачання",
+      "capture": "Завантажити / оновити обидва",
+      "downloadHtml": "Завантажити зведення в HTML",
+      "downloadJson": "Завантажити зведення в JSON",
+      "back": "← Назад до зведення про країну",
+      "select": "Виберіть порушення енергопостачання, потім завантажте обидва сценарії.",
+      "changed": "Вибір змінено. Завантажте обидва сценарії перед експортом.",
+      "loading": "Завантаження обох сценаріїв…",
+      "captured": "Завантажено. Перед збереженням перевірте дати спостережень та обмеження.",
+      "failed": "Не вдалося завантажити сценарії. Перевірте доступ і повторіть спробу. Немає результату для експорту.",
+      "locked": "Зведення для ухвалення рішення доступне в Pro."
+    },
+    "liveMedia": {
+      "idleStatus": "Призупинено через бездіяльність",
+      "idleBody": "Пряму трансляцію відео зупинено після {{duration}} без активності миші, клавіатури чи сенсора.",
+      "idleResume": "Відновити",
+      "idleKeepPlaying": "Продовжити відтворення при бездіяльності",
+      "idleSettingsHint": "Змінити це можна будь-коли в Параметри › Медіа.",
+      "idleKeepPlayingToast": "Пряма трансляція відео продовжиться при бездіяльності. Змініть у Параметри › Медіа."
+    },
+    "corroboration": {
+      "singlePublisher": "Один видавець",
+      "singlePublisherHint": "Поки що про це повідомляє лише один видавець. Це описує охоплення, а не точність.",
+      "tier4Only": "Тільки низькорівневі джерела",
+      "tier4OnlyHint": "Усі видавці, які повідомляють про це, є джерелами рівня 4 (агрегатори та блоги). Це описує охоплення, а не точність.",
+      "rosterListed": "({{listed}} у списку)",
+      "rosterFeeds": "Переглянуті стрічки: {{labels}}",
+      "rosterLegend": "Рівні ранжують джерела; вони не оцінюють це твердження.",
+      "tierDocsLink": "Як призначаються рівні",
+      "tierChip": "Р{{tier}}",
+      "tierChipUndeclared": "Р?",
+      "tierTitle1": "Рівень 1: Інформаційні агентства та офіційні органи",
+      "tierTitle2": "Рівень 2: Великі медіа-видання",
+      "tierTitle3": "Рівень 3: Спеціалізовані, регіональні джерела та аналітичні центри",
+      "tierTitle4": "Рівень 4: Агрегатори та блоги",
+      "tierTitleUndeclared": "Рівень не визначений: ще не переглянуто",
+      "rosterSummary": "Повідомили: {{publishers}}",
+      "rosterSummaryTier1": "Повідомили: {{publishers}}, з них рівня 1: {{tier1}}",
+      "rosterPublishers_one": "{{count}} видавець",
+      "rosterPublishers_few": "{{count}} видавці",
+      "rosterPublishers_many": "{{count}} видавців",
+      "rosterPublishers_other": "{{count}} видавців"
     }
   },
   "popups": {
@@ -2810,6 +3070,10 @@
     "protest": {
       "acledVerified": "ACLED (verified)",
       "gdelt": "GDELT",
+      "records": "записів",
+      "mediaSignal": "Неперевірений медіасигнал",
+      "relatedArticle": "Пов’язана стаття",
+      "mediaSignalDetail": "Це місце згадується у статтях про заворушення. Місцеву подію не підтверджено.",
       "riots": "Riots",
       "highSeverity": "High Severity"
     },
@@ -3255,8 +3519,8 @@
   "signals": {
     "context": {
       "prediction_leads_news": {
-        "whyItMatters": "Prediction markets often price in information before it becomes news—traders may have early access to developments.",
-        "actionableInsight": "Monitor for breaking news in the next 1-6 hours that could explain the market move.",
+        "whyItMatters": "Ринок прогнозів змінився, тоді як висвітлення цієї теми в новинах залишалося низьким — ринок може реагувати на інформацію, яка ще не була висвітлена.",
+        "actionableInsight": "Стежте за терміновими новинами, які можуть пояснити рух ринку.",
         "confidenceNote": "Higher confidence if multiple prediction markets move in same direction."
       },
       "news_leads_markets": {
@@ -3484,7 +3748,8 @@
   "auth": {
     "signIn": "Sign In",
     "createAccount": "Create account",
-    "settings": "Settings"
+    "settings": "Settings",
+    "passkeyOffer": {}
   },
   "mcp": {
     "connectPanel": "Connect MCP",

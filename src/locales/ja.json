@@ -16,7 +16,7 @@
     "predictionMarkets": "予測市場",
     "loadingMarkets": "予測市場を読み込み中...",
     "infrastructure": "インフラ露出度",
-    "briefUnavailable": "AIブリーフ利用不可 — 設定でGROQ_API_KEYを構成してください。",
+    "briefUnavailable": "AIブリーフ利用不可 — 設定でOPENROUTER_API_KEYを構成してください。",
     "cached": "キャッシュ済",
     "fresh": "最新",
     "noMarkets": "予測市場が見つからない",
@@ -76,6 +76,7 @@
       "suppliers": "Arms suppliers ({{start}}–{{end}})",
       "source": "Sources: World Bank and SIPRI Arms Transfers Database. TIV measures transfer volume, not financial value.",
       "sourceWorldBank": "Source: World Bank.",
+      "snapshotAssembled": "{{source}} のスナップショット作成日時：{{time}}",
       "unavailable": "Not available",
       "coverage": "Mapped coverage",
       "supplierRetained": "Supplier data retained from the last successful importer refresh."
@@ -115,11 +116,13 @@
       "doNotTravel": "渡航禁止",
       "reconsiderTravel": "渡航再考",
       "exerciseCaution": "注意喚起",
+      "normalPrecautions": "通常の注意",
       "advisory": "勧告",
       "activeSirens": "サイレン作動中",
       "sirens24h": "サイレン / 24時間",
       "aviationDisruptions": "航空障害",
-      "gpsJammingZones": "GPS妨害区域"
+      "gpsJammingZones": "GPS妨害区域",
+      "temporalUnavailable": "時間的観測が利用できません"
     },
     "fallback": {
       "instabilityIndex": "**不安定性指数：{{score}}/100**（{{level}}、{{trend}}）",
@@ -190,7 +193,7 @@
       "decisionSignalsUnavailable": "中国の意思決定シグナルのスナップショットは現在利用できません。"
     },
     "foodStocks": "Food stocks",
-    "foodStocksHelp": "USDA PSD commodity stocks-to-use by marketing year, with the world ratio alongside for context. FAOSTAT fills production only where PSD has no country coverage.",
+    "foodStocksHelp": "USDA PSD commodity stocks-to-use by marketing year, with the world ratio alongside for context. FAOSTAT Food Balances supplies production and domestic supply when PSD has no complete country balance.",
     "loadingFoodStocks": "Loading food stocks…",
     "foodStocksUnavailable": "Food stocks unavailable.",
     "foodStocksProLocked": "Upgrade to PRO for commodity stocks-to-use",
@@ -230,6 +233,71 @@
       "manufacturingShare": "Manufacturing employment",
       "source": "Sources: {{sources}}.",
       "retained": "{{stage}} data retained from the last successful refresh."
+    },
+    "fiveFactorScorecard": {
+      "title": "5要素レジリエンススコアカード",
+      "help": "食料、エネルギー、人口動態、技術、防衛のv1凍結エビデンススコア。行を展開して入力値、ソースの出典、欠損データの理由を確認できます。",
+      "loading": "5要素スコアカードを読み込み中…",
+      "unavailable": "5要素スコアカードは利用できません。",
+      "proLocked": "5要素レジリエンススコアカードにはPROへのアップグレードが必要です",
+      "insufficient": "データ不足",
+      "notAvailable": "利用不可",
+      "noEvidence": "このピラーのエビデンスは利用できません。",
+      "score": "{{score}}/5",
+      "coverage": "カバレッジ {{coverage}}%",
+      "methodologyVersion": "方法論 v{{version}}",
+      "methodologyLink": "方法論を表示",
+      "pillars": {
+        "food": "食料",
+        "energy": "エネルギー",
+        "demographics": "人口動態",
+        "technology": "技術",
+        "defense": "防衛"
+      },
+      "reasons": {
+        "source-unavailable": "ソース利用不可",
+        "country-unavailable": "国データ利用不可",
+        "invalid-value": "ソース値が無効",
+        "stale": "証拠が古い",
+        "coverage-below-floor": "スコアリング下限を下回るカバレッジ",
+        "required-group-missing": "必須のエビデンスグループが欠落",
+        "missing-population": "人口データが利用不可",
+        "redistribution-blocked": "ソースの再配布が許可されていません",
+        "pillar-unavailable": "ピラーが利用不可"
+      },
+      "inputs": {
+        "population": "Population",
+        "food_productionBalance": "生産バランス",
+        "food_stocksToUse": "使用可能な在庫",
+        "food_waterSecurity": "水安全保障",
+        "food_importDiversity": "輸入多様性",
+        "energy_productionBalance": "生産バランス",
+        "energy_lowCarbonShare": "低炭素エネルギー比率",
+        "energy_gridEfficiency": "送電網効率",
+        "demographics_totalDependency": "総扶養比率",
+        "demographics_oldAgeDependency": "高齢者扶養比率",
+        "demographics_workingAgeProjection": "労働年齢人口予測",
+        "demographics_tertiaryEnrollment": "高等教育進学率",
+        "demographics_researchersPerMillion": "人口100万人あたりの研究者数",
+        "demographics_stemGraduateShare": "STEM分野卒業生比率",
+        "demographics_trainedIndustrialShare": "訓練済み産業労働力比率",
+        "demographics_manufacturingEmploymentShare": "製造業雇用比率",
+        "technology_internetUse": "インターネット利用",
+        "technology_mobileSubscriptions": "モバイル契約数",
+        "technology_fixedBroadband": "固定ブロードバンド",
+        "technology_rdSpend": "研究開発費",
+        "technology_researchersPerMillion": "人口100万人あたりの研究者数",
+        "technology_stemGraduateShare": "STEM分野の卒業生比率",
+        "technology_electricityAccess": "電力アクセス",
+        "defense_expenditureUsd": "軍事支出",
+        "defense_expenditurePctGdp": "軍事負担",
+        "defense_personnel": "自衛隊人員",
+        "defense_industrialBalance": "防衛産業バランス",
+        "defense_supplierDiversity": "兵器サプライヤーの多様性"
+      }
+    },
+    "defenseIndustrialBase": {
+      "proLocked": "PRO にアップグレードして武器供給業者の依存関係と軍事能力を表示"
     }
   },
   "header": {
@@ -729,7 +797,7 @@
       "fresh": "最新",
       "noMarkets": "予測市場が見つからない",
       "predictionMarkets": "予測市場",
-      "unavailable": "AIブリーフ利用不可 — 設定でGROQ_API_KEYを構成してください。"
+      "unavailable": "AIブリーフ利用不可 — 設定でOPENROUTER_API_KEYを構成してください。"
     },
     "countryBrief": {
       "identifying": "国を特定中...",
@@ -745,7 +813,7 @@
       "predictionMarkets": "予測市場",
       "loadingMarkets": "予測市場を読み込み中...",
       "infrastructure": "インフラ露出度",
-      "briefUnavailable": "AIブリーフ利用不可 — 設定でGROQ_API_KEYを構成してください。",
+      "briefUnavailable": "AIブリーフ利用不可 — 設定でOPENROUTER_API_KEYを構成してください。",
       "cached": "キャッシュ済",
       "fresh": "最新",
       "noMarkets": "予測市場が見つからない",
@@ -787,7 +855,6 @@
   "components": {
     "webcams": {
       "paused": "ウェブカメラ一時停止中",
-      "pausedIdle": "ウェブカメラ一時停止中 — マウスを動かして再開",
       "regions": {
         "all": "すべて",
         "mideast": "中東",
@@ -797,7 +864,11 @@
         "space": "宇宙"
       },
       "play": "再生",
-      "previewStatus": "ライブプレビュー"
+      "previewStatus": "再生準備完了",
+      "connecting": "接続中…",
+      "unverified": "このストリームがライブ配信中であることを確認できません",
+      "offline": "{{city}} は現在オフラインです",
+      "noFeeds": "この地域に現在ライブウェブカメラがありません"
     },
     "positiveNewsFeed": {
       "noStories": "このカテゴリにはまだ記事がありません"
@@ -914,7 +985,8 @@
       "refineryStage": "Refine",
       "stageUnavailable": "No published figures for this stage",
       "withheldNote": "W withheld",
-      "productionCaption": "Country shares of actual production. The map deposits layer shows where resources sit; this table shows who mines or refines them."
+      "productionCaption": "Country shares of actual production. The map deposits layer shows where resources sit; this table shows who mines or refines them.",
+      "productionProLocked": "PRO にアップグレードして鉱山・精製所の国別シェアと段階別集中度(HHI)を表示"
     },
     "tradePolicy": {
       "tariffs": "関税",
@@ -1008,10 +1080,18 @@
       "skipToEnd": "Skip to end"
     },
     "pizzint": {
+      "indexSource": "指数: World Monitor · 店舗データ:",
+      "statusNormal": "通常",
+      "statusNoData": "データなし",
+      "statusNoBaseline": "基準なし",
+      "vsUsual": "通常比",
       "title": "ペンタゴンピザ指数",
       "defcon": "DEFCON {{level}}",
       "updated": "{{timeAgo}}に更新",
       "tensionsTitle": "地政学的緊張",
+      "tensionsSource": "緊張度：GDELTのイベントに基づくWorld Monitorの算出値",
+      "insufficientData": "データ不足",
+      "pizzaUnavailable": "ピザ店の活動データを取得できません",
       "source": "ソース:",
       "statusClosed": "閉鎖",
       "statusSpike": "急上昇",
@@ -1023,11 +1103,11 @@
       "minutesAgo": "{{m}}分前",
       "hoursAgo": "{{h}}時間前",
       "defconLabels": {
-        "1": "COCKED PISTOL — 最大即応態勢",
-        "2": "FAST PACE — 軍即応態勢",
-        "3": "ROUND HOUSE — 即応態勢強化",
-        "4": "DOUBLE TAKE — 情報監視強化",
-        "5": "FADE OUT — 最低即応態勢"
+        "1": "最大活動",
+        "2": "高い活動",
+        "3": "活動増加",
+        "4": "通常以上",
+        "5": "通常の活動"
       }
     },
     "strategicPosture": {
@@ -1108,9 +1188,6 @@
       "datacenter": "データセンター",
       "base": "基地",
       "nuclear": "核施設"
-    },
-    "community": {
-      "joinDiscussion": "Help Shape What's Next"
     },
     "threatLabels": {
       "critical": "危険",
@@ -1351,7 +1428,7 @@
       "rankingStories": "Ranking important stories...",
       "analyzingSentiment": "Analyzing sentiment...",
       "generatingBrief": "Generating world brief...",
-      "infoTooltip": "<strong>AI分析</strong><br>• <strong>世界ブリーフ</strong>: AI要約（Groq/OpenRouter）<br>• <strong>センチメント</strong>: ニュースのトーン分析<br>• <strong>速度</strong>: 急速に広がるストーリー<br>• <strong>焦点</strong>: ニュースエンティティとマップシグナル（軍事、抗議、障害）を相関<br><em>デスクトップ版のみ・Llama 3.3 + 焦点検出搭載</em>",
+      "infoTooltip": "<strong>AI分析</strong><br>• <strong>世界ブリーフ</strong>: AI要約（OpenRouter）<br>• <strong>センチメント</strong>: ニュースのトーン分析<br>• <strong>速度</strong>: 急速に広がるストーリー<br>• <strong>焦点</strong>: ニュースエンティティとマップシグナル（軍事、抗議、障害）を相関<br><em>デスクトップ版のみ・Llama 3.3 + 焦点検出搭載</em>",
       "streamQualityLabel": "動画画質",
       "streamQualityDesc": "すべてのライブストリームの画質を設定（低画質は帯域幅を節約）",
       "globeRenderScaleOptions": {
@@ -1363,7 +1440,7 @@
       },
       "mapFlashLabel": "Live Event Pulse",
       "mapFlashDesc": "Flash locations on the map when breaking news arrives",
-      "aiFlowCloudLabel": "クラウドAI（Groq & OpenRouter）",
+      "aiFlowCloudLabel": "クラウドAI（OpenRouter）",
       "aiFlowCloudDesc": "見出しをクラウドに送信してAI要約（推奨）",
       "aiFlowBrowserLabel": "ブラウザローカルモデル",
       "aiFlowBrowserDesc": "ブラウザ内でAIをローカル実行",
@@ -1420,7 +1497,10 @@
       "provenanceTitle": "カバレッジプロヴェナンス: このブリーフが選択された取り込まれたストーリーと個別ソースの数",
       "compiledFrom": "{{stories}}件のストーリーから{{sources}}個のソースをコンパイル",
       "briefFreshness": "{{minutes}}m前に生成 · 最新ソース{{hours}}h前",
-      "briefStoryDetails": "Story details ({{count}})"
+      "briefStoryDetails": "記事の詳細 ({{count}})",
+      "streamIdleStopLabel": "アイドル時にライブ動画を停止",
+      "streamIdleStopDesc": "設定した時間、操作がない状態が続くと、ライブニュースとライブウェブカメラを停止し、パネルに通知を表示します。",
+      "streamIdleStopNever": "なし"
     },
     "settings": {
       "exportSettings": "設定をエクスポート",
@@ -1749,6 +1829,16 @@
       "loading": "Telegramリレーに接続中...",
       "empty": "メッセージはありません",
       "disabled": "Telegramリレーが無効です",
+      "watchlistPlaceholder": "@usernameで公開チャンネルを追加",
+      "resolving": "チャンネルを検索中...",
+      "invalidUsername": "公開されているTelegramの@usernameを使用してください",
+      "resolveFailed": "チャンネルが見つかりませんでした",
+      "watchlistLimit": "カスタムチャンネルは最大{{count}}件までフォローできます",
+      "previewMembers": "メンバー{{count}}人",
+      "addChannel": "チャンネルを追加",
+      "added": "追加済み",
+      "remove": "削除",
+      "custom": "カスタム",
       "filterAll": "すべて",
       "filterBreaking": "速報",
       "filterConflict": "紛争",
@@ -1822,6 +1912,7 @@
       "etfs": "ETFs",
       "netInflow": "純流入",
       "netOutflow": "純流出",
+      "netNeutral": "純中立",
       "table": {
         "ticker": "ティッカー",
         "issuer": "発行体",
@@ -1904,15 +1995,11 @@
     },
     "liveNews": {
       "notLive": "{{name}} is not currently live",
-      "cannotEmbed": "{{name}} をここで再生できません — お住まいの地域で制限されている可能性があります（エラー {{code}}）",
-      "botCheck": "YouTubeが{{name}}の再生にサインインを要求しています",
       "signInToYouTube": "YouTubeにサインイン",
       "openOnYouTube": "Open on YouTube",
       "manage": "チャンネル管理",
       "addChannel": "チャンネルを追加",
       "remove": "削除",
-      "youtubeHandle": "YouTube ハンドル（例: @Channel）",
-      "youtubeHandleOrUrl": "YouTubeハンドルまたはURL",
       "displayName": "表示名（任意）",
       "channelSettings": "チャンネル設定",
       "save": "保存",
@@ -1928,12 +2015,24 @@
       "regionMiddleEast": "中東",
       "regionAfrica": "アフリカ",
       "regionOceania": "オセアニア",
-      "invalidHandle": "有効なYouTubeハンドルを入力してください（例: @ChannelName）",
       "verifying": "確認中…",
       "hlsUrl": "HLSストリームURL（任意）",
       "invalidHlsUrl": "有効なHLSストリームURL（.m3u8）を入力してください",
       "playLiveFeed": "ライブフィードを再生",
-      "readyStatus": "準備ができたら再生できます"
+      "readyStatus": "準備ができたら再生できます",
+      "embedBlocked": "YouTube は現在 {{name}} を他のサイト内で再生できません",
+      "unavailable": "{{name}} は現在再生できません",
+      "noStream": "{{name}} にはまだライブストリームが設定されていません",
+      "needsChannelUrl": "{{name}} をチャンネル URL (youtube.com/channel/UC…) またはライブ動画 URL で再度追加してください",
+      "connecting": "{{name}} に接続中…",
+      "recording": "録画中",
+      "unverified": "このストリームがライブかどうか確認できません",
+      "playNextChannel": "次のチャンネルを再生",
+      "channelOrVideoUrl": "YouTube チャンネルまたは動画 URL",
+      "channelUrlHint": "チャンネル URL (youtube.com/channel/UC…) またはライブ動画 URL を貼り付けてください",
+      "youtubeChannel": "YouTube チャンネル",
+      "insecureStream": "{{name}} は安全でない (http) ストリームを使用しており、ブラウザがブロックします。安全な (https) ストリーム URL で再度追加してください",
+      "httpsStreamHint": "ブラウザは安全でない (http) ストリームをブロックします。安全な (https) ストリーム URL を貼り付けてください"
     },
     "map": {
       "showMap": "地図を表示",
@@ -1960,6 +2059,22 @@
       "metals": {
         "gold": "Gold",
         "silver": "Silver"
+      },
+      "divergence": {
+        "compositeValue": "物理的ストレス指数：{{value}} / 100",
+        "fiveDayTrend": "5営業日プレミアムトレンド",
+        "regimes": {
+          "normal": "通常",
+          "elevated": "上昇",
+          "stressed": "逼迫",
+          "extreme": "極度"
+        },
+        "states": {
+          "insufficientHistory": "ウォームアップ中：{{count}} / {{required}} 営業日ポイント",
+          "staleInput": "物理的ベンチマークが古い",
+          "missingInput": "ダイバージェンスシグナル利用不可"
+        },
+        "twentyDayTrend": "20営業日プレミアムトレンド"
       }
     },
     "crypto": {
@@ -2071,7 +2186,7 @@
       "infoTooltip": "<strong>経済カレンダー</strong> 予定されたマクロ経済発表：CPI、NFP、GDP、PMIおよび中央銀行の決定。予想 vs 実績 vs 前回を表示。高インパクトイベントはハイライト表示。ソース：経済データプロバイダー。"
     },
     "fsi": {
-      "infoTooltip": "<strong>金融ストレス指標</strong> カンザスシティ連銀金融ストレス指数（KCFSI）：利回りスプレッド、ボラティリティ、クロス相関を含む11の指標を用いて米国金融市場のストレスを測定。正の値は平均以上のストレスを示す。ソース：カンザスシティ連邦準備銀行。",
+      "infoTooltip": "<strong>金融ストレス指標</strong> 株式ボラティリティとハイイールド・スプレッドで調整した、ハイイールド債券と長期米国債のWorldMonitor比率: (HYG / TLT) / (VIX × HY spread / 100)。これはカンザスシティ連邦準備銀行の金融ストレス指数ではありません。1.5以上は低ストレス、0.3未満は高ストレスを示します。",
       "title": "金融ストレス指数",
       "usFsiValue": "米国FSI値",
       "cissTitle": "EU CISS(ユーロ圏システミックストレス)",
@@ -2111,6 +2226,26 @@
         "failedToLoad": "読み込みに失敗しました"
       },
       "cissStale": "ECB がより新しい値を公開していません — このデータは古い可能性があります。"
+    },
+    "supplyVulnerability": {
+      "title": "商品脆弱性",
+      "help": "供給元の集中度、海上輸送、利用可能な戦略備蓄に基づく国別・商品別のエクスポージャー。",
+      "loading": "商品脆弱性を読み込み中…",
+      "unavailable": "商品脆弱性データを利用できません",
+      "noCoverage": "この国を評価する証拠が不足しています",
+      "unknown": "不明",
+      "concentration": "集中度",
+      "transit": "輸送",
+      "buffer": "備蓄",
+      "sources": "出典",
+      "methodology": "手法",
+      "hormuzTitle": "商品依存関係",
+      "dependentCountries": "依存国",
+      "dependentCommodities": "依存商品",
+      "stateOk": "最新",
+      "stateStale": "古い入力",
+      "stateInsufficient": "データ不足",
+      "proLocked": "PRO にアップグレードして商品脆弱性スコアを表示"
     },
     "hormuzTracker": {
       "infoTooltip": "<strong>ホルムズ海峡貿易トラッカー</strong> 世界最重要の石油チョークポイントであるホルムズ海峡を通過するAIS船舶のライブ追跡。タンカー数、混乱イベント、週次フロー変化を監視。世界の石油供給量の約20%が毎日ここを通過。",
@@ -2192,7 +2327,7 @@
       }
     },
     "marketImplications": {
-      "infoTooltip": "<strong>AI市場インプリケーション</strong> 各フォアキャストサイクル後のライブ地政学、商品、マクロ状態から導出されるLLM生成トレードシグナル。<ul><li><strong>方向性</strong>: LONG / SHORT / HEDGE(信頼度レーティング付き)</li><li><strong>時間軸</strong>: 1W、2W、1M、または3M</li><li><strong>ドライバー</strong>: シグナルの主要な触媒</li><li><strong>リスク</strong>: 注意事項または無効化条件</li></ul><em>情報提供のみを目的としています。投資アドバイスではありません。</em>",
+      "infoTooltip": "<strong>AI市場インプリケーション</strong> 各フォアキャストサイクル後のライブ地政学、商品、マクロ状態から導出されるLLM生成トレードシグナル。<ul><li><strong>方向性</strong>: LONG / SHORT / HEDGE</li><li><strong>時間軸</strong>: 1W、2W、1M、または3M</li><li><strong>ドライバー</strong>: シグナルの主要な触媒</li><li><strong>リスク</strong>: 注意事項または無効化条件</li></ul><em>情報提供のみを目的としています。投資アドバイスではありません。</em>",
       "title": "AI市場への影響",
       "directions": {
         "long": "ロング",
@@ -2204,10 +2339,64 @@
       "appliesToNext": "次のAI再生成に適用",
       "signals_other": "{{count}}シグナル",
       "disclaimer": "AI生成トレードシグナルは情報提供のみを目的としています。投資助言ではありません。常に独自の調査を行ってください。",
-      "unavailable": "AI市場への影響は各予測実行後に生成されます。しばらくしてからご確認ください。"
+      "unavailable": "AI市場への影響は各予測実行後に生成されます。しばらくしてからご確認ください。",
+      "unscored": "ナラティブなシナリオであり、精度は評価されていません。"
     },
     "forecast": {
-      "infoTooltip": "<strong>AI 予測</strong> 地政学的および経済的イベントの AI 生成確率推定:<ul><li>クロスドメインカバレッジ: 紛争、市場、サプライチェーン、サイバー、政治</li><li>各予測は推定確率、信頼度、時間軸を表示</li><li>利用可能な場合は予測市場ベースラインに対して調整済み</li></ul>新しいインテリジェンスシグナルが到着すると予測が更新されます。上記のタブでドメイン別にフィルタリングしてください。"
+      "infoTooltip": "<strong>AI 予測</strong> 地政学的および経済的イベントの AI 生成確率推定:<ul><li>クロスドメインカバレッジ: 紛争、市場、サプライチェーン、サイバー、政治</li><li>各予測は推定確率、信頼度、時間軸を表示</li><li>利用可能な場合は予測市場ベースラインに対して調整済み</li></ul>新しいインテリジェンスシグナルが到着すると予測が更新されます。上記のタブでドメイン別にフィルタリングしてください。",
+      "record": {
+        "label": "実績",
+        "labelHint": "過去{{days}}日間に、公開した予測が確定後にどう採点されたか。数値にカーソルを合わせると意味が表示されます。",
+        "unavailable": "現在利用できません",
+        "insufficient": "採点済みの予測がまだ十分にありません",
+        "brier": "ブライアスコア {{score}}（n={{n}}）",
+        "brierHint": "採点済み{{n}}件の予測に対するブライアスコア：予測確率と実際の結果との差の二乗の平均。0が完璧、0.25はコイン投げと同等で、低いほど良い。",
+        "baseRate": "基準率 {{score}}（n={{n}}）",
+        "baseRateHint": "同じ{{n}}件の予測で、観測された「はい」の割合を常に答えた場合のスコア（{{pct}}%が「はい」で確定）。これを上回れば予測が情報を加えていることになります。",
+        "void": "無効 {{pct}}%（{{resolved}}件中{{count}}件）",
+        "voidHint": "確定したものの採点できなかった予測。期間内に確定した{{resolved}}件のうち。",
+        "stale": "古いデータ",
+        "staleHint": "最終採点日 {{date}}。それ以降採点が実行されていないため、これらの数値は本来より古いものです。",
+        "fullRecord": "完全な実績"
+      },
+      "reliability": {
+        "measured": "{{domain}} n={{n}} · Brier {{score}} vs ベースレート {{base}}",
+        "measuredHint": "直近{{days}}日間に採点された{{n}}件の予測における{{domain}}の公開予測のスコア。ベースレートは、常にそのドメインの観測された肯定率で回答した場合のスコアです。スコアが低いほど良好です。これはドメインの記録であり、この予測の記録ではありません。",
+        "unmeasured": "まだ測定されていません",
+        "unmeasuredHint": "{{domain}}の予報は過去{{days}}日間に{{n}}件の採点済み結果があります。ドメインの精度を表示するには{{min}}件必要です。"
+      },
+      "resolution": {
+        "last": "前回: {{outcome}}",
+        "lastSr": "この予測の前のウィンドウは{{outcome}}で確定しました。",
+        "history": "最近のウィンドウ（最新順）: {{list}}",
+        "outcome": {
+          "yes": "はい",
+          "no": "いいえ",
+          "void": "無効"
+        },
+        "void": {
+          "no_establishable_metric": "このフィードにこの質問の読み取り値がありません",
+          "value_source_never_settled": "このフィードは確定した値を公開しませんでした",
+          "count_source_window_not_retained": "このフィードは質問のウィンドウを保持していません",
+          "unsupported_window": "この質問はフィードに対して確認できませんでした",
+          "unsupported_metric_key": "この質問はフィードに対して確認できませんでした",
+          "not_hard_spec": "この質問はフィードに対して確認できませんでした",
+          "missing_threshold": "この質問に閾値がありません",
+          "missing_deadline": "この質問に期限がありません",
+          "missing_generated_at": "この予測に開始日がありません",
+          "beyond_archive_horizon": "ニュースアーカイブが質問のウィンドウをカバーしていません",
+          "no_archive_evidence": "ニュースアーカイブにこの件についての記事がありません",
+          "all_judges_void": "両方の判定者が証拠不十分と判断しました",
+          "judge_disagreement": "判定者の意見が異なります",
+          "judge_retry_exhausted": "判定者が判定を下しませんでした",
+          "withheld_unpublished": "この種類の予測は現在公開されていません",
+          "other": "結果を確定できませんでした"
+        }
+      },
+      "horizons": {
+        "label": "他の評価期間: {{list}}",
+        "hint": "見出しの確率は予測自身の期間で採点されます。これらの各期間の投射値も、この予測で最初に公開された値を使い、データソースと照合して採点されます。現在の値は採点された値と異なる場合があるため、投射値は表示しません。"
+      }
     },
     "escalationCorrelation": {
       "infoTooltip": "<strong>エスカレーション監視</strong> 地政学的シグナルの収束を検出:<ul><li>軍事的動き、紛争イベント、ニュース急増を相関させる</li><li>収束ゾーンを重大度 (危機的/高/中/低) でスコアリング</li><li>時間経過に伴うエスカレーションまたはデエスカレーションの傾向を追跡</li></ul>カードをクリックしてマップ上の領域にズームします。"
@@ -2501,7 +2690,14 @@
       "empty": "アクティブな収束は検出されていません",
       "signals_other": "{{count}} シグナル",
       "analyzing": "分析中...",
-      "viewOnMap": "地図で表示"
+      "viewOnMap": "地図で表示",
+      "waiting": "次のデータ更新を待っています。このパネルは自動的に更新されます。",
+      "offline": "接続を待っています。オンラインに戻ると、このパネルは自動的に更新されます。",
+      "updated": "更新日時 {{time}}",
+      "saved": "最後に確認できた更新 {{time}} · 更新を確認中",
+      "savedOffline": "最後に確認できた更新 {{time}} · オフライン",
+      "localSignals": "ダッシュボードに読み込まれたシグナルに基づく",
+      "emptySaved": "最後に確認できた更新では収束はありませんでした。"
     },
     "thermalEscalation": {
       "title": "熱的エスカレーション",
@@ -2646,6 +2842,67 @@
       "rubBase": "ロシア中央銀行 — 1単位あたりのルーブル",
       "rubPerUnit": "単位あたりルーブル",
       "sourceCbr": "出典: ロシア中央銀行"
+    },
+    "passkeyOffer": {
+      "title": "パスキーを保存しますか?",
+      "body": "次回は指紋、顔、またはデバイスPINで簡単にサインインできます。覚えておくべきパスワードはありません。",
+      "accept": "パスキーを保存",
+      "dismiss": "後で",
+      "close": "閉じる",
+      "announce": "次回のサインインを高速化するためにパスキーを保存してください。",
+      "busy": "デバイスの処理を待機中…",
+      "succeeded": "パスキーが保存されました。次回のサインイン時に使用できます。",
+      "retryable": "完了しませんでした。もう一度試すことができます。",
+      "failed": "このデバイスにパスキーを保存できませんでした。"
+    },
+    "decisionBrief": {
+      "commodityTitle": "コモディティ意思決定ブリーフ",
+      "commodity": "コモディティ / 製品",
+      "blockedChokepoint": "封鎖を想定する海上要衝",
+      "commodityCapture": "コモディティ比較を記録",
+      "title": "意思決定ブリーフ",
+      "fuel": "燃料",
+      "chokepoint": "チョークポイント",
+      "baseline": "基準シナリオの混乱率",
+      "comparison": "比較シナリオの混乱率",
+      "capture": "両方を取得 / 更新",
+      "downloadHtml": "ブリーフをHTMLでダウンロード",
+      "downloadJson": "ブリーフをJSONでダウンロード",
+      "back": "← 国別ブリーフに戻る",
+      "select": "エネルギー供給の混乱を選び、両方のシナリオを取得してください。",
+      "changed": "選択が変更されました。エクスポート前に両方のシナリオを取得してください。",
+      "loading": "両方のシナリオを取得中…",
+      "captured": "取得しました。ダウンロード前に観測日と制約を確認してください。",
+      "failed": "シナリオを取得できませんでした。アクセス権を確認して再試行してください。エクスポートできる結果はありません。",
+      "locked": "意思決定ブリーフはProで利用できます。"
+    },
+    "liveMedia": {
+      "idleStatus": "アクティビティがないため一時停止中",
+      "idleBody": "マウス、キーボード、またはタッチアクティビティが {{duration}} ない状態が続いたため、ライブ動画が停止しました。",
+      "idleResume": "再開",
+      "idleKeepPlaying": "アイドル時にライブ動画を再生し続ける",
+      "idleSettingsHint": "この設定はいつでも設定 › メディアで変更できます。",
+      "idleKeepPlayingToast": "ライブ動画はアイドル時にも再生され続けます。設定 › メディアで変更してください。"
+    },
+    "corroboration": {
+      "singlePublisher": "単一の報道機関",
+      "singlePublisherHint": "現在のところ、1つの報道機関のみがこれを報じています。これは報道範囲を示すもので、正確性ではありません。",
+      "tier4Only": "低レベルのソースのみ",
+      "tier4OnlyHint": "これを報じているすべてのメディアはTier4ソース（アグリゲーターとブログ）です。これは報道範囲を示すもので、正確性ではありません。",
+      "rosterListed": "（{{listed}}社を表示）",
+      "rosterFeeds": "確認されたフィード: {{labels}}",
+      "rosterLegend": "ティアは情報源の順位付けであり、この主張の真偽を判断するものではありません。",
+      "tierDocsLink": "ティアの割り当て方法",
+      "tierChip": "T{{tier}}",
+      "tierChipUndeclared": "T?",
+      "tierTitle1": "ティア1: 通信社および公式機関",
+      "tierTitle2": "ティア2: 主要メディア",
+      "tierTitle3": "ティア3: 専門・地域メディアおよびシンクタンク",
+      "tierTitle4": "ティア4: アグリゲーターおよびブログ",
+      "tierTitleUndeclared": "ティア未申告: 未審査",
+      "rosterSummary": "{{publishers}}が報道",
+      "rosterSummaryTier1": "{{publishers}}が報道（うちティア1は{{tier1}}社）",
+      "rosterPublishers_other": "{{count}}社の報道機関"
     }
   },
   "popups": {
@@ -2684,14 +2941,18 @@
     "protest": {
       "acledVerified": "ACLED（検証済）",
       "gdelt": "GDELT",
+      "records": "件の記録",
+      "mediaSignal": "未確認のメディア情報",
+      "relatedArticle": "関連記事",
+      "mediaSignalDetail": "この場所は騒乱に関する記事で言及されています。現地での出来事は確認されていません。",
       "riots": "暴動",
       "highSeverity": "高深刻度"
     },
     "gpsJamming": {
       "title": "GPS/GNSS干渉",
-      "navPerformance": "Nav Performance",
-      "samples": "ADS-B Samples",
-      "aircraft": "Aircraft",
+      "navPerformance": "影響を受けた航空機",
+      "samples": "影響を受けた航空機数",
+      "aircraft": "観測された航空機の総数",
       "h3Hex": "H3 Hex"
     },
     "flight": {
@@ -3129,8 +3390,8 @@
   "signals": {
     "context": {
       "prediction_leads_news": {
-        "whyItMatters": "予測市場はしばしばニュースより先に情報を織り込む — トレーダーが早期に情報を入手している可能性。",
-        "actionableInsight": "今後1-6時間以内に市場の動きを説明するニュースが出ないか監視。",
+        "whyItMatters": "予測市場が動いたのに、そのトピックのニュース報道が少ないままです。市場がまだ報道されていない情報に反応している可能性があります。",
+        "actionableInsight": "市場の動きを説明する速報ニュースを監視してください。",
         "confidenceNote": "複数の予測市場が同方向に動いている場合、信頼度が高い。"
       },
       "news_leads_markets": {
@@ -3427,7 +3688,8 @@
   "auth": {
     "signIn": "サインイン",
     "createAccount": "アカウントを作成",
-    "settings": "設定"
+    "settings": "設定",
+    "passkeyOffer": {}
   },
   "mcp": {
     "connectPanel": "MCPを接続",

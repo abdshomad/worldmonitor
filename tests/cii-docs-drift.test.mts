@@ -155,7 +155,7 @@ describe('CII docs drift guards', () => {
     const riskLevels = markdownSection(doc, '### Risk Levels');
     const trendSection = markdownSection(doc, '### Trend Detection');
     const pizzintSection = markdownSection(doc, '### DEFCON-Style Alerting');
-    const gdeltSection = markdownSection(doc, '### GDELT Tension Pairs');
+    const gdeltSection = markdownSection(doc, '### World Monitor Tension Pairs');
     const multipliersSection = markdownSection(doc, '### Event Significance Multipliers');
 
     assert.match(
@@ -218,17 +218,16 @@ describe('CII docs drift guards', () => {
       'USA ↔ Russia',
       'Russia ↔ Ukraine',
       'USA ↔ China',
-      'China ↔ Taiwan',
       'USA ↔ Iran',
-      'USA ↔ Venezuela',
     ]) {
       assert.match(gdeltSection, new RegExp(`\\|\\s*${pair}\\s*\\|`));
     }
     assert.doesNotMatch(
       gdeltSection,
-      /Israel ↔ Iran/,
-      'strategic-risk GDELT table must match DEFAULT_GDELT_PAIRS and omit stale Israel-Iran pair',
+      /Israel ↔ Iran|China ↔ Taiwan|USA ↔ Venezuela/,
+      'strategic-risk tension table must omit unsupported or low-volume pairs',
     );
+    assert.match(gdeltSection, /World Monitor tension scores computed independently from GDELT event exports/);
     assert.equal(CII_COUNTRY_WEIGHTS.US.eventMultiplier, 0.3);
     assert.match(
       multipliersSection,
@@ -484,5 +483,24 @@ describe('CII docs drift guards', () => {
       `${llmsFull}\n${communityGuide}\n${readFileSync(resolve(root, 'AGENTS.md'), 'utf8')}`,
       /Tri-Variant Build System|Three Variant Dashboards|three specialized variants|tri-variant architecture|three specialized views/i,
     );
+  });
+
+  it('public CII surfaces point to the canonical live rankings page', () => {
+    const canonical = 'https://www.worldmonitor.app/country-instability-index/';
+    const surfaces = [
+      'README.md',
+      'public/ai-search.md',
+      'public/llms.txt',
+      'public/llms-full.txt',
+      'docs/country-instability-index.mdx',
+      'blog-site/src/content/blog/country-instability-index-methodology-explained.md',
+      'blog-site/src/data/glossary.ts',
+      'skills/check-country-risk/SKILL.md',
+    ];
+
+    for (const path of surfaces) {
+      const text = readFileSync(resolve(root, path), 'utf8');
+      assert.ok(text.includes(canonical), `${path} must link the canonical CII rankings page`);
+    }
   });
 });

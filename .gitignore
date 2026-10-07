@@ -9,13 +9,16 @@ public/blog/
 # pro-test/src without rebuilding.
 public/pro/
 public/countries/
+public/country-instability-index/
 public/chokepoints/
 public/crises/
 public/tools/
 public/reference/
 public/research/
 public/use-cases/
+public/compare/
 public/sources/
+public/accuracy/
 public/crawlable-corpus.json
 # Volatile inventory metrics are derived during install/build. Stable product
 # lifecycle, pricing, and catalog artifacts remain committed.
@@ -23,6 +26,7 @@ public/product-facts.json
 api/_inventory-facts.generated.js
 scripts/shared/inventory-facts.generated.json
 docs/generated/stats.json
+docs/generated/entitlement-crosswalk.json
 .DS_Store
 *.log
 .env
@@ -39,7 +43,7 @@ docs/generated/stats.json
 #   - docker-compose.override.yml holds WORLDMONITOR_VALID_KEYS and the
 #     upstream provider keys; SELF_HOSTING.md already states it is gitignored.
 #   - secrets/ is the Docker-secrets layout documented in docker-compose.yml,
-#     which instructs `echo "gsk_abc123" > secrets/groq_api_key.txt`.
+#     which instructs `echo "sk-or-abc123" > secrets/openrouter_api_key.txt`.
 docker-compose.override.yml
 secrets/
 .playwright-mcp/
@@ -55,12 +59,16 @@ CLAUDE.md
 .agent/
 .factory/
 .windsurf/
-skills/
-!api/skills/
-# Cursor project skills (agentskills.io). The `skills/` rule above would
-# otherwise hide `.agents/skills/` and keep `/sentry-triage` local-only.
-!.agents/skills/
-!.agents/skills/**/
+# Root /skills/ is the Agent Plugin skill tree (tracked regular SKILL.md
+# files materialized from public/.well-known/agent-skills/) and the default
+# landing zone for local `npx skills add` installs. Ignore extra install
+# files; keep SKILL.md. Scope to the repo root so api/skills/ and
+# .agents/skills/ stay tracked — a trailing-slash `skills/` rule would hide
+# those nested trees.
+/skills/**
+!/skills/
+!/skills/*/
+!/skills/*/SKILL.md
 ideas/
 docs/internal/
 docs/ideation/
@@ -127,6 +135,11 @@ tmp/
 # worktree-drift gate.
 .tmp-seed-freshness-gate-*/
 .tmp-deploy-gate-*/
+# Same trap, different directory: bundle-runner.test.mjs writes its run scripts
+# into the TRACKED scripts/fixtures/ (one per random UUID), so a concurrent
+# `git add -A` commits a temp file that can never exist again.
+scripts/fixtures/_bundle-runner-test-run-*.mjs
+scripts/fixtures/_bundle-fixture-pressure-run.mjs
 .context/
 # Scratch the Umami storage monitor writes on the runner: Railway volume and
 # deployment dumps plus its cached growth baseline. Local runs produce them too.

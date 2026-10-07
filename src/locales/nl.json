@@ -358,7 +358,7 @@
       "loadingIndex": "Index laden...",
       "loadingMarkets": "Voorspellingsmarkten laden...",
       "generatingBrief": "Inlichtingenoverzicht genereren...",
-      "unavailable": "AI-overzicht niet beschikbaar: configureer GROQ_API_KEY in Instellingen.",
+      "unavailable": "AI-overzicht niet beschikbaar: configureer OPENROUTER_API_KEY in Instellingen.",
       "cached": "in cache",
       "fresh": "Vers",
       "noMarkets": "Geen voorspellingsmarkten gevonden",
@@ -398,7 +398,7 @@
       "predictionMarkets": "Voorspellingsmarkten",
       "loadingMarkets": "Voorspellingsmarkten laden...",
       "infrastructure": "Blootstelling aan infrastructuur",
-      "briefUnavailable": "AI-overzicht niet beschikbaar: configureer GROQ_API_KEY in Instellingen.",
+      "briefUnavailable": "AI-overzicht niet beschikbaar: configureer OPENROUTER_API_KEY in Instellingen.",
       "cached": "in cache",
       "fresh": "Vers",
       "noMarkets": "Geen voorspellingsmarkten gevonden",
@@ -492,9 +492,12 @@
         "space": "RUIMTE"
       },
       "paused": "Webcams gepauzeerd",
-      "pausedIdle": "Webcams gepauzeerd — beweeg de muis om te hervatten",
       "play": "Afspelen",
-      "previewStatus": "Livevoorbeeld"
+      "previewStatus": "Klaar om af te spelen",
+      "connecting": "Verbinding wordt tot stand gebracht…",
+      "unverified": "Kan niet bevestigen dat deze stream live is",
+      "offline": "{{city}} is momenteel offline",
+      "noFeeds": "Geen live webcams in deze regio op dit moment"
     },
     "playback": {
       "live": "Live",
@@ -759,9 +762,6 @@
       "base": "Basis",
       "nuclear": "Nucleair"
     },
-    "community": {
-      "joinDiscussion": "Help Shape What's Next"
-    },
     "threatLabels": {
       "critical": "KRIT",
       "high": "HOOG",
@@ -770,8 +770,16 @@
       "info": "INFO"
     },
     "pizzint": {
+      "indexSource": "Index: World Monitor · locatiegegevens:",
+      "statusNormal": "NORMAAL",
+      "statusNoData": "GEEN GEGEVENS",
+      "statusNoBaseline": "GEEN REFERENTIE",
+      "vsUsual": "ten opzichte van normaal",
       "title": "Pentagon Pizza-index",
       "tensionsTitle": "Geopolitieke spanningen",
+      "tensionsSource": "Spanningen: World Monitor op basis van GDELT-gebeurtenissen",
+      "insufficientData": "Onvoldoende gegevens",
+      "pizzaUnavailable": "Activiteit van pizzeria's niet beschikbaar",
       "source": "Bron:",
       "defcon": "DEFCON {{level}}",
       "updated": "Bijgewerkt {{timeAgo}}",
@@ -785,11 +793,11 @@
       "minutesAgo": "{{m}}m geleden",
       "hoursAgo": "{{h}}u geleden",
       "defconLabels": {
-        "1": "GEREGISTREERD PISTOOL - MAXIMALE KLAARHEID",
-        "2": "SNEL TEMPO - STRIJDKRACHTEN KLAAR",
-        "3": "ROND HUIS - VERHOOG DE KRACHTBEREIDING",
-        "4": "DUBBEL NEMEN - VERHOOGDE INTELLIGENTIE HORLOGE",
-        "5": "FADE OUT - LAAGSTE KLAARHEID"
+        "1": "Maximale activiteit",
+        "2": "Hoge activiteit",
+        "3": "Verhoogde activiteit",
+        "4": "Boven normaal",
+        "5": "Normale activiteit"
       }
     },
     "stablecoins": {
@@ -1108,6 +1116,16 @@
       "loading": "Verbinding maken met Telegram-relay...",
       "empty": "Geen berichten beschikbaar",
       "disabled": "Telegram-relay niet actief",
+      "watchlistPlaceholder": "Openbaar kanaal toevoegen via @username",
+      "resolving": "Kanaal opzoeken...",
+      "invalidUsername": "Gebruik een openbare Telegram-@username",
+      "resolveFailed": "Kanaal kon niet worden gevonden",
+      "watchlistLimit": "Je kunt maximaal {{count}} aangepaste kanalen volgen",
+      "previewMembers": "{{count}} leden",
+      "addChannel": "Kanaal toevoegen",
+      "added": "Toegevoegd",
+      "remove": "Verwijderen",
+      "custom": "Aangepast",
       "filterAll": "Alles",
       "filterBreaking": "Belangrijk",
       "filterConflict": "Conflicten",
@@ -1230,7 +1248,7 @@
       "sourcesDetail": "{{active}}/{{total}} sources"
     },
     "insights": {
-      "infoTooltip": "<strong>AI-aangedreven analyse</strong><br>• <strong>World Brief</strong>: AI-samenvatting (Groq/OpenRouter)<br>• <strong>Sentiment</strong>: analyse van nieuwstoon<br>• <strong>Velocity</strong>: snel bewegende verhalen<br>• <strong>Focal Punten</strong>: correleert nieuwsentiteiten met kaartsignalen (militair, protesten, storingen)<br><em>Alleen desktop • Mogelijk gemaakt door Llama 3.3 + Focal Point-detectie</em>",
+      "infoTooltip": "<strong>AI-aangedreven analyse</strong><br>• <strong>World Brief</strong>: AI-samenvatting (OpenRouter)<br>• <strong>Sentiment</strong>: analyse van nieuwstoon<br>• <strong>Velocity</strong>: snel bewegende verhalen<br>• <strong>Focal Punten</strong>: correleert nieuwsentiteiten met kaartsignalen (militair, protesten, storingen)<br><em>Alleen desktop • Mogelijk gemaakt door Llama 3.3 + Focal Point-detectie</em>",
       "noStories": "Nog geen breaking of multi-source verhalen",
       "step": "Step {{step}}/{{total}}",
       "waitingForData": "Waiting for news data...",
@@ -1239,7 +1257,7 @@
       "generatingBrief": "Generating world brief...",
       "mapFlashLabel": "Live Event Pulse",
       "mapFlashDesc": "Flash locations on the map when breaking news arrives",
-      "aiFlowCloudLabel": "Cloud AI (Groq & OpenRouter)",
+      "aiFlowCloudLabel": "Cloud AI (OpenRouter)",
       "aiFlowCloudDesc": "Koppen naar de cloud sturen voor AI-samenvatting (aanbevolen)",
       "aiFlowBrowserLabel": "Lokaal browsermodel",
       "aiFlowBrowserDesc": "AI lokaal in uw browser uitvoeren",
@@ -1306,7 +1324,10 @@
       "provenanceTitle": "Dekking herkomst: hoeveel opgenomen verhalen en verschillende bronnen deze samenvatting is geselecteerd uit",
       "compiledFrom": "Samengesteld uit {{stories}} verhalen uit {{sources}} bronnen",
       "briefFreshness": "Gegenereerd {{minutes}}m geleden · nieuwste bron {{hours}}h oud",
-      "briefStoryDetails": "Story details ({{count}})"
+      "briefStoryDetails": "Details van het bericht ({{count}})",
+      "streamIdleStopLabel": "Livevideostream stoppen bij inactiviteit",
+      "streamIdleStopDesc": "Stopt Live News en Live Webcams na deze periode zonder activiteit en toont een melding in het paneel.",
+      "streamIdleStopNever": "Nooit"
     },
     "techHubs": {
       "infoTooltip": "<strong>Tech Hub-activiteit</strong><br>Toont tech-hubs met de meeste nieuwsactiviteit.<br><br><em>Activiteitsniveaus:</em><br>• <span style=\"color: {{highColor}}\">Hoog</span> — Breaking news of 50+ score<br>• <span style=\"color: {{elevatedColor}}\">Verhoogd</span> — Score 20-49<br>• <span style=\"color: {{lowColor}}\">Laag</span> — Score lager dan 20<br><br>Klik op een hub om naar de locatie ervan te zoomen."
@@ -1367,6 +1388,7 @@
       "etfs": "ETF's",
       "netInflow": "NETTO INSTROOM",
       "netOutflow": "NETTO UITSTROOM",
+      "netNeutral": "NETTO NEUTRAAL",
       "table": {
         "ticker": "Ticker",
         "issuer": "Uitgever",
@@ -1450,13 +1472,10 @@
     },
     "liveNews": {
       "notLive": "{{name}} is not currently live",
-      "cannotEmbed": "{{name}} kan hier niet worden afgespeeld — mogelijk beperkt in uw regio (fout {{code}})",
       "openOnYouTube": "Open on YouTube",
       "manage": "Kanalen beheren",
       "addChannel": "Kanaal toevoegen",
       "remove": "Verwijderen",
-      "youtubeHandle": "YouTube-handle (bijv. @Channel)",
-      "youtubeHandleOrUrl": "YouTube-handle of URL",
       "displayName": "Weergavenaam (optioneel)",
       "channelSettings": "Kanaalinstellingen",
       "save": "Opslaan",
@@ -1471,15 +1490,26 @@
       "regionMiddleEast": "Midden-Oosten",
       "regionAfrica": "Afrika",
       "regionOceania": "Oceanië",
-      "botCheck": "YouTube vraagt om in te loggen om {{name}} af te spelen",
-      "invalidHandle": "Voer een geldig YouTube-handle in (bijv. @Kanaalnaam)",
       "signInToYouTube": "Inloggen bij YouTube",
       "verifying": "Verifiëren…",
       "noResults": "Geen kanalen gevonden voor \"{{term}}\"",
       "hlsUrl": "HLS-stream-URL (optioneel)",
       "invalidHlsUrl": "Voer een geldige HLS-stream-URL in (.m3u8)",
       "playLiveFeed": "Livefeed afspelen",
-      "readyStatus": "Klaar wanneer jij dat bent"
+      "readyStatus": "Klaar wanneer jij dat bent",
+      "embedBlocked": "YouTube speelt {{name}} momenteel niet af in andere sites",
+      "unavailable": "{{name}} kan momenteel niet worden afgespeeld",
+      "noStream": "Er is nog geen livestream ingesteld voor {{name}}",
+      "needsChannelUrl": "Voeg {{name}} opnieuw toe met het kanaal-URL (youtube.com/channel/UC…) of een live-video-URL",
+      "insecureStream": "{{name}} gebruikt een onveilige (http) stream, die browsers blokkeren. Voeg het opnieuw toe met een veilige (https) stream-URL",
+      "connecting": "Verbinding maken met {{name}}…",
+      "recording": "Opnemen",
+      "unverified": "Kan niet bevestigen dat deze stream live is",
+      "playNextChannel": "Volgende kanaal afspelen",
+      "channelOrVideoUrl": "YouTube-kanaal of video-URL",
+      "channelUrlHint": "Plak een kanaal-URL (youtube.com/channel/UC…) of een live-video-URL",
+      "youtubeChannel": "YouTube-kanaal",
+      "httpsStreamHint": "Browsers blokkeren onveilige (http) streams. Plak een veilige (https) stream-URL"
     },
     "securityAdvisories": {
       "loading": "Reisadviezen laden...",
@@ -1601,7 +1631,8 @@
       "refineryStage": "Refine",
       "stageUnavailable": "No published figures for this stage",
       "withheldNote": "W withheld",
-      "productionCaption": "Country shares of actual production. The map deposits layer shows where resources sit; this table shows who mines or refines them."
+      "productionCaption": "Country shares of actual production. The map deposits layer shows where resources sit; this table shows who mines or refines them.",
+      "productionProLocked": "Upgrade naar PRO voor aandelen van mijn- en raffinaderijen per land met concentratie (HHI) per fase."
     },
     "positiveNewsFeed": {
       "noStories": "Nog geen verhalen in deze categorie"
@@ -1649,6 +1680,22 @@
       "metals": {
         "gold": "Gold",
         "silver": "Silver"
+      },
+      "divergence": {
+        "compositeValue": "Fysieke stressindex: {{value}} / 100",
+        "fiveDayTrend": "Trend premie vijf handelsdagen",
+        "regimes": {
+          "normal": "Normaal",
+          "elevated": "Verhoogd",
+          "stressed": "Onder spanning",
+          "extreme": "Extreem"
+        },
+        "states": {
+          "insufficientHistory": "Opwarmfase: {{count}} / {{required}} handelspunten",
+          "staleInput": "Fysieke benchmark is verouderd",
+          "missingInput": "Divergentiesignaal niet beschikbaar"
+        },
+        "twentyDayTrend": "Premiumtrend over twintig handelsdagen"
       }
     },
     "crypto": {
@@ -1765,7 +1812,7 @@
       "infoTooltip": "<strong>Economische kalender</strong> Geplande macro-economische publicaties: CPI, NFP, GDP, PMI en centrale bankbesluiten. Toont prognose vs. werkelijk vs. vorig. Gebeurtenissen met hoge impact zijn gemarkeerd. Bron: economische dataproviders."
     },
     "fsi": {
-      "infoTooltip": "<strong>Financiële stress-indicator</strong> Kansas City Fed Financial Stress Index (KCFSI): meet stress op Amerikaanse financiële markten aan de hand van 11 indicatoren waaronder rentespreads, volatiliteit en kruiscorrelaties. Positieve waarden duiden op bovengemiddelde stress. Bron: Federal Reserve Bank of Kansas City.",
+      "infoTooltip": "<strong>Financiële-stressindicator</strong> WorldMonitor-verhouding van hoogrentend krediet tot langlopende Amerikaanse staatsobligaties, gecorrigeerd voor aandelenvolatiliteit en de hoogrentende spread: (HYG / TLT) / (VIX × HY spread / 100). Dit is niet de Financial Stress Index van de Federal Reserve Bank of Kansas City. Een waarde van 1.5 of hoger betekent lage stress; onder 0.3 betekent hoge stress.",
       "title": "Financiële stressindicator",
       "usFsiValue": "US FSI-WAARDE",
       "cissTitle": "EU CISS (systeemstress eurozone)",
@@ -1805,6 +1852,26 @@
         "failedToLoad": "Laden mislukt"
       },
       "cissStale": "ECB heeft geen nieuwere waarde gepubliceerd — deze waarde kan verouderd zijn."
+    },
+    "supplyVulnerability": {
+      "title": "Kwetsbaarheid voor grondstoffen",
+      "help": "Blootstelling per grondstof op basis van leveranciersconcentratie, maritieme doorvoer en beschikbare strategische buffers.",
+      "loading": "Kwetsbaarheid voor grondstoffen laden…",
+      "unavailable": "Gegevens over grondstoffenkwetsbaarheid niet beschikbaar",
+      "noCoverage": "Onvoldoende bewijs voor dit land",
+      "unknown": "Onbekend",
+      "concentration": "Concentratie",
+      "transit": "Doorvoer",
+      "buffer": "Bufferreserve",
+      "sources": "Bronnen",
+      "methodology": "Methodologie",
+      "hormuzTitle": "Grondstofafhankelijkheden",
+      "dependentCountries": "Afhankelijke landen",
+      "dependentCommodities": "Afhankelijke grondstoffen",
+      "stateOk": "Actueel",
+      "stateStale": "Verouderde invoer",
+      "stateInsufficient": "Onvoldoende gegevens",
+      "proLocked": "Upgrade naar PRO voor scorebepaling van grondstofgevoeligheid"
     },
     "hormuzTracker": {
       "infoTooltip": "<strong>Hormuz-handelstracker</strong> Live AIS-scheepvaarttracking door de Straat van Hormuz, het meest kritieke olieknelpunt ter wereld. Monitort tankeraantallen, verstoringsevenementen en wekelijkse stroomwijzigingen. Ongeveer 20% van de wereldwijde olietoevoer passeert hier dagelijks.",
@@ -1886,7 +1953,7 @@
       }
     },
     "marketImplications": {
-      "infoTooltip": "<strong>AI-marktimplicaties</strong> Door LLM gegenereerde handelssignalen afgeleid van live geopolitieke, grondstof- en macrothema's na elke voorspellingscyclus.<ul><li><strong>Richting</strong>: LONG / SHORT / HEDGE met betrouwbaarheidsrating</li><li><strong>Periode</strong>: 1W, 2W, 1M of 3M horizon</li><li><strong>Driver</strong>: Belangrijkste katalysator achter het signaal</li><li><strong>Risico</strong>: Voorbehoud of ongeldigheidsvoorwaarde</li></ul><em>Uitsluitend voor informatiedoeleinden. Geen beleggingsadvies.</em>",
+      "infoTooltip": "<strong>AI-marktimplicaties</strong> Door LLM gegenereerde handelssignalen afgeleid van live geopolitieke, grondstof- en macrothema's na elke voorspellingscyclus.<ul><li><strong>Richting</strong>: LONG / SHORT / HEDGE</li><li><strong>Periode</strong>: 1W, 2W, 1M of 3M horizon</li><li><strong>Driver</strong>: Belangrijkste katalysator achter het signaal</li><li><strong>Risico</strong>: Voorbehoud of ongeldigheidsvoorwaarde</li></ul><em>Uitsluitend voor informatiedoeleinden. Geen beleggingsadvies.</em>",
       "title": "AI-marktimplicaties",
       "directions": {
         "long": "LONG",
@@ -1899,10 +1966,64 @@
       "signals_one": "{{count}} signaal",
       "signals_other": "{{count}} signalen",
       "disclaimer": "Door AI gegenereerde handelssignalen alleen voor informatiedoeleinden. Geen beleggingsadvies. Voer altijd uw eigen onderzoek uit.",
-      "unavailable": "AI-marktimplicaties worden na elke forecastrun gegenereerd. Kom binnenkort terug."
+      "unavailable": "AI-marktimplicaties worden na elke forecastrun gegenereerd. Kom binnenkort terug.",
+      "unscored": "Narratieve scenario's, niet beoordeeld op nauwkeurigheid."
     },
     "forecast": {
-      "infoTooltip": "<strong>AI-prognoses</strong> Door AI gegenereerde waarschijnlijkheidsschattingen voor geopolitieke en economische gebeurtenissen:<ul><li>Cross-domain dekking: conflict, markten, toeleveringsketen, cyber, politiek</li><li>Elke prognose toont geschatte waarschijnlijkheid, betrouwbaarheidsniveau en tijdshorizon</li><li>Gekalibreerd tegen voorspellingsmarkt basislijnen waar beschikbaar</li></ul>Prognoses worden bijgewerkt wanneer nieuwe inlichtingssignalen binnenkomen. Filter op domein met behulp van de tabbladen hierboven."
+      "infoTooltip": "<strong>AI-prognoses</strong> Door AI gegenereerde waarschijnlijkheidsschattingen voor geopolitieke en economische gebeurtenissen:<ul><li>Cross-domain dekking: conflict, markten, toeleveringsketen, cyber, politiek</li><li>Elke prognose toont geschatte waarschijnlijkheid, betrouwbaarheidsniveau en tijdshorizon</li><li>Gekalibreerd tegen voorspellingsmarkt basislijnen waar beschikbaar</li></ul>Prognoses worden bijgewerkt wanneer nieuwe inlichtingssignalen binnenkomen. Filter op domein met behulp van de tabbladen hierboven.",
+      "record": {
+        "label": "Staat van dienst",
+        "labelHint": "Hoe de gepubliceerde voorspellingen scoorden nadat ze waren beslist, over de laatste {{days}} dagen. Beweeg over een getal om te zien wat het betekent.",
+        "unavailable": "Momenteel niet beschikbaar",
+        "insufficient": "Nog niet genoeg beoordeelde voorspellingen",
+        "brier": "Brier-score {{score}} (n={{n}})",
+        "brierHint": "Brier-score over {{n}} beoordeelde voorspellingen: het gemiddelde kwadraat van het verschil tussen de voorspelde kans en wat er gebeurde. 0 is perfect, 0,25 is een muntworp, lager is beter.",
+        "baseRate": "Basispercentage {{score}} (n={{n}})",
+        "baseRateHint": "Wat iemand die altijd het waargenomen ja-percentage antwoordt zou hebben gescoord op dezelfde {{n}} voorspellingen ({{pct}}% eindigde op ja). Beter scoren betekent dat de voorspellingen informatie toevoegen.",
+        "void": "Ongeldig {{pct}}% ({{count}} van {{resolved}})",
+        "voidHint": "Besliste voorspellingen die niet beoordeeld konden worden, van de {{resolved}} besliste in de periode.",
+        "stale": "Verouderd",
+        "staleHint": "Laatst beoordeeld op {{date}}. De beoordelaar heeft sindsdien niet gedraaid, dus deze cijfers zijn ouder dan ze zouden moeten zijn.",
+        "fullRecord": "Volledige staat van dienst"
+      },
+      "reliability": {
+        "measured": "{{domain}} n={{n}} · Brier {{score}} vs basisratio {{base}}",
+        "measuredHint": "Hoe gepubliceerde {{domain}}-prognoses hebben gescoord over {{n}} geclassificeerde prognoses in de afgelopen {{days}} dagen. Het basispercentage is wat je zou scoren door altijd het waargenomen ja-percentage van het domein te antwoorden. Lager is beter. Dit is het record van het domein, niet van deze prognose.",
+        "unmeasured": "Nog niet gemeten",
+        "unmeasuredHint": "{{domain}} voorspellingen hebben {{n}} beoordeelde resultaten in de afgelopen {{days}} dagen. Een domein heeft minimaal {{min}} nodig voordat de nauwkeurigheid wordt weergegeven."
+      },
+      "resolution": {
+        "last": "Laatste: {{outcome}}",
+        "lastSr": "Het vorige venster van deze voorspelling is beslist als {{outcome}}.",
+        "history": "Recente vensters, nieuwste eerst: {{list}}",
+        "outcome": {
+          "yes": "JA",
+          "no": "NEE",
+          "void": "ONGELDIG"
+        },
+        "void": {
+          "no_establishable_metric": "De feed had geen waarde voor deze vraag",
+          "value_source_never_settled": "De feed heeft nooit een vastgestelde waarde gepubliceerd",
+          "count_source_window_not_retained": "De feed bewaarde het vraagvenster niet meer",
+          "unsupported_window": "De vraag kon niet tegen de feed worden gecontroleerd",
+          "unsupported_metric_key": "De vraag kon niet tegen de feed worden gecontroleerd",
+          "not_hard_spec": "De vraag kon niet tegen de feed worden gecontroleerd",
+          "missing_threshold": "De vraag miste een drempel",
+          "missing_deadline": "De vraag miste een deadline",
+          "missing_generated_at": "De voorspelling miste de startdatum",
+          "beyond_archive_horizon": "Het nieuwsarchief dekte het vraagvenster niet meer",
+          "no_archive_evidence": "Het nieuwsarchief had niets over het onderwerp",
+          "all_judges_void": "Beide beoordelaars vonden het bewijs onvoldoende",
+          "judge_disagreement": "De beoordelaars waren het niet eens",
+          "judge_retry_exhausted": "De beoordelaars gaven geen uitspraak",
+          "withheld_unpublished": "Dit soort voorspelling wordt niet meer gepubliceerd",
+          "other": "Kon niet worden beslist"
+        }
+      },
+      "horizons": {
+        "label": "Ook gescoord op: {{list}}",
+        "hint": "De kans in de kop wordt beoordeeld op de eigen horizon van de prognose. De projectie op elk van deze horizons wordt ook beoordeeld, tegen de bronfeed, met de waarde die voor deze prognose eerst is gepubliceerd. Projectiewaarden worden niet weergegeven omdat de huidige waarde kan afwijken van de beoordeelde waarde."
+      }
     },
     "escalationCorrelation": {
       "infoTooltip": "<strong>Escalatie Monitor</strong> Detecteert convergerende geopolitieke signalen:<ul><li>Correleert militaire bewegingen, conflictgebeurtenissen en nieuwspieken</li><li>Scores convergentiezones op ernst (kritiek/hoog/gemiddeld/laag)</li><li>Volgt escalatie- of de-escalatietrends in de tijd</li></ul>Klik op een kaart om naar de regio op de kaart in te zoomen."
@@ -2200,7 +2321,14 @@
       "signals_one": "{{count}} signaal",
       "signals_other": "{{count}} signalen",
       "analyzing": "Analyseren...",
-      "viewOnMap": "Bekijken op kaart"
+      "viewOnMap": "Bekijken op kaart",
+      "waiting": "Wachten op de volgende gegevensupdate. Dit paneel wordt automatisch bijgewerkt.",
+      "offline": "Wachten op een verbinding. Dit paneel wordt automatisch bijgewerkt zodra je weer online bent.",
+      "updated": "Bijgewerkt {{time}}",
+      "saved": "Laatst bekende update {{time}} · Controleren op updates",
+      "savedOffline": "Laatst bekende update {{time}} · Offline",
+      "localSignals": "Gebaseerd op geladen dashboardsignalen",
+      "emptySaved": "Geen convergentie in de laatst bekende update."
     },
     "thermalEscalation": {
       "title": "Thermische escalatie",
@@ -2350,6 +2478,68 @@
       "rubBase": "Centrale Bank van Rusland — roebel per 1 eenheid",
       "rubPerUnit": "Roebel per eenheid",
       "sourceCbr": "Bron: Centrale Bank van Rusland"
+    },
+    "passkeyOffer": {
+      "title": "Wachtsleutel opslaan?",
+      "body": "Volgende keer inloggen met je vingerafdruk, gezicht of apparaat-pincode — geen wachtwoord om te onthouden.",
+      "accept": "Wachtsleutel opslaan",
+      "dismiss": "Nu niet",
+      "close": "Sluiten",
+      "announce": "Sla een wachtsleutel op om volgende keer sneller in te loggen.",
+      "busy": "Je apparaat wordt gecontroleerd…",
+      "succeeded": "Wachtsleutel opgeslagen. Je kunt deze gebruiken wanneer je volgende keer inlogt.",
+      "retryable": "Dit is niet afgerond. Je kunt het opnieuw proberen.",
+      "failed": "We konden geen wachtsleutel op dit apparaat opslaan."
+    },
+    "decisionBrief": {
+      "commodityTitle": "Beslisnotitie voor grondstoffen",
+      "commodity": "Grondstof / product",
+      "blockedChokepoint": "Verondersteld geblokkeerde doorgang",
+      "commodityCapture": "Grondstoffenvergelijking vastleggen",
+      "title": "Beslisnotitie",
+      "fuel": "Brandstof",
+      "chokepoint": "Knelpunt",
+      "baseline": "Verstoring in basisscenario",
+      "comparison": "Verstoring in vergelijkingsscenario",
+      "capture": "Beide vastleggen / vernieuwen",
+      "downloadHtml": "Beslisnotitie downloaden als HTML",
+      "downloadJson": "Beslisnotitie downloaden als JSON",
+      "back": "← Terug naar landenoverzicht",
+      "select": "Selecteer een energieverstoring en leg beide scenario’s vast.",
+      "changed": "Selectie gewijzigd. Leg beide scenario’s vast voordat u exporteert.",
+      "loading": "Beide scenario’s worden vastgelegd…",
+      "captured": "Vastgelegd. Controleer de observatiedatums en beperkingen voordat u downloadt.",
+      "failed": "De scenario’s konden niet worden vastgelegd. Controleer uw toegang en probeer opnieuw. Er is geen resultaat om te exporteren.",
+      "locked": "De beslisnotitie is beschikbaar met Pro."
+    },
+    "liveMedia": {
+      "idleStatus": "Gepauzeerd wegens inactiviteit",
+      "idleBody": "Livevideostream gestopt na {{duration}} zonder muis-, toetsenbord- of aanraakactiviteit.",
+      "idleResume": "Hervatten",
+      "idleKeepPlaying": "Videostream afspelen bij inactiviteit",
+      "idleSettingsHint": "Wijzig dit op elk moment in Instellingen › Media.",
+      "idleKeepPlayingToast": "Livevideostream blijft afspelen bij inactiviteit. Wijzigen in Instellingen › Media."
+    },
+    "corroboration": {
+      "singlePublisher": "Enkele uitgever",
+      "singlePublisherHint": "Tot nu toe meldt slechts één uitgever dit. Dit beschrijft de verslaggeving, niet de nauwkeurigheid.",
+      "tier4Only": "Alleen laag-tier bronnen",
+      "tier4OnlyHint": "Elk medium dat hierover bericht, is een tier-4-bron (aggregators en blogs). Dit beschrijft de verslaggeving, niet de nauwkeurigheid.",
+      "rosterListed": "({{listed}} vermeld)",
+      "rosterFeeds": "Feeds gezien: {{labels}}",
+      "rosterLegend": "Tiers rangschikken bronnen; ze beoordelen deze bewering niet.",
+      "tierDocsLink": "Hoe tiers worden toegekend",
+      "tierChip": "T{{tier}}",
+      "tierChipUndeclared": "T?",
+      "tierTitle1": "Tier 1: Persbureaus en officiële instanties",
+      "tierTitle2": "Tier 2: Grote media",
+      "tierTitle3": "Tier 3: Gespecialiseerde, regionale en denktankbronnen",
+      "tierTitle4": "Tier 4: Aggregators en blogs",
+      "tierTitleUndeclared": "Tier niet opgegeven: nog niet beoordeeld",
+      "rosterSummary": "Gemeld door {{publishers}}",
+      "rosterSummaryTier1": "Gemeld door {{publishers}}, waaronder {{tier1}} tier-1",
+      "rosterPublishers_one": "{{count}} uitgever",
+      "rosterPublishers_other": "{{count}} uitgevers"
     }
   },
   "popups": {
@@ -2387,14 +2577,18 @@
     "protest": {
       "acledVerified": "ACLED (geverifieerd)",
       "gdelt": "GDELT",
+      "records": "vermeldingen",
+      "mediaSignal": "Onbevestigd mediasignaal",
+      "relatedArticle": "Gerelateerd artikel",
+      "mediaSignalDetail": "Deze locatie wordt genoemd in artikelen over onrust. Een lokale gebeurtenis is niet bevestigd.",
       "riots": "Rellen",
       "highSeverity": "Hoge ernst"
     },
     "gpsJamming": {
-      "title": "GPS/GNSS-storing",
-      "navPerformance": "Nav Performance",
-      "samples": "ADS-B Samples",
-      "aircraft": "Aircraft",
+      "title": "GPS/GNSS-interferentie",
+      "navPerformance": "Getroffen luchtvaartuigen",
+      "samples": "Aantal getroffen luchtvaartuigen",
+      "aircraft": "Totaal aantal waargenomen luchtvaartuigen",
       "h3Hex": "H3 Hex"
     },
     "flight": {
@@ -2833,8 +3027,8 @@
   "signals": {
     "context": {
       "prediction_leads_news": {
-        "whyItMatters": "Voorspellingsmarkten prijzen informatie vaak in voordat het nieuws wordt -- handelaren hebben mogelijk vroege toegang tot ontwikkelingen.",
-        "actionableInsight": "Monitor op breaking news in de komende 1-6 uur die de marktbeweging kan verklaren.",
+        "whyItMatters": "Een voorspellingsmarkt bewoog terwijl de nieuwsberichtgeving over het onderwerp laag bleef — de markt reageert mogelijk op informatie die nog niet is gerapporteerd.",
+        "actionableInsight": "Let op actueel nieuws dat de marktbeweging kan verklaren.",
         "confidenceNote": "Hogere betrouwbaarheid als meerdere voorspellingsmarkten in dezelfde richting bewegen."
       },
       "news_leads_markets": {
@@ -3104,7 +3298,7 @@
     "predictionMarkets": "Voorspellingsmarkten",
     "loadingMarkets": "Voorspellingsmarkten laden...",
     "infrastructure": "Blootstelling aan infrastructuur",
-    "briefUnavailable": "AI-overzicht niet beschikbaar — configureer GROQ_API_KEY in Instellingen.",
+    "briefUnavailable": "AI-overzicht niet beschikbaar — configureer OPENROUTER_API_KEY in Instellingen.",
     "cached": "In cache",
     "fresh": "Vers",
     "noMarkets": "Geen voorspellingsmarkten gevonden",
@@ -3174,6 +3368,7 @@
       "suppliers": "Arms suppliers ({{start}}–{{end}})",
       "source": "Sources: World Bank and SIPRI Arms Transfers Database. TIV measures transfer volume, not financial value.",
       "sourceWorldBank": "Source: World Bank.",
+      "snapshotAssembled": "Momentopname van {{source}} samengesteld op {{time}}",
       "unavailable": "Not available",
       "coverage": "Mapped coverage",
       "supplierRetained": "Supplier data retained from the last successful importer refresh."
@@ -3213,11 +3408,13 @@
       "doNotTravel": "Niet reizen",
       "reconsiderTravel": "Reis heroverwegen",
       "exerciseCaution": "Wees voorzichtig",
+      "normalPrecautions": "Gebruikelijke voorzorgsmaatregelen",
       "advisory": "Reisadvies",
       "activeSirens": "Actieve sirenes",
       "sirens24h": "Sirenes / 24u",
       "aviationDisruptions": "Luchtvaartverstoringen",
-      "gpsJammingZones": "GPS-storingszones"
+      "gpsJammingZones": "GPS-storingszones",
+      "temporalUnavailable": "Temporele waarnemingen niet beschikbaar"
     },
     "countryFacts": "Landenfeiten",
     "loadingFacts": "Landenfeiten laden...",
@@ -3283,7 +3480,7 @@
       "decisionSignalsUnavailable": "De momentopname van beslissingssignalen van China is momenteel niet beschikbaar."
     },
     "foodStocks": "Food stocks",
-    "foodStocksHelp": "USDA PSD commodity stocks-to-use by marketing year, with the world ratio alongside for context. FAOSTAT fills production only where PSD has no country coverage.",
+    "foodStocksHelp": "USDA PSD commodity stocks-to-use by marketing year, with the world ratio alongside for context. FAOSTAT Food Balances supplies production and domestic supply when PSD has no complete country balance.",
     "loadingFoodStocks": "Loading food stocks…",
     "foodStocksUnavailable": "Food stocks unavailable.",
     "foodStocksProLocked": "Upgrade to PRO for commodity stocks-to-use",
@@ -3323,6 +3520,71 @@
       "manufacturingShare": "Manufacturing employment",
       "source": "Sources: {{sources}}.",
       "retained": "{{stage}} data retained from the last successful refresh."
+    },
+    "fiveFactorScorecard": {
+      "title": "Vijffactoren-resiliëntiescorekaart",
+      "help": "Vastgevroren v1-bewijsscores voor voedsel, energie, demografie, technologie en defensie. Breid een rij uit om invoer, bronherkomst en redenen voor ontbrekende gegevens te inspecteren.",
+      "loading": "Vijffactoren-scorekaart wordt geladen…",
+      "unavailable": "Vijffactoren-scorekaart niet beschikbaar.",
+      "proLocked": "Upgrade naar PRO voor de vijffactoren-resiliëntiescorekaart",
+      "insufficient": "Onvoldoende gegevens",
+      "notAvailable": "Niet beschikbaar",
+      "noEvidence": "Er is geen bewijs beschikbaar voor deze pijler.",
+      "score": "{{score}}/5",
+      "coverage": "{{coverage}}% dekking",
+      "methodologyVersion": "Methode v{{version}}",
+      "methodologyLink": "Toegangs methode",
+      "pillars": {
+        "food": "Voedsel",
+        "energy": "Energie",
+        "demographics": "Demografie",
+        "technology": "Technologie",
+        "defense": "Defensie"
+      },
+      "reasons": {
+        "source-unavailable": "Bron niet beschikbaar",
+        "country-unavailable": "Land niet beschikbaar",
+        "invalid-value": "Ongeldige bronwaarde",
+        "stale": "Bewijs is verouderd",
+        "coverage-below-floor": "Dekking onder de scoregrens",
+        "required-group-missing": "Verplichte bewijsgroep ontbreekt",
+        "missing-population": "Bevolking niet beschikbaar",
+        "redistribution-blocked": "Herredistributie van bron is niet toegestaan",
+        "pillar-unavailable": "Pijler niet beschikbaar"
+      },
+      "inputs": {
+        "population": "Population",
+        "food_productionBalance": "Productiebalans",
+        "food_stocksToUse": "Voorraden te gebruiken",
+        "food_waterSecurity": "Waterveiligheid",
+        "food_importDiversity": "Importdiversiteit",
+        "energy_productionBalance": "Productiebalans",
+        "energy_lowCarbonShare": "Aandeel koolstofarme energie",
+        "energy_gridEfficiency": "Netdoeltreffendheid",
+        "demographics_totalDependency": "Totale afhankelijkheidsratio",
+        "demographics_oldAgeDependency": "Ouderdomsafhankelijkheidsratio",
+        "demographics_workingAgeProjection": "Projectie werkende bevolking",
+        "demographics_tertiaryEnrollment": "Inschrijving hoger onderwijs",
+        "demographics_researchersPerMillion": "Onderzoekers per miljoen",
+        "demographics_stemGraduateShare": "Aandeel STEM-afgestudeerden",
+        "demographics_trainedIndustrialShare": "Aandeel getrainde industriële arbeidskrachten",
+        "demographics_manufacturingEmploymentShare": "Aandeel werkgelegenheid in de maakindustrie",
+        "technology_internetUse": "Internetgebruik",
+        "technology_mobileSubscriptions": "Mobiele abonnementen",
+        "technology_fixedBroadband": "Vaste breedband",
+        "technology_rdSpend": "Onderzoeks- en ontwikkelingsuitgaven",
+        "technology_researchersPerMillion": "Onderzoekers per miljoen",
+        "technology_stemGraduateShare": "Aandeel STEM-afgestudeerden",
+        "technology_electricityAccess": "Toegang tot elektriciteit",
+        "defense_expenditureUsd": "Militaire uitgaven",
+        "defense_expenditurePctGdp": "Militaire last",
+        "defense_personnel": "Personeel van de gewapende strijdkrachten",
+        "defense_industrialBalance": "Industrieel evenwicht defensie",
+        "defense_supplierDiversity": "Diversiteit wapenleveranciers"
+      }
+    },
+    "defenseIndustrialBase": {
+      "proLocked": "Upgrade naar PRO voor afhankelijkheid van wapenleveranciers en militaire capaciteit"
     }
   },
   "preferences": {
@@ -3446,7 +3708,8 @@
   "auth": {
     "signIn": "Aanmelden",
     "createAccount": "Account aanmaken",
-    "settings": "Instellingen"
+    "settings": "Instellingen",
+    "passkeyOffer": {}
   },
   "mcp": {
     "connectPanel": "MCP Verbinden",

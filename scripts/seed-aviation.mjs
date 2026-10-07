@@ -6,7 +6,7 @@
  *   aviation:delays:intl:v3      — AviationStack per-airport delay aggregates (56 intl)
  *   aviation:delays:faa:v1       — FAA ASWS XML delays (30 US)
  *   aviation:notam:closures:v2   — ICAO NOTAM closures (60 global)
- *   aviation:news::24:v1         — RSS news prewarmer (list-aviation-news.ts cache)
+ *   aviation:news:feeds:v2         — RSS news prewarmer (list-aviation-news.ts cache)
  *
  * Also publishes notifications for new severe/major airport disruptions and new
  * NOTAM closures via the standard wm:events:queue LPUSH + wm:notif:scan-dedup SETNX.
@@ -24,6 +24,7 @@
  * hosts the /aviationstack live proxy for user-triggered flight lookups.
  */
 
+import { XMLParser } from 'fast-xml-parser';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
@@ -58,7 +59,7 @@ loadEnvFile(import.meta.url);
 const INTL_KEY         = 'aviation:delays:intl:v3';
 const FAA_KEY          = 'aviation:delays:faa:v1';
 const NOTAM_KEY        = 'aviation:notam:closures:v2';
-const NEWS_KEY         = 'aviation:news::24:v1';
+export const NEWS_KEY  = 'aviation:news:feeds:v2';
 // Page-load hydration aggregate. Health (api/health.js BOOTSTRAP_KEYS.flightDelays)
 // reads STRLEN here, and its record count from BOOTSTRAP_META_KEY below — which
 // must be written from THIS payload, not from a contributing source's own count
@@ -79,7 +80,7 @@ export const BOOTSTRAP_META_KEY = 'seed-meta:aviation:delays-bootstrap';
 const INTL_TTL      = 10_800; // 3h — survives ~5 consecutive missed 30min cron ticks
 const FAA_TTL       = 7_200;  // 2h
 const NOTAM_TTL     = 7_200;  // 2h
-const NEWS_TTL      = 2_400;  // 40min
+export const NEWS_TTL = 2_400;  // 40min
 const BOOTSTRAP_TTL = 7_200;  // 2h — matches FAA/NOTAM; survives ~4 missed cron ticks
 
 function nonNegativeEnv(name, fallback, max = Number.POSITIVE_INFINITY) {
@@ -116,13 +117,13 @@ const NOTAM_PREV_CLOSED_KEY     = 'notam:prev-closed-state:v1';
 const PREV_STATE_TTL            = 86_400; // 24h — longer than any realistic cron cadence
 
 // ─── Unified airport registry ────────────────────────────────────────────────
-// Each row declares: iata, icao, name, city, country, region, lat, lon (where
-// known), and which data sources cover it:
+// Each row declares: iata, icao, name, city, country, region, lat, lon, and
+// which data sources cover it:
 //   'aviationstack' — AviationStack /v1/flights?dep_iata={iata}
 //   'faa'           — FAA ASWS XML filter matches this IATA
 //   'notam'         — ICAO NOTAM list includes this ICAO
-// lat/lon/city are only required for rows with 'aviationstack' (feed the
-// AirportDelayAlert envelope).
+// Every row needs real lat/lon: each one becomes a map marker, and a missing
+// position used to publish at 0,0 (tests/aviation-airport-coordinates.test.mjs).
 
 // Keep this provider contract narrow and evidence-backed: these are individual
 // hubs AviationStack is expected to return, not a claim that every airport in
@@ -156,29 +157,29 @@ export const AIRPORTS = [
   { iata: 'LAX', icao: 'KLAX', name: 'Los Angeles International',             city: 'Los Angeles',   country: 'USA', lat: 33.9416, lon: -118.4085, region: 'americas', sources: ['faa', 'notam'] },
   { iata: 'JFK', icao: 'KJFK', name: 'John F. Kennedy International',         city: 'New York',      country: 'USA', lat: 40.6413, lon: -73.7781, region: 'americas', sources: ['faa', 'notam'] },
   { iata: 'SFO', icao: 'KSFO', name: 'San Francisco International',           city: 'San Francisco', country: 'USA', lat: 37.6213, lon: -122.3790, region: 'americas', sources: ['faa', 'notam'] },
-  { iata: 'SEA', icao: 'KSEA', name: 'Seattle–Tacoma International',          city: 'Seattle',       country: 'USA', region: 'americas', sources: ['faa'] },
-  { iata: 'LAS', icao: 'KLAS', name: 'Harry Reid International',              city: 'Las Vegas',     country: 'USA', region: 'americas', sources: ['faa'] },
-  { iata: 'MCO', icao: 'KMCO', name: 'Orlando International',                 city: 'Orlando',       country: 'USA', region: 'americas', sources: ['faa'] },
-  { iata: 'EWR', icao: 'KEWR', name: 'Newark Liberty International',          city: 'Newark',        country: 'USA', region: 'americas', sources: ['faa'] },
-  { iata: 'CLT', icao: 'KCLT', name: 'Charlotte Douglas International',       city: 'Charlotte',     country: 'USA', region: 'americas', sources: ['faa'] },
-  { iata: 'PHX', icao: 'KPHX', name: 'Phoenix Sky Harbor International',      city: 'Phoenix',       country: 'USA', region: 'americas', sources: ['faa'] },
-  { iata: 'IAH', icao: 'KIAH', name: 'George Bush Intercontinental',          city: 'Houston',       country: 'USA', region: 'americas', sources: ['faa'] },
-  { iata: 'MIA', icao: 'KMIA', name: 'Miami International',                   city: 'Miami',         country: 'USA', region: 'americas', sources: ['faa'] },
-  { iata: 'BOS', icao: 'KBOS', name: 'Logan International',                   city: 'Boston',        country: 'USA', region: 'americas', sources: ['faa'] },
-  { iata: 'MSP', icao: 'KMSP', name: 'Minneapolis–Saint Paul International',  city: 'Minneapolis',   country: 'USA', region: 'americas', sources: ['faa'] },
-  { iata: 'DTW', icao: 'KDTW', name: 'Detroit Metropolitan',                  city: 'Detroit',       country: 'USA', region: 'americas', sources: ['faa'] },
-  { iata: 'FLL', icao: 'KFLL', name: 'Fort Lauderdale–Hollywood',             city: 'Fort Lauderdale', country: 'USA', region: 'americas', sources: ['faa'] },
-  { iata: 'PHL', icao: 'KPHL', name: 'Philadelphia International',            city: 'Philadelphia',  country: 'USA', region: 'americas', sources: ['faa'] },
-  { iata: 'LGA', icao: 'KLGA', name: 'LaGuardia',                             city: 'New York',      country: 'USA', region: 'americas', sources: ['faa'] },
-  { iata: 'BWI', icao: 'KBWI', name: 'Baltimore/Washington International',    city: 'Baltimore',     country: 'USA', region: 'americas', sources: ['faa'] },
-  { iata: 'SLC', icao: 'KSLC', name: 'Salt Lake City International',          city: 'Salt Lake City', country: 'USA', region: 'americas', sources: ['faa'] },
-  { iata: 'SAN', icao: 'KSAN', name: 'San Diego International',               city: 'San Diego',     country: 'USA', region: 'americas', sources: ['faa'] },
-  { iata: 'IAD', icao: 'KIAD', name: 'Washington Dulles International',       city: 'Washington',    country: 'USA', region: 'americas', sources: ['faa'] },
-  { iata: 'DCA', icao: 'KDCA', name: 'Ronald Reagan Washington National',     city: 'Washington',    country: 'USA', region: 'americas', sources: ['faa'] },
-  { iata: 'MDW', icao: 'KMDW', name: 'Chicago Midway International',          city: 'Chicago',       country: 'USA', region: 'americas', sources: ['faa'] },
-  { iata: 'TPA', icao: 'KTPA', name: 'Tampa International',                   city: 'Tampa',         country: 'USA', region: 'americas', sources: ['faa'] },
-  { iata: 'HNL', icao: 'PHNL', name: 'Daniel K. Inouye International',        city: 'Honolulu',      country: 'USA', region: 'americas', sources: ['faa'] },
-  { iata: 'PDX', icao: 'KPDX', name: 'Portland International',                city: 'Portland',      country: 'USA', region: 'americas', sources: ['faa'] },
+  { iata: 'SEA', icao: 'KSEA', name: 'Seattle–Tacoma International',          city: 'Seattle',       country: 'USA', lat: 47.4502, lon: -122.3088, region: 'americas', sources: ['faa'] },
+  { iata: 'LAS', icao: 'KLAS', name: 'Harry Reid International',              city: 'Las Vegas',     country: 'USA', lat: 36.0840, lon: -115.1537, region: 'americas', sources: ['faa'] },
+  { iata: 'MCO', icao: 'KMCO', name: 'Orlando International',                 city: 'Orlando',       country: 'USA', lat: 28.4312, lon: -81.3081, region: 'americas', sources: ['faa'] },
+  { iata: 'EWR', icao: 'KEWR', name: 'Newark Liberty International',          city: 'Newark',        country: 'USA', lat: 40.6895, lon: -74.1745, region: 'americas', sources: ['faa'] },
+  { iata: 'CLT', icao: 'KCLT', name: 'Charlotte Douglas International',       city: 'Charlotte',     country: 'USA', lat: 35.2140, lon: -80.9431, region: 'americas', sources: ['faa'] },
+  { iata: 'PHX', icao: 'KPHX', name: 'Phoenix Sky Harbor International',      city: 'Phoenix',       country: 'USA', lat: 33.4373, lon: -112.0078, region: 'americas', sources: ['faa'] },
+  { iata: 'IAH', icao: 'KIAH', name: 'George Bush Intercontinental',          city: 'Houston',       country: 'USA', lat: 29.9902, lon: -95.3368, region: 'americas', sources: ['faa'] },
+  { iata: 'MIA', icao: 'KMIA', name: 'Miami International',                   city: 'Miami',         country: 'USA', lat: 25.7959, lon: -80.2870, region: 'americas', sources: ['faa'] },
+  { iata: 'BOS', icao: 'KBOS', name: 'Logan International',                   city: 'Boston',        country: 'USA', lat: 42.3656, lon: -71.0096, region: 'americas', sources: ['faa'] },
+  { iata: 'MSP', icao: 'KMSP', name: 'Minneapolis–Saint Paul International',  city: 'Minneapolis',   country: 'USA', lat: 44.8848, lon: -93.2223, region: 'americas', sources: ['faa'] },
+  { iata: 'DTW', icao: 'KDTW', name: 'Detroit Metropolitan',                  city: 'Detroit',       country: 'USA', lat: 42.2162, lon: -83.3554, region: 'americas', sources: ['faa'] },
+  { iata: 'FLL', icao: 'KFLL', name: 'Fort Lauderdale–Hollywood',             city: 'Fort Lauderdale', country: 'USA', lat: 26.0742, lon: -80.1506, region: 'americas', sources: ['faa'] },
+  { iata: 'PHL', icao: 'KPHL', name: 'Philadelphia International',            city: 'Philadelphia',  country: 'USA', lat: 39.8744, lon: -75.2424, region: 'americas', sources: ['faa'] },
+  { iata: 'LGA', icao: 'KLGA', name: 'LaGuardia',                             city: 'New York',      country: 'USA', lat: 40.7769, lon: -73.8740, region: 'americas', sources: ['faa'] },
+  { iata: 'BWI', icao: 'KBWI', name: 'Baltimore/Washington International',    city: 'Baltimore',     country: 'USA', lat: 39.1774, lon: -76.6684, region: 'americas', sources: ['faa'] },
+  { iata: 'SLC', icao: 'KSLC', name: 'Salt Lake City International',          city: 'Salt Lake City', country: 'USA', lat: 40.7899, lon: -111.9791, region: 'americas', sources: ['faa'] },
+  { iata: 'SAN', icao: 'KSAN', name: 'San Diego International',               city: 'San Diego',     country: 'USA', lat: 32.7338, lon: -117.1933, region: 'americas', sources: ['faa'] },
+  { iata: 'IAD', icao: 'KIAD', name: 'Washington Dulles International',       city: 'Washington',    country: 'USA', lat: 38.9531, lon: -77.4565, region: 'americas', sources: ['faa'] },
+  { iata: 'DCA', icao: 'KDCA', name: 'Ronald Reagan Washington National',     city: 'Washington',    country: 'USA', lat: 38.8512, lon: -77.0402, region: 'americas', sources: ['faa'] },
+  { iata: 'MDW', icao: 'KMDW', name: 'Chicago Midway International',          city: 'Chicago',       country: 'USA', lat: 41.7868, lon: -87.7522, region: 'americas', sources: ['faa'] },
+  { iata: 'TPA', icao: 'KTPA', name: 'Tampa International',                   city: 'Tampa',         country: 'USA', lat: 27.9755, lon: -82.5332, region: 'americas', sources: ['faa'] },
+  { iata: 'HNL', icao: 'PHNL', name: 'Daniel K. Inouye International',        city: 'Honolulu',      country: 'USA', lat: 21.3187, lon: -157.9225, region: 'americas', sources: ['faa'] },
+  { iata: 'PDX', icao: 'KPDX', name: 'Portland International',                city: 'Portland',      country: 'USA', lat: 45.5898, lon: -122.5951, region: 'americas', sources: ['faa'] },
 
   // ── Europe — AviationStack + NOTAM ──
   { iata: 'LHR', icao: 'EGLL', name: 'London Heathrow',               city: 'London',     country: 'UK',      lat: 51.4700, lon: -0.4543, region: 'europe', sources: ['aviationstack', 'notam'] },
@@ -261,8 +262,7 @@ const NOTAM_LIST         = AIRPORTS.filter(a => a.sources.includes('notam')).map
 const AVIATIONSTACK_IATAS = new Set(AVIATIONSTACK_LIST.map(a => a.iata));
 const FAA_IATAS = new Set(FAA_LIST);
 
-// iata → aviationstack-enriched meta (for building AirportDelayAlert envelopes
-// with coordinates — aviationstack rows are the only ones with lat/lon).
+// iata → aviationstack-enriched meta (for building AirportDelayAlert envelopes).
 const AIRPORT_META = Object.fromEntries(AVIATIONSTACK_LIST.map(a => [a.iata, a]));
 
 // iata → FAA-row meta (icao/name/city/country for alert envelopes). NOTAM-
@@ -664,16 +664,7 @@ function parseFaaXml(text) {
   return delays;
 }
 
-async function seedFaaDelays() {
-  const t0 = Date.now();
-  const resp = await fetch(FAA_URL, {
-    headers: { Accept: 'application/xml', 'User-Agent': CHROME_UA },
-    signal: AbortSignal.timeout(15_000),
-  });
-  if (!resp.ok) throw new Error(`FAA HTTP ${resp.status}`);
-  const xml = await resp.text();
-  const faaDelays = parseFaaXml(xml);
-
+export function buildFaaAlerts(faaDelays) {
   const alerts = [];
   for (const iata of FAA_LIST) {
     const d = faaDelays.get(iata);
@@ -686,7 +677,7 @@ async function seedFaaDelays() {
       name: meta?.name ?? iata,
       city: meta?.city ?? '',
       country: meta?.country ?? 'USA',
-      location: { latitude: 0, longitude: 0 }, // FAA rows have no lat/lon in the registry
+      location: { latitude: meta.lat, longitude: meta.lon },
       region: 'AIRPORT_REGION_AMERICAS',
       delayType: `FLIGHT_DELAY_TYPE_${d.type.toUpperCase()}`,
       severity: `FLIGHT_DELAY_SEVERITY_${faaSeverityFromAvg(d.avgDelay).toUpperCase()}`,
@@ -699,6 +690,18 @@ async function seedFaaDelays() {
       updatedAt: Date.now(),
     });
   }
+  return alerts;
+}
+
+async function seedFaaDelays() {
+  const t0 = Date.now();
+  const resp = await fetch(FAA_URL, {
+    headers: { Accept: 'application/xml', 'User-Agent': CHROME_UA },
+    signal: AbortSignal.timeout(15_000),
+  });
+  if (!resp.ok) throw new Error(`FAA HTTP ${resp.status}`);
+  const xml = await resp.text();
+  const alerts = buildFaaAlerts(parseFaaXml(xml));
   console.log(`[FAA] ${alerts.length} alerts in ${((Date.now() - t0) / 1000).toFixed(1)}s`);
   return { alerts };
 }
@@ -812,29 +815,32 @@ const AVIATION_RSS_FEEDS = [
   { url: 'https://www.aviationweek.com/rss',      name: 'Aviation Week' },
 ];
 
+const xmlParser = new XMLParser({ ignoreAttributes: true });
+
 function parseRssItems(xml, sourceName) {
   try {
-    const items = [];
-    const itemRegex = /<item[\s>]([\s\S]*?)<\/item>/gi;
-    let match;
-    while ((match = itemRegex.exec(xml)) !== null) {
-      const block = match[1];
-      const title = block.match(/<title[^>]*>([\s\S]*?)<\/title>/i)?.[1]?.replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, '$1').trim() || '';
-      const link = block.match(/<link[^>]*>([\s\S]*?)<\/link>/i)?.[1]?.replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, '$1').trim() || '';
-      const pubDate = block.match(/<pubDate[^>]*>([\s\S]*?)<\/pubDate>/i)?.[1]?.trim() || '';
-      const desc = block.match(/<description[^>]*>([\s\S]*?)<\/description>/i)?.[1]?.replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, '$1').trim() || '';
-      if (title && link) items.push({ title, link, pubDate, description: desc, _source: sourceName });
-    }
-    return items.slice(0, 30);
+      const parsed = xmlParser.parse(xml);
+      const channel = parsed?.rss?.channel ?? parsed?.feed ?? {};
+      const rawItems = Array.isArray(channel.item) ? channel.item
+          : channel.item ? [channel.item]
+              : Array.isArray(channel.entry) ? channel.entry
+                  : channel.entry ? [channel.entry] : [];
+
+      // Bound matching text and serialized records: 270 x 3KiB stays below the local cache limit.
+      return rawItems.slice(0, 30).map((item) => ({
+          title: String(item?.title ?? '').trim().slice(0, 512),
+          link: typeof (item?.link ?? item?.guid) === 'string' ? (item.link ?? item.guid).trim() : '',
+          pubDate: String(item?.pubDate ?? item?.published ?? item?.updated ?? '').trim().slice(0, 128),
+          description: String(item?.description ?? item?.summary ?? item?.content ?? '').trim().slice(0, 2048),
+          _source: sourceName,
+      })).filter(item => item.link.length > 0 && item.link.length <= 2048 && new TextEncoder().encode(JSON.stringify(item)).byteLength <= 3072);
   } catch {
-    return [];
+      return [];
   }
 }
 
-async function seedAviationNews() {
+export async function seedAviationNews() {
   const t0 = Date.now();
-  const now = Date.now();
-  const cutoff = now - 24 * 60 * 60 * 1000;
   const allItems = [];
   await Promise.allSettled(
     AVIATION_RSS_FEEDS.map(async (feed) => {
@@ -850,19 +856,8 @@ async function seedAviationNews() {
     }),
   );
 
-  const items = allItems.map((item) => {
-    let publishedAt = 0;
-    if (item.pubDate) try { publishedAt = new Date(item.pubDate).getTime(); } catch { /* skip */ }
-    if (publishedAt && publishedAt < cutoff) return null;
-    const snippet = (item.description || '').replace(/<[^>]+>/g, '').slice(0, 200);
-    return {
-      id: Buffer.from(item.link).toString('base64').slice(0, 32),
-      title: item.title, url: item.link, sourceName: item._source,
-      publishedAt: publishedAt || now, snippet, matchedEntities: [], imageUrl: '',
-    };
-  }).filter(Boolean).sort((a, b) => b.publishedAt - a.publishedAt);
-  console.log(`[News] ${items.length} articles from ${AVIATION_RSS_FEEDS.length} feeds in ${((Date.now() - t0) / 1000).toFixed(1)}s`);
-  return { items };
+  console.log(`[News] ${allItems.length} articles from ${AVIATION_RSS_FEEDS.length} feeds in ${((Date.now() - t0) / 1000).toFixed(1)}s`);
+  return { items: allItems };
 }
 
 // ─── Section 5: Notification dispatch ────────────────────────────────────────
@@ -1450,7 +1445,7 @@ export async function reserveAviationStackBudget(count) {
   }
 }
 
-async function fetchIntl() {
+export async function fetchIntl() {
   const result = await seedIntlDelays();
   if (!result.healthy || result.skipped) {
     const why = result.skipped
@@ -1467,6 +1462,24 @@ async function fetchIntl() {
     const err = new Error(`intl unpublishable: ${why}`);
     err.nonRetryable = true;
     throw err;
+  }
+
+  // A globally healthy sweep can miss required China hubs. Retry only those
+  // hubs once before the publish starts the 55-minute gate, never the full
+  // paid sweep. Reserve the extra calls against the same monthly ceiling.
+  const unavailableHubs = CHINA_AVIATIONSTACK_HUBS.filter((hub) => result.coverage.some(
+    (row) => row.iata === hub.iata && ['failed', 'omitted'].includes(row.status),
+  ));
+  if (unavailableHubs.length > 0 && await reserveAviationStackBudget(unavailableHubs.length)) {
+    const retry = await seedIntlDelays({ airports: unavailableHubs });
+    const recovered = new Map(retry.coverage
+      .filter((row) => row.status === 'normal' || row.status === 'disruption')
+      .map((row) => [row.iata, row]));
+    // Keep the original observations and alerts for every other airport. A
+    // failed retry must not manufacture coverage or refresh old timestamps.
+    result.coverage = result.coverage.map((row) => recovered.get(row.iata) ?? row);
+    result.alerts.push(...retry.alerts);
+    console.log(`[Intl] China hub retry: ${recovered.size}/${unavailableHubs.length} recovered`);
   }
   return result;
 }

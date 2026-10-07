@@ -76,6 +76,8 @@ export interface PizzintLocation {
   isClosedNow: boolean;
   lat: number;
   lng: number;
+  noLiveSignal: boolean;
+  hasBaseline: boolean;
 }
 
 export interface GdeltTensionPair {
@@ -135,6 +137,7 @@ export interface GetCountryIntelBriefResponse {
   model: string;
   generatedAt: number;
   sources: BriefSource[];
+  evidence: BriefEvidence[];
 }
 
 export interface BriefSource {
@@ -142,6 +145,61 @@ export interface BriefSource {
   source: string;
   url: string;
   publishedAt: string;
+}
+
+export interface BriefEvidence {
+  id: string;
+  kind: string;
+  label: string;
+  value: string;
+  factText: string;
+  asOf: string;
+  url: string;
+}
+
+export interface GetCountryCoverageRequest {
+  countryCode: string;
+  windowHours: number;
+  limit: number;
+}
+
+export interface GetCountryCoverageResponse {
+  countryCode: string;
+  countryName: string;
+  windowHours: number;
+  generatedAt: string;
+  headlines: CountryCoverageHeadline[];
+  events: CountryCoverageEvent[];
+  sources: CountryCoverageSourceStatus[];
+  degraded: boolean;
+  containment: string;
+}
+
+export interface CountryCoverageHeadline {
+  title: string;
+  url: string;
+  source: string;
+  publishedAt: string;
+  publishedAtMs: number;
+}
+
+export interface CountryCoverageEvent {
+  timestampMs: number;
+  occurredAt: string;
+  lane: string;
+  label: string;
+  severity: string;
+  origin: string;
+  source: string;
+}
+
+export interface CountryCoverageSourceStatus {
+  source: string;
+  state: string;
+  detail: string;
+  fetchedAt: string;
+  ageSeconds: number;
+  contributed: number;
 }
 
 export interface SearchGdeltDocumentsRequest {
@@ -600,6 +658,21 @@ export interface TransmissionNode {
   logic: string;
 }
 
+export interface ListWsbTickersRequest {
+}
+
+export interface ListWsbTickersResponse {
+  tickers: WsbTicker[];
+}
+
+export interface WsbTicker {
+  symbol: string;
+  mentionCount: number;
+  totalScore: number;
+  subreddits: string[];
+  velocityScore: number;
+}
+
 export interface GetSocialVelocityRequest {
 }
 
@@ -686,6 +759,9 @@ export interface GetCountryEnergyProfileResponse {
   sprAvailable: boolean;
   jodiOilObservedMeasurements: string[];
   jodiGasObservedMeasurements: string[];
+  importShareAvailable: boolean;
+  importShareYear: number;
+  importShareSource: string;
 }
 
 export interface ComputeEnergyShockScenarioRequest {
@@ -714,7 +790,9 @@ export interface ComputeEnergyShockScenarioResponse {
   degraded: boolean;
   chokepointConfidence: string;
   liveFlowRatio?: number;
+  /** @deprecated */
   gasImpact?: GasImpact;
+  gasSensitivity?: GasSensitivity;
 }
 
 export interface ProductImpact {
@@ -740,6 +818,28 @@ export interface GasStorageBuffer {
   fillPct: number;
   gasTwh: number;
   bufferDays: number;
+  trend: string;
+  date: string;
+  scope: string;
+}
+
+export interface GasSensitivity {
+  lngShareOfImports?: number;
+  lngImportsTj: number;
+  lngDisruptionTj: number;
+  totalDemandTj: number;
+  deficitPct: number;
+  dataAvailable: boolean;
+  assessment: string;
+  storage?: GasStorageObservation;
+  dataSource: string;
+  dataMonth: string;
+  modelBasis: string;
+}
+
+export interface GasStorageObservation {
+  fillPct: number;
+  gasTwh: number;
   trend: string;
   date: string;
   scope: string;
@@ -1069,7 +1169,7 @@ export type TrendDirection = "TREND_DIRECTION_UNSPECIFIED" | "TREND_DIRECTION_RI
 
 export type CrossSourceSignalSeverity = "CROSS_SOURCE_SIGNAL_SEVERITY_UNSPECIFIED" | "CROSS_SOURCE_SIGNAL_SEVERITY_LOW" | "CROSS_SOURCE_SIGNAL_SEVERITY_MEDIUM" | "CROSS_SOURCE_SIGNAL_SEVERITY_HIGH" | "CROSS_SOURCE_SIGNAL_SEVERITY_CRITICAL";
 
-export type CrossSourceSignalType = "CROSS_SOURCE_SIGNAL_TYPE_UNSPECIFIED" | "CROSS_SOURCE_SIGNAL_TYPE_COMPOSITE_ESCALATION" | "CROSS_SOURCE_SIGNAL_TYPE_THERMAL_SPIKE" | "CROSS_SOURCE_SIGNAL_TYPE_GPS_JAMMING" | "CROSS_SOURCE_SIGNAL_TYPE_MILITARY_FLIGHT_SURGE" | "CROSS_SOURCE_SIGNAL_TYPE_UNREST_SURGE" | "CROSS_SOURCE_SIGNAL_TYPE_OREF_ALERT_CLUSTER" | "CROSS_SOURCE_SIGNAL_TYPE_VIX_SPIKE" | "CROSS_SOURCE_SIGNAL_TYPE_COMMODITY_SHOCK" | "CROSS_SOURCE_SIGNAL_TYPE_CYBER_ESCALATION" | "CROSS_SOURCE_SIGNAL_TYPE_SHIPPING_DISRUPTION" | "CROSS_SOURCE_SIGNAL_TYPE_SANCTIONS_SURGE" | "CROSS_SOURCE_SIGNAL_TYPE_EARTHQUAKE_SIGNIFICANT" | "CROSS_SOURCE_SIGNAL_TYPE_RADIATION_ANOMALY" | "CROSS_SOURCE_SIGNAL_TYPE_INFRASTRUCTURE_OUTAGE" | "CROSS_SOURCE_SIGNAL_TYPE_WILDFIRE_ESCALATION" | "CROSS_SOURCE_SIGNAL_TYPE_DISPLACEMENT_SURGE" | "CROSS_SOURCE_SIGNAL_TYPE_FORECAST_DETERIORATION" | "CROSS_SOURCE_SIGNAL_TYPE_MARKET_STRESS" | "CROSS_SOURCE_SIGNAL_TYPE_WEATHER_EXTREME" | "CROSS_SOURCE_SIGNAL_TYPE_MEDIA_TONE_DETERIORATION" | "CROSS_SOURCE_SIGNAL_TYPE_RISK_SCORE_SPIKE";
+export type CrossSourceSignalType = "CROSS_SOURCE_SIGNAL_TYPE_UNSPECIFIED" | "CROSS_SOURCE_SIGNAL_TYPE_COMPOSITE_ESCALATION" | "CROSS_SOURCE_SIGNAL_TYPE_THERMAL_SPIKE" | "CROSS_SOURCE_SIGNAL_TYPE_GPS_JAMMING" | "CROSS_SOURCE_SIGNAL_TYPE_MILITARY_FLIGHT_SURGE" | "CROSS_SOURCE_SIGNAL_TYPE_UNREST_SURGE" | "CROSS_SOURCE_SIGNAL_TYPE_OREF_ALERT_CLUSTER" | "CROSS_SOURCE_SIGNAL_TYPE_VIX_SPIKE" | "CROSS_SOURCE_SIGNAL_TYPE_COMMODITY_SHOCK" | "CROSS_SOURCE_SIGNAL_TYPE_CYBER_ESCALATION" | "CROSS_SOURCE_SIGNAL_TYPE_SHIPPING_DISRUPTION" | "CROSS_SOURCE_SIGNAL_TYPE_SANCTIONS_SURGE" | "CROSS_SOURCE_SIGNAL_TYPE_EARTHQUAKE_SIGNIFICANT" | "CROSS_SOURCE_SIGNAL_TYPE_RADIATION_ANOMALY" | "CROSS_SOURCE_SIGNAL_TYPE_INFRASTRUCTURE_OUTAGE" | "CROSS_SOURCE_SIGNAL_TYPE_WILDFIRE_ESCALATION" | "CROSS_SOURCE_SIGNAL_TYPE_DISPLACEMENT_SURGE" | "CROSS_SOURCE_SIGNAL_TYPE_FORECAST_DETERIORATION" | "CROSS_SOURCE_SIGNAL_TYPE_MARKET_STRESS" | "CROSS_SOURCE_SIGNAL_TYPE_WEATHER_EXTREME" | "CROSS_SOURCE_SIGNAL_TYPE_MEDIA_TONE_DETERIORATION" | "CROSS_SOURCE_SIGNAL_TYPE_RISK_SCORE_SPIKE" | "CROSS_SOURCE_SIGNAL_TYPE_PHYSICAL_PREMIUM_REGIME_TRANSITION" | "CROSS_SOURCE_SIGNAL_TYPE_REGULATORY_ACTION";
 
 export type DataFreshness = "DATA_FRESHNESS_UNSPECIFIED" | "DATA_FRESHNESS_FRESH" | "DATA_FRESHNESS_STALE";
 
@@ -1252,6 +1352,33 @@ export class IntelligenceServiceClient {
     }
 
     return await resp.json() as GetCountryIntelBriefResponse;
+  }
+
+  async getCountryCoverage(req: GetCountryCoverageRequest, options?: IntelligenceServiceCallOptions): Promise<GetCountryCoverageResponse> {
+    let path = "/api/intelligence/v1/get-country-coverage";
+    const params = new URLSearchParams();
+    if (req.countryCode != null && req.countryCode !== "") params.set("country_code", String(req.countryCode));
+    if (req.windowHours != null && req.windowHours !== 0) params.set("window_hours", String(req.windowHours));
+    if (req.limit != null && req.limit !== 0) params.set("limit", String(req.limit));
+    const url = this.baseURL + path + (params.toString() ? "?" + params.toString() : "");
+
+    const headers: Record<string, string> = {
+      "Content-Type": "application/json",
+      ...this.defaultHeaders,
+      ...options?.headers,
+    };
+
+    const resp = await this.fetchFn(url, {
+      method: "GET",
+      headers,
+      signal: options?.signal,
+    });
+
+    if (!resp.ok) {
+      return this.handleError(resp);
+    }
+
+    return await resp.json() as GetCountryCoverageResponse;
   }
 
   async searchGdeltDocuments(req: SearchGdeltDocumentsRequest, options?: IntelligenceServiceCallOptions): Promise<SearchGdeltDocumentsResponse> {
@@ -1664,6 +1791,29 @@ export class IntelligenceServiceClient {
     }
 
     return await resp.json() as ListMarketImplicationsResponse;
+  }
+
+  async listWsbTickers(_req: ListWsbTickersRequest, options?: IntelligenceServiceCallOptions): Promise<ListWsbTickersResponse> {
+    let path = "/api/intelligence/v1/list-wsb-tickers";
+    const url = this.baseURL + path;
+
+    const headers: Record<string, string> = {
+      "Content-Type": "application/json",
+      ...this.defaultHeaders,
+      ...options?.headers,
+    };
+
+    const resp = await this.fetchFn(url, {
+      method: "GET",
+      headers,
+      signal: options?.signal,
+    });
+
+    if (!resp.ok) {
+      return this.handleError(resp);
+    }
+
+    return await resp.json() as ListWsbTickersResponse;
   }
 
   async getSocialVelocity(_req: GetSocialVelocityRequest, options?: IntelligenceServiceCallOptions): Promise<GetSocialVelocityResponse> {

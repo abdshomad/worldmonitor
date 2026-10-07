@@ -19,6 +19,13 @@ import {
   deriveDeadline,
   buildResolutionSpec,
   attachResolutionSpecs,
+  evaluateExtractionShadow,
+  extractionShadowFeedKeys,
+  summarizeExtractionShadow,
+  HORIZON_SAMPLE_TOLERANCE_MS,
+  PROJECTION_HORIZONS,
+  buildHorizonResolutionSpecs,
+  horizonSampleToleranceMs,
 } from '../scripts/_forecast-resolution.mjs';
 
 // Emission-time commodities feed shape (inputs.commodityQuotes) — mirrors the
@@ -582,6 +589,60 @@ describe('deadline is always present', () => {
   });
 });
 
+describe('state-derived hard specs (#5234)', () => {
+  const CHOKEPOINT_INPUTS = {
+    chokepoints: {
+      chokepoints: [
+        { name: 'Kerch Strait', region: 'Kerch Strait', riskScore: 70 },
+        { name: 'Bosporus Strait', region: 'Bosporus Strait', riskScore: 30 },
+        { name: 'Suez Canal', region: 'Suez Canal', riskScore: 35 },
+      ],
+    },
+  };
+  const stateDerived = (domain, bucketId, region, timeHorizon) => pred({
+    domain,
+    region,
+    timeHorizon,
+    generationOrigin: 'state_derived',
+    title: `${bucketId} from ${region} maritime disruption state`,
+    signals: [{ type: 'market_transmission', value: 'x', weight: 0.24 }],
+    stateDerivation: { bucketId },
+  });
+
+  for (const domain of ['market', 'supply_chain']) {
+    it(`an energy bucket (${domain}) resolves on a 10% WTI move from the emission price`, () => {
+      const spec = buildResolutionSpec(stateDerived(domain, 'energy', 'Black Sea', domain === 'market' ? '30d' : '7d'), COMMODITY_INPUTS, GENERATED_AT);
+      assert.equal(spec.kind, 'hard');
+      assert.equal(spec.metricKey, 'market:commodities-bootstrap:v1|price(symbol==CL=F)');
+      assert.equal(spec.operator, 'crosses');
+      assert.equal(spec.baselineValue, 68.92);
+      assert.equal(spec.threshold, +(68.92 * 1.1).toFixed(2));
+      assert.equal(spec.window, 'within-horizon');
+    });
+  }
+
+  it('a freight bucket resolves on the most disrupted chokepoint of its sea at emission', () => {
+    const spec = buildResolutionSpec(stateDerived('supply_chain', 'freight', 'Black Sea', '7d'), CHOKEPOINT_INPUTS, GENERATED_AT);
+    assert.equal(spec.kind, 'hard');
+    assert.equal(spec.metricKey, 'supply_chain:chokepoints:v4|riskScore(route==Kerch Strait)');
+    assert.equal(spec.operator, '>=');
+    assert.equal(spec.threshold, 60);
+    assert.equal(spec.window, 'at-deadline');
+  });
+
+  it('stays judged when the emission inputs cannot anchor the check', () => {
+    assert.equal(buildResolutionSpec(stateDerived('market', 'energy', 'Black Sea', '30d'), {}, GENERATED_AT).kind, 'judged');
+    assert.equal(buildResolutionSpec(stateDerived('supply_chain', 'freight', 'Western Pacific', '7d'), CHOKEPOINT_INPUTS, GENERATED_AT).kind, 'judged');
+  });
+
+  for (const bucketId of ['sovereign_risk', 'rates_inflation', 'fx_stress']) {
+    it(`${bucketId} stays judged: no regional hard feed exists`, () => {
+      const spec = buildResolutionSpec(stateDerived('market', bucketId, 'Middle East', '30d'), { ...COMMODITY_INPUTS, ...CHOKEPOINT_INPUTS }, GENERATED_AT);
+      assert.equal(spec.kind, 'judged');
+    });
+  }
+});
+
 describe('R4 — sourceFeed membership over every hard fixture', () => {
   const fixtures = [
     pred({ id: 'conflict', domain: 'conflict', signals: [{ type: 'ucdp', value: '14 UCDP conflict events', weight: 0.5 }] }),
@@ -977,5 +1038,248 @@ describe('FIX 8 — signal-vocab drift guard', () => {
         `SIGNAL_TO_HARD_FAMILY key '${key}' is not emitted as a type: literal in seed-forecasts.mjs (stale mapping?)`,
       );
     }
+  });
+});
+
+describe('extraction gate shadow (#7067)', () => {
+  const GPS_FEED = 'intelligence:gpsjam:v2';
+  const COMMODITY_FEED = 'market:commodities-bootstrap:v1';
+
+  function gpsForecast(region) {
+    return pred({
+      id: `fc-gps-${region}`,
+      domain: 'supply_chain',
+      region,
+      timeHorizon: '7d',
+      signals: [{ type: 'gps_jamming', value: `12 jamming hexes in ${region}`, weight: 0.5 }],
+    });
+  }
+
+  function oilForecast() {
+    return pred({
+      id: 'fc-oil',
+      domain: 'market',
+      region: 'Middle East',
+      title: 'Oil price impact from Strait of Hormuz disruption',
+      signals: [
+        { type: 'chokepoint', value: 'Strait of Hormuz risk: critical', weight: 0.5 },
+        { type: 'commodity', value: 'Oil sensitivity: 0.8', weight: 0.3 },
+      ],
+    });
+  }
+
+  function attached(forecasts) {
+    return attachResolutionSpecs(forecasts, COMMODITY_INPUTS, GENERATED_AT);
+  }
+
+  const RAW_FEEDS = {
+    [GPS_FEED]: { hexes: [{ region: 'Persian Gulf', hexCount: 14 }] },
+    [COMMODITY_FEED]: { _seed: { fetchedAt: GENERATED_AT }, data: { quotes: [{ symbol: 'CL=F', price: 70.1 }] } },
+  };
+
+  it('reads each hard spec sourceFeed once and skips judged specs', () => {
+    const forecasts = attached([gpsForecast('Persian Gulf'), gpsForecast('Baltic Sea'), oilForecast(), pred({ domain: 'military' })]);
+    assert.deepEqual(extractionShadowFeedKeys(forecasts).sort(), [GPS_FEED, COMMODITY_FEED].sort());
+  });
+
+  it('positive control: a matched metric extracts finite and passes', () => {
+    const forecasts = attached([gpsForecast('Persian Gulf'), oilForecast()]);
+    const verdicts = evaluateExtractionShadow(forecasts, RAW_FEEDS);
+    assert.deepEqual(verdicts.map((v) => [v.id, v.outcome, v.family, v.domain, v.value]), [
+      ['fc-gps-Persian Gulf', 'pass', 'gps', 'supply_chain', 14],
+      ['fc-oil', 'pass', 'market', 'market', 70.1],
+    ]);
+    for (const forecast of forecasts) assert.equal(forecast.resolution.kind, 'hard');
+  });
+
+  it('negative control: an absent geography extracts non-finite and is marked would-downgrade', () => {
+    const [forecast] = attached([gpsForecast('Baltic Sea')]);
+    const [verdict] = evaluateExtractionShadow([forecast], RAW_FEEDS);
+    assert.deepEqual(verdict, {
+      id: 'fc-gps-Baltic Sea',
+      outcome: 'fail',
+      family: 'gps',
+      domain: 'supply_chain',
+      metricKey: `${GPS_FEED}|hexCount(region==Baltic Sea)`,
+      reason: 'metric_not_found',
+      value: null,
+    });
+  });
+
+  for (const [label, sourceFeed, metricKey] of [
+    ['FRED', 'economic:fred:v1:UNRATE:0', 'economic:fred:v1:UNRATE:0|value(metric==UNRATE)'],
+    ['market settlement', 'prediction:markets-resolution:v1', 'prediction:markets-resolution:v1|yesPrice(slug==fixture-market)'],
+  ]) {
+    it(`an absent ${label} key is feed_unavailable, though shaping turns it into []`, () => {
+      const forecast = { id: `fc-absent-${label}`, domain: 'market', signals: [], resolution: { kind: 'hard', sourceFeed, metricKey } };
+      const [verdict] = evaluateExtractionShadow([forecast], { [sourceFeed]: null });
+      assert.deepEqual([verdict.outcome, verdict.reason], ['feed_unavailable', 'feed_empty']);
+    });
+  }
+
+  it('a failed feed read is feed_unavailable, not an extraction failure', () => {
+    const forecasts = attached([gpsForecast('Persian Gulf'), oilForecast()]);
+    const verdicts = evaluateExtractionShadow(forecasts, { [GPS_FEED]: null });
+    assert.deepEqual(verdicts.map((v) => [v.outcome, v.reason]), [
+      ['feed_unavailable', 'feed_empty'],
+      ['feed_unavailable', 'feed_read_failed'],
+    ]);
+  });
+
+  it('count specs are skipped: the resolver tallies events instead of extracting a record', () => {
+    const [forecast] = attached([pred({ domain: 'cyber', region: 'Estonia', timeHorizon: '7d', signals: [{ type: 'cyber', value: '10 threats (malware)', weight: 0.5 }] })]);
+    const [verdict] = evaluateExtractionShadow([forecast], { [CYBER_COUNT_SOURCE_FEED]: { threats: [] } });
+    assert.equal(verdict.outcome, 'skipped');
+    assert.equal(verdict.reason, 'count_resolved_by_tally');
+  });
+
+  it('shadow mode never changes the attached spec', () => {
+    const forecasts = attached([gpsForecast('Persian Gulf'), gpsForecast('Baltic Sea'), oilForecast()]);
+    const specs = forecasts.map((forecast) => forecast.resolution);
+    const before = JSON.stringify(forecasts);
+    const verdicts = evaluateExtractionShadow(forecasts, RAW_FEEDS);
+    assert.ok(verdicts.some((v) => v.outcome === 'fail'), 'fixture must include a would-downgrade verdict');
+    assert.equal(JSON.stringify(forecasts), before);
+    forecasts.forEach((forecast, index) => assert.equal(forecast.resolution, specs[index]));
+  });
+
+  it('the pure gate reads no network or clock and mutates nothing', () => {
+    const deepFreeze = (value) => {
+      if (value && typeof value === 'object' && !Object.isFrozen(value)) {
+        Object.freeze(value);
+        Object.values(value).forEach(deepFreeze);
+      }
+      return value;
+    };
+    const forecasts = deepFreeze(attached([gpsForecast('Persian Gulf'), gpsForecast('Baltic Sea'), oilForecast()]));
+    const feeds = deepFreeze(structuredClone(RAW_FEEDS));
+    const originalFetch = globalThis.fetch;
+    const originalNow = Date.now;
+    globalThis.fetch = () => { throw new Error('network read in pure gate'); };
+    Date.now = () => { throw new Error('clock read in pure gate'); };
+    try {
+      const first = evaluateExtractionShadow(forecasts, feeds);
+      const second = evaluateExtractionShadow(forecasts, feeds);
+      assert.deepEqual(first, second);
+      summarizeExtractionShadow(first);
+    } finally {
+      globalThis.fetch = originalFetch;
+      Date.now = originalNow;
+    }
+  });
+
+  it('summarizes verdicts into per-outcome, per-family, and per-domain counters', () => {
+    const forecasts = attached([gpsForecast('Persian Gulf'), gpsForecast('Baltic Sea'), oilForecast()]);
+    const summary = summarizeExtractionShadow(evaluateExtractionShadow(forecasts, RAW_FEEDS));
+    assert.deepEqual(summary, {
+      total: 3,
+      byOutcome: { pass: 2, fail: 1 },
+      byFamily: { gps: { pass: 1, fail: 1 }, market: { pass: 1 } },
+      byDomain: { supply_chain: { pass: 1, fail: 1 }, market: { pass: 1 } },
+    });
+  });
+});
+
+describe('projection horizon contracts (#7075)', () => {
+  const pointInTime = (timeHorizon = '14d') => pred({
+    id: 'fc-hormuz',
+    domain: 'supply_chain',
+    region: 'Strait of Hormuz',
+    title: 'Hormuz disruption risk rises',
+    timeHorizon,
+    signals: [{ type: 'chokepoint', value: 'Strait of Hormuz disruption detected', weight: 0.5 }],
+  });
+  const reasons = (specs) => new Set(Object.values(specs).map((spec) => `${spec.kind}:${spec.reason}`));
+
+  it('PROJECTION_HORIZONS pairs every projection key with its HORIZON_MS horizon', () => {
+    assert.deepEqual(PROJECTION_HORIZONS, { h24: '24h', d7: '7d', d30: '30d' });
+    for (const timeHorizon of Object.values(PROJECTION_HORIZONS)) assert.ok(Object.hasOwn(HORIZON_MS, timeHorizon));
+  });
+
+  it('a point-in-time hard forecast gets one complete contract per horizon, each at its own deadline', () => {
+    const parent = buildResolutionSpec(pointInTime(), {}, GENERATED_AT);
+    assert.equal(parent.window, 'at-deadline');
+    const specs = buildHorizonResolutionSpecs(pointInTime(), {}, GENERATED_AT);
+    assert.deepEqual(Object.keys(specs), ['h24', 'd7', 'd30']);
+    for (const [horizon, timeHorizon] of Object.entries(PROJECTION_HORIZONS)) {
+      assert.deepEqual(specs[horizon], {
+        horizon,
+        timeHorizon,
+        kind: 'hard',
+        semantics: 'point_in_time',
+        metricKey: parent.metricKey,
+        operator: parent.operator,
+        threshold: parent.threshold,
+        window: 'at-deadline',
+        sourceFeed: parent.sourceFeed,
+        deadline: GENERATED_AT + HORIZON_MS[timeHorizon],
+        sampleToleranceMs: horizonSampleToleranceMs(timeHorizon),
+      });
+    }
+    assert.notEqual(specs.h24.deadline, specs.d30.deadline);
+  });
+
+  it('caps the sample tolerance at one resolver cycle and at half the horizon', () => {
+    assert.equal(HORIZON_SAMPLE_TOLERANCE_MS, 24 * 60 * 60 * 1000);
+    assert.equal(horizonSampleToleranceMs('24h'), 12 * 60 * 60 * 1000);
+    assert.equal(horizonSampleToleranceMs('7d'), HORIZON_SAMPLE_TOLERANCE_MS);
+    assert.equal(horizonSampleToleranceMs('30d'), HORIZON_SAMPLE_TOLERANCE_MS);
+  });
+
+  it('an excluded origin is unscored as excluded_origin on every horizon', () => {
+    const specs = buildHorizonResolutionSpecs({ ...pointInTime(), generationOrigin: 'state_derived' }, {}, GENERATED_AT);
+    assert.deepEqual(reasons(specs), new Set(['unscored:excluded_origin']));
+  });
+
+  it('the horizon equal to the forecast\'s own horizon is unscored as parent_horizon', () => {
+    const specs = buildHorizonResolutionSpecs(pointInTime('7d'), {}, GENERATED_AT);
+    assert.deepEqual(specs.d7, { horizon: 'd7', timeHorizon: '7d', kind: 'unscored', reason: 'parent_horizon' });
+    assert.equal(specs.h24.kind, 'hard');
+    assert.equal(specs.d30.kind, 'hard');
+    assert.equal(buildHorizonResolutionSpecs(pointInTime('24h'), {}, GENERATED_AT).h24.reason, 'parent_horizon');
+  });
+
+  it('a cumulative (within-horizon) hard forecast is unscored on every horizon with a stated reason', () => {
+    const forecast = pred({
+      domain: 'market',
+      region: 'Middle East',
+      title: 'Oil price impact from Hormuz disruption',
+      timeHorizon: '14d',
+      signals: [{ type: 'commodity', value: 'Oil sensitivity: 0.9', weight: 0.3 }],
+    });
+    assert.equal(buildResolutionSpec(forecast, COMMODITY_INPUTS, GENERATED_AT).window, 'within-horizon');
+    const specs = buildHorizonResolutionSpecs(forecast, COMMODITY_INPUTS, GENERATED_AT);
+    assert.deepEqual(specs.h24, { horizon: 'h24', timeHorizon: '24h', kind: 'unscored', reason: 'cumulative_unsupported' });
+    assert.deepEqual(reasons(specs), new Set(['unscored:cumulative_unsupported']));
+  });
+
+  it('a settlement-deadline (at-endDate) forecast is unscored: its truth time is not horizon-bound', () => {
+    const forecast = pred({
+      domain: 'political',
+      region: 'Iran',
+      title: 'Will the U.S. invade Iran before 2027?',
+      timeHorizon: '14d',
+      signals: [{ type: 'prediction_market', value: 'Polymarket: 62%', weight: 0.8 }],
+    });
+    const inputs = { predictionMarkets: { geopolitical: [{ title: 'Will the U.S. invade Iran before 2027?', yesPrice: 62, endDate: '2026-12-31' }] } };
+    assert.deepEqual(reasons(buildHorizonResolutionSpecs(forecast, inputs, GENERATED_AT)), new Set(['unscored:settlement_deadline']));
+  });
+
+  it('a judged forecast is unscored with no_hard_contract', () => {
+    const specs = buildHorizonResolutionSpecs(pred({ domain: 'political', timeHorizon: '14d', signals: [] }), {}, GENERATED_AT);
+    assert.deepEqual(reasons(specs), new Set(['unscored:no_hard_contract']));
+  });
+
+  it('attachResolutionSpecs sets horizonResolutions beside resolution', () => {
+    const [forecast] = attachResolutionSpecs([pointInTime()], {}, GENERATED_AT);
+    assert.equal(forecast.resolution.kind, 'hard');
+    assert.deepEqual(forecast.horizonResolutions, buildHorizonResolutionSpecs(pointInTime(), {}, GENERATED_AT));
+  });
+
+  it('is deterministic for identical inputs', () => {
+    assert.deepEqual(
+      buildHorizonResolutionSpecs(pointInTime(), {}, GENERATED_AT),
+      buildHorizonResolutionSpecs(pointInTime(), {}, GENERATED_AT),
+    );
   });
 });

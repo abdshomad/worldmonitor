@@ -5,8 +5,10 @@ import {
   HMAC_SECRET,
   callBody,
   makeProDeps,
+  PRO_USER_ID,
   proReq,
 } from './helpers/mcp-pro-deps.mjs';
+import { documentedOutputSchema } from './helpers/mcp-output-schema.mjs';
 
 const originalFetch = globalThis.fetch;
 const originalEnv = { ...process.env };
@@ -40,6 +42,26 @@ const canonicalResponse = {
   supplierRetained: false,
   supplierMappingCoverage: 0.97,
 };
+
+const MILITARY_RPC_PATH = '/api/military/v1/get-defense-industrial-base';
+
+function findMilitaryRpcRequest(requests) {
+  const request = requests.find((entry) => {
+    try {
+      return new URL(entry.url).pathname === MILITARY_RPC_PATH;
+    } catch {
+      return false;
+    }
+  });
+  assert.ok(request, 'tool must fetch the canonical military RPC');
+  return request;
+}
+
+function assertSignedProHeaders(headers) {
+  assert.match(headers['X-WM-MCP-Internal'] ?? '', /^\d+\.[A-Za-z0-9_-]+$/);
+  assert.equal(headers['X-WM-MCP-User-Id'], PRO_USER_ID);
+  assert.match(headers['X-WM-MCP-Nonce'] ?? '', /^[A-Za-z0-9_-]+$/);
+}
 
 describe('get_defense_industrial_base MCP tool', () => {
   let mcpHandler;
@@ -76,14 +98,15 @@ describe('get_defense_industrial_base MCP tool', () => {
     const tool = (await listed.json()).result.tools.find((entry) => entry.name === 'get_defense_industrial_base');
     assert.ok(tool, 'tool must be discoverable through tools/list');
     assert.deepEqual(tool.inputSchema.required, ['country_code']);
-    assert.deepEqual(tool.outputSchema.properties.expenditurePctGdp.required, [
+    assert.deepEqual(documentedOutputSchema(tool).properties.expenditurePctGdp.required, [
       'available', 'value', 'year', 'previousValue', 'previousYear', 'source',
     ]);
-    assert.equal(tool.outputSchema.properties.expenditurePctGdp.properties.year.type, 'integer');
-    assert.equal(tool.outputSchema.properties.suppliers.items.properties.tivShare.maximum, 1);
-    assert.equal(tool.outputSchema.properties.supplierHhi.maximum, 1);
-    assert.equal(tool.outputSchema.properties.supplierMappingCoverage.maximum, 1);
+    assert.equal(documentedOutputSchema(tool).properties.expenditurePctGdp.properties.year.type, 'integer');
+    assert.equal(documentedOutputSchema(tool).properties.suppliers.items.properties.tivShare.maximum, 1);
+    assert.equal(documentedOutputSchema(tool).properties.supplierHhi.maximum, 1);
+    assert.equal(documentedOutputSchema(tool).properties.supplierMappingCoverage.maximum, 1);
 
+    requests = [];
     const { deps } = makeProDeps();
     const response = await mcpHandler(
       proReq('POST', callBody('get_defense_industrial_base', { country_code: 'ua' })),
@@ -92,15 +115,19 @@ describe('get_defense_industrial_base MCP tool', () => {
     const body = await response.json();
 
     assert.equal(response.status, 200);
-    const requestUrl = new URL(requests[0].url);
-    assert.equal(requestUrl.pathname, '/api/military/v1/get-defense-industrial-base');
+    const downstream = findMilitaryRpcRequest(requests);
+    const requestUrl = new URL(downstream.url);
+    assert.equal(requestUrl.pathname, MILITARY_RPC_PATH);
     assert.equal(requestUrl.searchParams.get('country_code'), 'UA');
-    assert.equal(requestUrl.searchParams.get('public'), '1');
-    assert.equal(requests[0].init.headers['X-WM-MCP-Internal'], undefined);
+    // #6438: the tool must NOT ask for the anonymous `public=1` CDN shape. That
+    // shape bypassed the gateway's tier check, so leaving it here would give
+    // the tool a route to Pro data that the gate no longer inspects.
+    assert.equal(requestUrl.searchParams.get('public'), null);
+    assertSignedProHeaders(downstream.init.headers);
     assert.deepEqual(JSON.parse(body.result.content[0].text), canonicalResponse);
   });
 
-  it('authenticates only a local loopback self-fetch with the sidecar token', async () => {
+  it('authenticates a local loopback self-fetch with the sidecar token and Pro HMAC', async () => {
     process.env.LOCAL_API_TOKEN = 'local-sidecar-token';
     const { deps } = makeProDeps();
     const response = await mcpHandler(new Request('http://127.0.0.1:43123/mcp', {
@@ -113,7 +140,9 @@ describe('get_defense_industrial_base MCP tool', () => {
     }), deps);
 
     assert.equal(response.status, 200);
-    assert.equal(new URL(requests[0].url).origin, 'http://127.0.0.1:43123');
-    assert.equal(requests[0].init.headers['X-WorldMonitor-Local-Token'], 'local-sidecar-token');
+    const downstream = findMilitaryRpcRequest(requests);
+    assert.equal(new URL(downstream.url).origin, 'http://127.0.0.1:43123');
+    assert.equal(downstream.init.headers['X-WorldMonitor-Local-Token'], 'local-sidecar-token');
+    assertSignedProHeaders(downstream.init.headers);
   });
 });

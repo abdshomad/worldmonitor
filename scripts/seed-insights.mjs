@@ -21,6 +21,7 @@ import {
   ENTITY_BIGRAMS,
 } from './_clustering.mjs';
 import { MIN_CORROBORATING_PUBLISHERS } from './shared/publisher-families.js';
+import { isAcceptableDigest } from './shared/digest-acceptance.mjs';
 import { extractCountryCode } from './shared/geo-extract.mjs';
 import { buildChinaNewsCoverage } from './_china-news-coverage.mjs';
 import { unwrapEnvelope } from './_seed-envelope-source.mjs';
@@ -51,8 +52,6 @@ export {
 };
 import { buildLlmCallEvent, emitLlmEvents, flushPendingLlmEvents } from './lib/llm-telemetry.cjs';
 import {
-  GROQ_DEFAULT_MODEL,
-  GROQ_REASONING_EXTRA_BODY,
   OPENROUTER_FREE_BACKUP_MODEL,
   OPENROUTER_FREE_PRIMARY_MODEL,
   OPENROUTER_PROVIDER_ROUTING,
@@ -64,7 +63,7 @@ import {
 // the seeder on startup. The local pattern is the `./shared/geo-extract.mjs`
 // line above. PR #3836 review caught this. See skill
 // railway-deploy-gotchas/reference/nixpacks-root-dir-scripts-cross-dir-import-escape.
-import { validateNoHallucinatedProperNouns } from './shared/brief-llm-core.js';
+import { validateNoHallucinatedProperNouns, validateNoHallucinatedStatusQualifiers } from './shared/brief-llm-core.js';
 
 // Hallucination validator rollout mode (PR-2 of brief-content-quality
 // regressions). `shadow` = log violations to Sentry but ship the LLM
@@ -349,9 +348,15 @@ async function generateLegacySingleHeadlineBrief(topStories, { callBudgetMs } = 
   // Hallucination check: did the LLM invent proper nouns not in the
   // headline? (May 19 incident: "Lebanese President Michel Aoun pledged…"
   // against a nameless headline. docs/plans/2026-05-19-001 U2.)
-  const validation = validateNoHallucinatedProperNouns(llmResult.text, topHeadline);
-  if (!validation.ok) {
-    const hallucinated = (validation.hallucinated || []).join(' ');
+  // The proper-noun gate reads "Former President" as a title prefix and
+  // grounds only "Trump", so the qualifier needs its own check (#8441).
+  const nounValidation = validateNoHallucinatedProperNouns(llmResult.text, topHeadline);
+  const qualifierValidation = validateNoHallucinatedStatusQualifiers(llmResult.text, topHeadline);
+  if (!nounValidation.ok || !qualifierValidation.ok) {
+    const hallucinated = [
+      ...(nounValidation.hallucinated || []),
+      ...(qualifierValidation.hallucinated || []),
+    ].join(' ');
     if (BRIEF_VALIDATOR_MODE === 'enforce') {
       console.warn(`  [brief_hallucination ENFORCE] dropped LLM summary: invented "${hallucinated}" not in headline; fell back to headline`);
       return {
@@ -385,7 +390,13 @@ async function readDigestFromRedis(key = DIGEST_KEY) {
   });
   if (!resp.ok) return null;
   const data = await resp.json();
-  return data.result ? unwrapEnvelope(JSON.parse(data.result)).data : null;
+  if (!data.result) return null;
+  try {
+    const digest = unwrapEnvelope(JSON.parse(data.result)).data;
+    return isAcceptableDigest(digest) ? digest : null;
+  } catch {
+    return null;
+  }
 }
 
 async function readExistingInsights() {
@@ -400,7 +411,7 @@ async function readExistingInsights() {
 }
 
 // Provider config — mirrors server/_shared/llm.ts getProviderCredentials()
-// Order: Ollama → paid OpenRouter → two fixed free OpenRouter models → Groq.
+// Order: Ollama → paid OpenRouter → two fixed free OpenRouter models.
 // Each free model stays a separate application-validated attempt.
 const LLM_PROVIDERS = [
   {
@@ -445,15 +456,6 @@ const LLM_PROVIDERS = [
     extraBody: { reasoning: { enabled: false }, provider: OPENROUTER_PROVIDER_ROUTING },
     timeout: 20_000,
     maxRetries: 0,
-  },
-  {
-    name: 'groq',
-    envKey: 'GROQ_API_KEY',
-    apiUrl: 'https://api.groq.com/openai/v1/chat/completions',
-    model: GROQ_DEFAULT_MODEL,
-    extraBody: GROQ_REASONING_EXTRA_BODY,
-    headers: (key) => ({ 'Authorization': `Bearer ${key}`, 'Content-Type': 'application/json', 'User-Agent': CHROME_UA }),
-    timeout: 15_000,
   },
 ];
 
@@ -595,8 +597,8 @@ async function callLLM(headline, options = {}) {
         });
         if (!response.ok) {
           // #6110: `usableBudgetMs()` is a real remaining wall clock, so pass it
-          // as `remainingBudgetMs` — a hint longer than that (groq's daily-quota
-          // 429 asks for ~20 minutes) makes the error nonRetryable and we fall
+          // as `remainingBudgetMs` — a hint longer than that (a daily-quota
+          // 429 can ask for ~20 minutes) makes the error nonRetryable and we fall
           // through to the next provider immediately, instead of clamping the
           // hint to the ceiling and sleeping it away twice.
           throw httpRetryError(response, {
@@ -764,24 +766,35 @@ async function warmDigestCache(language = 'en') {
       headers,
       signal: AbortSignal.timeout(30_000),
     });
-    if (resp.ok) console.log(`  ${language} digest cache warmed via RPC`);
-    else {
+    if (resp.ok) {
+      const digest = await resp.json();
+      if (isAcceptableDigest(digest)) {
+        console.log(`  ${language} digest cache warmed via RPC`);
+        return digest;
+      }
+      console.warn(`  Digest warm returned no acceptable ${language} digest`);
+    } else {
       const keyNote = RELAY_API_KEY ? '' : ' (WORLDMONITOR_RELAY_KEY not set — Origin-only auth)';
       console.warn(`  Digest warm failed: HTTP ${resp.status}${keyNote}`);
     }
   } catch (err) {
     console.warn(`  Digest warm failed: ${err.message}`);
   }
+  return null;
 }
 
-async function readOrWarmDigest(language) {
+export async function readOrWarmDigest(language) {
   const key = digestKeyForLanguage(language);
   let digest = await readDigestFromRedis(key);
   if (digest) return digest;
   console.log(`  ${language} digest not in Redis, warming cache via RPC...`);
-  await warmDigestCache(language);
+  const warmedDigest = await warmDigestCache(language);
+  // The RPC response has passed the endpoint's current revocation filter.
+  // Return it before any Redis readback can discard it or replace it with the
+  // unfiltered canonical body.
+  if (warmedDigest) return warmedDigest;
   // Wait for the Edge write to propagate before the readback. This is the
-  // existing full/en warm-cache contract, now reused for the Chinese digest.
+  // fallback when the RPC response did not contain an acceptable digest.
   await new Promise(r => setTimeout(r, 3_000));
   digest = await readDigestFromRedis(key);
   return digest;
@@ -821,6 +834,15 @@ export function normalizeDigestItemsForInsights(items) {
     corroborationCount: item.corroborationCount ?? item.storyMeta?.sourceCount,
     storyMeta: item.storyMeta,
   })).filter(item => item.title.length > 10);
+}
+
+export function digestItemsForInsights(digest) {
+  if (Array.isArray(digest)) return digest;
+  if (digest?.categories && typeof digest.categories === 'object') {
+    return Object.values(digest.categories)
+      .flatMap(bucket => (Array.isArray(bucket?.items) ? bucket.items : []));
+  }
+  return digest?.items || digest?.articles || digest?.headlines || [];
 }
 
 /**
@@ -880,17 +902,7 @@ async function fetchInsights() {
   });
 
   // Digest shape: { categories: { politics: { items: [...] }, ... }, feedStatuses, generatedAt }
-  let items;
-  if (Array.isArray(digest)) {
-    items = digest;
-  } else if (digest.categories && typeof digest.categories === 'object') {
-    items = [];
-    for (const bucket of Object.values(digest.categories)) {
-      if (Array.isArray(bucket.items)) items.push(...bucket.items);
-    }
-  } else {
-    items = digest.items || digest.articles || digest.headlines || [];
-  }
+  const items = digestItemsForInsights(digest);
 
   if (items.length === 0) {
     const keys = typeof digest === 'object' && digest !== null ? Object.keys(digest).join(', ') : typeof digest;
@@ -1119,6 +1131,10 @@ async function fetchInsights() {
       // attribution the publisher is owed.
       uniqueSourceCount: story.uniquePublisherCount ?? 0,
       sources: Array.isArray(story.sources) ? story.sources : [],
+      // #6419: `sources` holds only the labels that survived the digest's
+      // per-category cap; the digest's origin-aware publisher count is the
+      // floor a single-publisher verdict has to respect.
+      corroborationCount: story.corroborationCount ?? 0,
       lastUpdated: story.lastUpdated,
       memberTitles: Array.isArray(story.memberTitles) ? story.memberTitles : [story.primaryTitle],
       sourceTier: story.sourceTier,
@@ -1257,7 +1273,7 @@ async function finalizeInsightsRun(data, outcome, { previousMeta } = {}) {
   };
 }
 
-export { callLLM, __setInsightsLlmTransportForTests };
+export { callLLM, generateLegacySingleHeadlineBrief, __setInsightsLlmTransportForTests };
 
 if (_isDirectRun) {
   runSeed('news', 'insights', CANONICAL_KEY, fetchInsights, {

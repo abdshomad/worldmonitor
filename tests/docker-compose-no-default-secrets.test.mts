@@ -199,6 +199,44 @@ describe('docker self-hosting — no default credentials (#3804)', () => {
     );
   });
 
+  it('docker-compose.yml forwards operator MCP/REST keys to the app container (#5449)', async () => {
+    const compose = await read('docker-compose.yml');
+    const worldmonitor = serviceBlock(compose, 'worldmonitor');
+
+    assert.match(
+      worldmonitor,
+      /WORLDMONITOR_VALID_KEYS:\s*"\$\{WORLDMONITOR_VALID_KEYS:-\}"/,
+      'worldmonitor must receive WORLDMONITOR_VALID_KEYS so the self-hosted MCP X-WorldMonitor-Key path documented in SELF_HOSTING.md works',
+    );
+  });
+
+  it('docker-compose.yml points ais-relay Classify at the in-network app (#7437)', async () => {
+    const compose = await read('docker-compose.yml');
+    const relay = serviceBlock(compose, 'ais-relay');
+    const worldmonitor = serviceBlock(compose, 'worldmonitor');
+
+    assert.match(
+      relay,
+      /API_BASE_URL:\s*"\$\{API_BASE_URL:-http:\/\/worldmonitor:8080\}"/,
+      'ais-relay must default API_BASE_URL to the compose-network worldmonitor service',
+    );
+    assert.match(
+      relay,
+      /WORLDMONITOR_RELAY_KEY:\s*"\$\{WORLDMONITOR_RELAY_KEY:-\}"/,
+      'ais-relay must receive WORLDMONITOR_RELAY_KEY so Classify can send X-WorldMonitor-Key',
+    );
+    assert.match(
+      worldmonitor,
+      /WORLDMONITOR_RELAY_KEY:\s*"\$\{WORLDMONITOR_RELAY_KEY:-\}"/,
+      'worldmonitor must receive the same WORLDMONITOR_RELAY_KEY so the gateway can accept the Classify digest fetch',
+    );
+    assert.doesNotMatch(
+      relay,
+      /depends_on:[\s\S]*worldmonitor/,
+      'ais-relay must not depend_on worldmonitor — that would cycle with the app depends_on',
+    );
+  });
+
   it('docker-compose.yml bounds redis-rest memory against its per-request body buffer (#7099)', async () => {
     const compose = await read('docker-compose.yml');
     const redisRest = serviceBlock(compose, 'redis-rest');

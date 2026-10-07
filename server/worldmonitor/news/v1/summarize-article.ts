@@ -155,7 +155,6 @@ export async function summarizeArticle(
   // Provider credential check
   const skipReasons: Record<string, string> = {
     ollama: 'OLLAMA_API_URL not configured',
-    groq: 'GROQ_API_KEY not configured',
     openrouter: 'OPENROUTER_API_KEY not configured',
   };
 
@@ -192,7 +191,7 @@ export async function summarizeArticle(
   }
 
   try {
-    const cacheKey = getCacheKey(headlines, mode, sanitizedGeoContext, variant, lang, systemAppend || undefined, bodies);
+    const cacheKey = await getCacheKey(headlines, mode, sanitizedGeoContext, variant, lang, systemAppend || undefined, bodies);
 
     // Single atomic call — source tracking happens inside cachedFetchJsonWithMeta,
     // eliminating the TOCTOU race between a separate getCachedJson and cachedFetchJson.

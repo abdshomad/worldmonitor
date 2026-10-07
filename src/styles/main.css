@@ -97,6 +97,15 @@
   --threat-low: #22c55e;
   --threat-info: #3b82f6;
 
+  /* Plan-card billing tones (#7315). Dark hexes match the threat scale
+     (unknown is a dedicated grey — the scale has no grey rung). Light
+     overrides below raise every tone to WCAG AA on --bg / --surface. */
+  --billing-tone-active: #22c55e;
+  --billing-tone-attention: #eab308;
+  --billing-tone-ending: #3b82f6;
+  --billing-tone-ended: #ef4444;
+  --billing-tone-unknown: #9ca3af;
+
   /* DEFCON levels */
   --defcon-1: #ff0040;
   --defcon-2: #ff4400;
@@ -139,6 +148,16 @@
   /* Tailwind yellow-600 (was #eab308, 1.82:1) */
   --threat-low: #15803d;
   /* Tailwind green-700 (was #22c55e, 2.16:1) */
+  --billing-tone-active: #15803d;
+  /* green-700; was #22c55e 2.16:1 on --bg */
+  --billing-tone-attention: #a16207;
+  /* yellow-700; was #eab308 1.82:1 — yellow-600 #ca8a04 is still 2.79:1 */
+  --billing-tone-ending: #2563eb;
+  /* blue-600; was #3b82f6 3.49:1 — sky-600 #0284c7 is still 3.89:1 */
+  --billing-tone-ended: #b91c1c;
+  /* red-700; was #ef4444 3.57:1 */
+  --billing-tone-unknown: #4b5563;
+  /* gray-600; was #9ca3af 2.41:1 */
   --defcon-3: #d97706;
   /* Tailwind amber-600 (was #ffaa00, 1.81:1) */
   --defcon-4: #0284c7;
@@ -1156,7 +1175,10 @@ canvas,
   width: min(720px, 100%);
   max-height: calc(100vh - 48px);
   display: grid;
-  grid-template-rows: auto minmax(180px, 320px) auto minmax(96px, auto) auto;
+  /* header, preview, then one row holding every snippet tier. Tiers are a
+     single grid child so adding the keyed one cannot shift the preview's
+     sizing row. */
+  grid-template-rows: auto minmax(180px, 320px) auto;
   gap: 14px;
   overflow: auto;
   border: 1px solid var(--border);
@@ -1238,9 +1260,55 @@ canvas,
   outline: none;
 }
 
+.embed-modal-tiers {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  min-height: 0;
+}
+
+.embed-modal-tier {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.embed-modal-tier + .embed-modal-tier {
+  padding-top: 16px;
+  border-top: 1px solid var(--border);
+}
+
+.embed-tier-detail {
+  margin: 0;
+  color: var(--text-dim);
+  font-size: calc(12px * var(--wm-panel-effective-scale, 1));
+  line-height: 1.5;
+}
+
 .embed-modal-actions {
   display: flex;
   justify-content: flex-end;
+  gap: 8px;
+}
+
+.embed-manage-keys-btn {
+  min-height: 34px;
+  padding: 0 14px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-dim);
+  cursor: pointer;
+  font-family: inherit;
+  font-size: calc(12px * var(--wm-panel-effective-scale, 1));
+  font-weight: 600;
+}
+
+.embed-manage-keys-btn:hover,
+.embed-manage-keys-btn:focus-visible {
+  color: var(--text);
+  border-color: var(--accent);
+  outline: none;
 }
 
 .embed-copy-btn {
@@ -1270,7 +1338,7 @@ canvas,
 
   .embed-modal {
     max-height: calc(100vh - 24px);
-    grid-template-rows: auto minmax(160px, 260px) auto minmax(112px, auto) auto;
+    grid-template-rows: auto minmax(160px, 260px) auto;
     padding: 14px;
   }
 }
@@ -1672,8 +1740,8 @@ canvas,
 @media (max-width: 768px) {
   /* #7085: display:none on the whole footer removed the digest coverage row's
      live region from the mobile accessibility tree (PR #7267 review). Keep the
-     footer in flow but collapse it: brand/nav/copy stay hidden, so it renders
-     zero-height until the coverage row mounts, then only the row shows. */
+     footer in flow but collapse it: brand/nav/copy stay hidden, and the
+     coverage row announces from off-screen instead of painting. */
   .site-footer {
     padding: 0;
     border-top: none;
@@ -1683,11 +1751,35 @@ canvas,
     display: none;
   }
 
+  /* #app is a fixed-viewport flex column and .main-content scrolls internally,
+     so .site-footer is pinned to the viewport bottom and its contents are
+     LCP-eligible at EVERY width — desktop included. What differs is only the
+     competition: at 1440x900 the row measures ~29,400px2 against .map-section's
+     ~607,000px2 and never wins, but collapsing the footer on mobile left the
+     row facing a 12,302px2 shell skeleton, which its 139 characters of wrapped
+     10px mono beat at 15,066px2. Since the text is written only on the first
+     digest load, LCP then waited on a network round trip: field p75 for mobile
+     /dashboard went 1137ms to 2357ms across the three days after #7267, and the
+     throttled lab check measured a 13.3s render delay against a 271ms baseline.
+     Do not read this as "desktop is safe because the footer is out of view" —
+     it is in view, and shrinking the desktop first-paint candidate would
+     regress it the same way. e2e/dashboard-lcp-attribution.spec.ts pins the
+     invariant on both viewports for that reason.
+     Off-screen keeps role="status" announcing with zero candidate area;
+     display:none and visibility:hidden are the two the #7267 review rejected.
+     Same declarations as .wm-visually-hidden, duplicated the way
+     .passkey-offer-announce already does, since plain CSS (no preprocessor in
+     this repo) cannot share a rule into a media query. */
   .site-footer .status-panel-container {
-    border-top: 1px solid var(--border);
-    /* Clear the fixed mobile tab bar (58px + safe area) so the row's text is
-       reachable at full scroll, matching the .cached-mode-banner offset. */
-    padding: 8px 12px calc(8px + 58px + env(safe-area-inset-bottom, 0px));
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    margin: -1px;
+    padding: 0;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+    border: 0;
   }
 
   .mobile-tab-bar {
@@ -2041,11 +2133,13 @@ body.panel-resize-active iframe {
 }
 
 /* The resize strips are keyboard-focusable separators (arrow keys resize);
-   show where focus is when it lands on one. */
+   show where focus is when it lands on one. Panel content is a tab stop so
+   overflow-y:auto regions stay keyboard-scrollable (#8460). */
 .panel-resize-handle:focus-visible,
 .panel-col-resize-handle:focus-visible,
 .map-resize-handle:focus-visible,
-.map-width-resize-handle:focus-visible {
+.map-width-resize-handle:focus-visible,
+.panel-content:focus-visible {
   outline: 2px solid var(--text);
   outline-offset: -2px;
 }
@@ -2938,6 +3032,15 @@ body.panel-resize-active iframe {
   white-space: normal;
 }
 
+.live-news-manage-row-editing .live-news-manage-hint {
+  flex-basis: 100%;
+  margin-top: 0;
+}
+
+.live-news-manage-row-editing .live-news-manage-edit-handle.invalid {
+  border-color: #f44;
+}
+
 .live-news-manage-row-editing .live-news-manage-edit-handle,
 .live-news-manage-row-editing .live-news-manage-edit-name {
   padding: 10px 12px;
@@ -3020,6 +3123,12 @@ body.panel-resize-active iframe {
 .live-news-manage-handle.invalid {
   border-color: #f44;
   box-shadow: 0 0 0 1px rgba(255, 68, 68, 0.3);
+}
+
+.live-news-manage-hint {
+  margin-top: 4px;
+  color: #f44;
+  font-size: calc(12px * var(--wm-panel-effective-scale, 1));
 }
 
 .live-news-manage-add-btn {
@@ -3115,7 +3224,10 @@ body.panel-resize-active iframe {
   margin-top: 20px;
 }
 
-/* Channel management modal overlay */
+/* Channel management modal overlay. Hides only by unmounting: the base rule
+   is display:flex with opacity:0 and .active raises the opacity, while the
+   reload guard's checkVisibility() probe ignores opacity, so a leaked overlay
+   reads as open for the rest of the session. LiveNewsPanel.destroy() removes it. */
 .live-channels-modal-overlay {
   position: fixed;
   inset: 0;
@@ -3498,6 +3610,52 @@ body.panel-resize-active iframe {
   outline-offset: 2px;
 }
 
+.live-media-shell--idle {
+  cursor: default;
+}
+
+.live-media-shell--idle .live-media-shell-dot {
+  background: var(--text-dim);
+}
+
+.live-media-shell--idle .live-media-shell-dot::before {
+  animation: none;
+}
+
+.live-media-shell-body,
+.live-media-shell-hint {
+  max-width: 34em;
+  margin: 0;
+  color: var(--text-dim);
+  line-height: 1.4;
+  text-align: center;
+}
+
+.live-media-shell-body {
+  font-size: calc(12px * var(--wm-panel-effective-scale, 1));
+}
+
+.live-media-shell-hint {
+  font-size: calc(10px * var(--wm-panel-effective-scale, 1));
+}
+
+.live-media-shell-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
+}
+
+.live-media-shell .offline-retry.live-media-shell-secondary {
+  background: transparent;
+  border-color: var(--border);
+  color: var(--text);
+}
+
+.live-media-shell .offline-retry.live-media-shell-secondary:hover {
+  border-color: var(--text-dim);
+}
+
 @keyframes live-pulse-ring {
   0%,
   100% {
@@ -3511,18 +3669,12 @@ body.panel-resize-active iframe {
   }
 }
 
-.bot-check-actions {
+.live-offline-actions {
   display: flex;
   gap: 8px;
   flex-wrap: wrap;
   justify-content: center;
   margin-top: 4px;
-}
-
-.bot-check-actions .bot-check-signin {
-  background: var(--accent, #4a9eff);
-  border-color: var(--accent, #4a9eff);
-  color: #fff;
 }
 
 @keyframes loadingDots {
@@ -3583,8 +3735,7 @@ body.panel-resize-active iframe {
 }
 
 .live-news-fullscreen .live-news-player,
-.live-news-fullscreen .live-news-native-video,
-.live-news-fullscreen .live-news-embed-frame {
+.live-news-fullscreen .live-news-media {
   height: 100% !important;
 }
 
@@ -3610,10 +3761,6 @@ body.live-news-fullscreen-active #mapSection.live-news-fullscreen .map-container
   height: auto !important;
   flex: 1 1 auto !important;
   min-height: 0 !important;
-}
-
-body.live-news-fullscreen-active .community-widget {
-  display: none;
 }
 
 /* Hide map overlays and sibling panels behind fullscreen panel (#829, #859) */
@@ -3682,16 +3829,63 @@ body.live-news-fullscreen-active .panels-grid > *:not(.live-news-fullscreen) {
 }
 
 .live-news-player {
+  position: relative;
   width: 100%;
   flex: 1;
   background: var(--bg);
   aspect-ratio: 16 / 9;
 }
 
-.live-news-player iframe {
+.live-news-player iframe,
+.live-news-player video {
   width: 100%;
   height: 100%;
   display: block;
+  border: 0;
+}
+
+.live-news-player video {
+  object-fit: contain;
+  background: #000;
+}
+
+/* Covers the player while a stream connects; a corner chip discloses a recording or an unconfirmed stream. */
+.live-news-status {
+  position: absolute;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: calc(12px * var(--wm-panel-effective-scale, 1));
+}
+
+.live-news-status--cover {
+  inset: 0;
+  justify-content: center;
+  background: var(--bg);
+  color: var(--text-dim);
+}
+
+.live-news-status--chip {
+  top: 8px;
+  left: 8px;
+  max-width: calc(100% - 16px);
+  flex-wrap: wrap;
+  padding: 4px 8px;
+  border-radius: 4px;
+  background: rgba(0, 0, 0, 0.72);
+  color: rgba(255, 255, 255, 0.9);
+}
+
+.live-news-status .offline-retry {
+  padding: 2px 8px;
+  background: transparent;
+  border: 1px solid rgba(255, 255, 255, 0.4);
+  border-radius: 4px;
+  color: inherit;
+  font-size: inherit;
+  text-decoration: none;
+  cursor: pointer;
 }
 
 /* Live Webcams Panel */
@@ -3976,6 +4170,25 @@ body.live-news-fullscreen-active .panels-grid > *:not(.live-news-fullscreen) {
   min-height: 200px;
   color: var(--text-dim);
   font-size: calc(12px * var(--wm-panel-effective-scale, 1));
+}
+
+.webcam-idle-notice {
+  min-height: 200px;
+}
+
+.webcam-tile-status {
+  color: rgba(255, 255, 255, 0.8);
+  font-size: calc(10px * var(--wm-panel-effective-scale, 1));
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.8);
+}
+
+.webcam-offline-note {
+  padding: 4px 8px;
+  color: var(--text-dim);
+  font-size: calc(10px * var(--wm-panel-effective-scale, 1));
+  background: var(--darken-heavy);
+  border-top: 1px solid var(--border);
+  flex-shrink: 0;
 }
 
 @media (max-width: 768px) {
@@ -4588,6 +4801,29 @@ body.live-news-fullscreen-active .panels-grid > *:not(.live-news-fullscreen) {
   border-radius: 8px;
 }
 
+/* Coverage disclosure (#6419), deliberately neutral: it is not a warning. */
+.corroboration-flag {
+  display: inline-block;
+  border: 1px solid var(--border);
+  color: var(--text-dim);
+  padding: 0 5px;
+  font-size: calc(8px * var(--wm-panel-effective-scale, 1));
+  line-height: 1.5;
+  border-radius: 8px;
+  white-space: nowrap;
+  cursor: help;
+}
+
+.breaking-alert .corroboration-flag {
+  flex-shrink: 0;
+  font-size: 10px;
+}
+
+.cdp-news-meta .corroboration-flag {
+  margin-inline-start: 6px;
+  font-size: calc(10px * var(--wm-panel-effective-scale, 1));
+}
+
 .cluster-meta {
   display: flex;
   align-items: center;
@@ -4596,33 +4832,83 @@ body.live-news-fullscreen-active .panels-grid > *:not(.live-news-fullscreen) {
   gap: 8px;
 }
 
-.top-sources {
-  display: flex;
-  gap: 4px;
-  flex-wrap: wrap;
+.cluster-roster {
+  min-width: 0;
 }
 
-.top-source {
-  font-size: calc(8px * var(--wm-panel-effective-scale, 1));
-  padding: 1px 4px;
-  border-radius: 2px;
-  background: var(--panel-border);
+/* Publisher roster (#6419 step 3): who reports a claim and each declared tier. */
+.publisher-roster {
+  font-size: calc(9px * var(--wm-panel-effective-scale, 1));
   color: var(--text-dim);
 }
 
-.top-source.tier-1 {
+.publisher-roster summary {
+  cursor: pointer;
+}
+
+.publisher-roster ol {
+  margin: 4px 0 0;
+  padding-inline-start: 16px;
+}
+
+.publisher-roster li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  column-gap: 4px;
+  row-gap: 1px;
+}
+
+.publisher-roster li + li {
+  margin-top: 5px;
+}
+
+.publisher-roster .publisher-feeds {
+  flex-basis: 100%;
+  font-size: calc(8px * var(--wm-panel-effective-scale, 1));
+  opacity: 0.75;
+  overflow-wrap: anywhere;
+}
+
+.tier-chip {
+  padding: 0 4px;
+  border-radius: 2px;
+  border: 1px solid var(--border);
+  font-size: calc(8px * var(--wm-panel-effective-scale, 1));
+  cursor: help;
+}
+
+.tier-chip.tier-1 {
   background: rgba(0, 255, 136, 0.15);
   color: var(--green);
 }
 
-.top-source.tier-2 {
+.tier-chip.tier-2 {
   background: rgba(0, 170, 255, 0.15);
   color: var(--accent);
 }
 
-.top-source.tier-3 {
+.tier-chip.tier-3 {
   background: rgba(255, 170, 0, 0.15);
   color: var(--yellow);
+}
+
+.tier-legend {
+  margin: 4px 0 0;
+  font-style: italic;
+}
+
+.tier-legend a {
+  color: inherit;
+}
+
+.insight-story .publisher-roster {
+  margin-top: 4px;
+  padding-left: 12px;
+}
+
+.cdp-news-entry .publisher-roster {
+  padding: 4px 0 8px;
 }
 
 /* Source credibility tier badge */
@@ -4645,24 +4931,6 @@ body.live-news-fullscreen-active .panels-grid > *:not(.live-news-fullscreen) {
   background: rgba(0, 170, 255, 0.15);
   color: var(--accent);
   border: 1px solid rgba(0, 170, 255, 0.3);
-}
-
-/* "Also reported by" label */
-.also-reported {
-  font-size: calc(8px * var(--wm-panel-effective-scale, 1));
-  color: var(--text-dim);
-  margin-right: 4px;
-  font-style: italic;
-}
-
-/* Enhanced tier indicators for top sources */
-.top-source.tier-1 {
-  font-weight: 500;
-  border: 1px solid rgba(0, 255, 136, 0.3);
-}
-
-.top-source.tier-2 {
-  border: 1px solid rgba(0, 170, 255, 0.2);
 }
 
 .item.clustered {
@@ -8322,6 +8590,24 @@ a.prediction-link:hover {
   color: var(--text-dim);
   font-size: calc(20px * var(--wm-panel-effective-scale, 1));
   cursor: pointer;
+}
+
+/* Clerk's mounted card brings its own surface; the wrapper only positions it and the close button. */
+.signup-resume-modal {
+  position: relative;
+  padding: 0;
+  max-width: none;
+  width: auto;
+  background: transparent;
+  border: none;
+  overflow: visible;
+}
+
+.signup-resume-close {
+  position: absolute;
+  top: -36px;
+  right: 0;
+  z-index: 1;
 }
 
 .confirm-modal-message {
@@ -14013,8 +14299,11 @@ a.prediction-link:hover {
   display: flex;
 }
 
-/* Non-blocking confirm dialog (#4559) — replaces native confirm(). Sits above
-   the settings modal; mirrors the mobile-warning overlay tokens. */
+/* Non-blocking confirm dialog (#4559) — replaces native confirm(); mirrors the
+   mobile-warning overlay tokens. Appended to document.body, not nested in
+   #unifiedSettingsModal, so it must out-stack .modal-overlay (9999): below it,
+   the discard prompt is hidden behind Settings and the close button goes dead
+   while it waits (WORLDMONITOR-15Z). Same layer as the account-deletion dialog. */
 .confirm-dialog-overlay {
   position: fixed;
   inset: 0;
@@ -14023,7 +14312,7 @@ a.prediction-link:hover {
   display: none;
   align-items: center;
   justify-content: center;
-  z-index: 4000;
+  z-index: 10050;
   padding: 20px;
 }
 
@@ -14218,11 +14507,6 @@ a.prediction-link:hover {
   color: var(--accent);
 }
 
-.pizzint-score {
-  font-size: calc(10px * var(--wm-panel-effective-scale, 1));
-  color: var(--text-dim);
-}
-
 .pizzint-panel {
   position: absolute;
   top: 100%;
@@ -14283,7 +14567,8 @@ a.prediction-link:hover {
 
 .pizzint-locations {
   padding: 8px 16px;
-  max-height: 180px;
+  /* Six venues without a scrollbar; more would scroll. */
+  max-height: 240px;
   overflow-y: auto;
 }
 
@@ -14401,6 +14686,8 @@ a.prediction-link:hover {
 
 .pizzint-footer {
   display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
   justify-content: space-between;
   padding: 8px 16px;
   border-top: 1px solid var(--overlay-medium);
@@ -14737,14 +15024,57 @@ a.prediction-link:hover {
   .credit-link,
   .github-link,
   .region-selector,
-  .mobile-settings-btn,
-  .header-right {
+  .mobile-settings-btn {
     display: none !important;
+  }
+
+  .header-right {
+    display: flex !important;
+    flex: 0 0 auto;
+    gap: 0;
+    margin-left: auto;
+    padding-left: 0 !important;
+  }
+
+  .header-right > :not(#authWidgetMount),
+  #authWidgetMount .auth-signup-link,
+  #authWidgetMount .auth-header-skeleton-signup {
+    display: none !important;
+  }
+
+  #authWidgetMount {
+    min-width: 0 !important;
+    min-height: 44px;
+  }
+
+  #authWidgetMount .auth-header-widget {
+    gap: 0;
+  }
+
+  #authWidgetMount .auth-signin-btn {
+    min-height: 44px;
+    padding: 0 12px;
+  }
+
+  #authWidgetMount .auth-header-widget-pending {
+    width: 72px;
+  }
+
+  #authWidgetMount .auth-header-skeleton-signin {
+    flex-basis: 72px;
+    height: 44px;
+  }
+
+  #authWidgetMount .auth-clerk-user-button,
+  #authWidgetMount .cl-userButtonTrigger {
+    min-width: 44px;
+    min-height: 44px;
   }
 
   .header {
     gap: 8px;
-    padding: 8px 12px;
+    height: 45px;
+    padding: 0 12px;
   }
 
   .header-left {
@@ -15051,11 +15381,6 @@ a.prediction-link:hover {
 
   /* Mobile: hide the UTC clock */
   .header-clock {
-    display: none !important;
-  }
-
-  /* Mobile: hide community discussion widget (accessible via settings) */
-  .community-widget {
     display: none !important;
   }
 
@@ -16976,10 +17301,31 @@ a.prediction-link:hover {
   border: 1px solid rgba(160, 160, 170, 0.25);
 }
 
-.top-source .propaganda-badge {
+.publisher-roster .propaganda-badge {
   font-size: calc(7px * var(--wm-panel-effective-scale, 1));
   padding: 0 3px;
   margin-left: 2px;
+}
+
+/* Perspective and affiliation are disclosure, not caution: neutral styling. */
+.provenance-fact {
+  display: inline-flex;
+  align-items: center;
+  padding: 1px 5px;
+  border-radius: 3px;
+  font-size: calc(8px * var(--wm-panel-effective-scale, 1));
+  font-weight: 500;
+  margin-left: 4px;
+  vertical-align: middle;
+  color: var(--text-secondary);
+  background: var(--overlay-medium);
+  border: 1px solid var(--border);
+}
+
+.provenance-fact-marker {
+  font-size: calc(7px * var(--wm-panel-effective-scale, 1));
+  margin-left: 2px;
+  color: var(--text-secondary);
 }
 
 /* --- Intelligence Findings Badge --- */
@@ -20367,35 +20713,6 @@ a.prediction-link:hover {
   text-decoration: underline;
 }
 
-/* Discussion link in settings */
-.us-discussion-link {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 8px 12px;
-  border-radius: 6px;
-  background: var(--overlay-subtle);
-  border: 1px solid var(--border);
-  color: var(--text);
-  text-decoration: none;
-  font-size: calc(12px * var(--wm-panel-effective-scale, 1));
-  font-weight: 500;
-  transition: border-color 0.2s, background 0.2s;
-}
-
-.us-discussion-link:hover {
-  border-color: hsl(229, 48%, 55%);
-  background: rgba(99, 120, 198, 0.1);
-}
-
-.us-discussion-dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: hsl(229, 48%, 55%);
-  flex-shrink: 0;
-}
-
 /* Data management buttons in settings */
 .us-data-mgmt {
   display: flex;
@@ -20992,7 +21309,8 @@ body:has(.tauri-titlebar) .breaking-news-container {
 }
 
 .breaking-alert .tier-badge,
-.breaking-alert .propaganda-badge {
+.breaking-alert .propaganda-badge,
+.breaking-alert .provenance-fact {
   flex-shrink: 0;
 }
 
@@ -21000,7 +21318,8 @@ body:has(.tauri-titlebar) .breaking-news-container {
   margin-right: 0;
 }
 
-.breaking-alert .propaganda-badge {
+.breaking-alert .propaganda-badge,
+.breaking-alert .provenance-fact {
   margin-left: 0;
 }
 
@@ -22471,6 +22790,10 @@ body.has-breaking-alert .panels-grid {
 
 /* ============================================
    Country Brief Page (full-page overlay)
+
+   Hides via `opacity` while staying mounted, which is safe ONLY because the
+   element carries no dialog role. See the note in CountryBriefPage's
+   constructor before adding one.
    ============================================ */
 
 .country-brief-overlay {
@@ -23069,167 +23392,6 @@ body.has-breaking-alert .panels-grid {
   }
 }
 
-/* ============================================================
-   Community Discussion Widget — Floating Pill
-   ============================================================ */
-.community-widget {
-  position: fixed;
-  bottom: 24px;
-  right: 24px;
-  z-index: 9000;
-  display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-  gap: 6px;
-  animation: cw-float-in 0.4s cubic-bezier(0.22, 1, 0.36, 1);
-}
-
-.community-widget.cw-hiding {
-  animation: cw-float-out 0.3s ease-in forwards;
-}
-
-@keyframes cw-float-in {
-  0% {
-    transform: translateY(10px) scale(0.95);
-    opacity: 0;
-  }
-
-  100% {
-    transform: translateY(0) scale(1);
-    opacity: 1;
-  }
-}
-
-@keyframes cw-float-out {
-  0% {
-    transform: translateY(0) scale(1);
-    opacity: 1;
-  }
-
-  100% {
-    transform: translateY(10px) scale(0.95);
-    opacity: 0;
-  }
-}
-
-.cw-pill {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  background: var(--panel-bg, #141414);
-  border: 1px solid var(--border, #2a2a2a);
-  border-radius: 28px;
-  padding: 8px 8px 8px 16px;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
-}
-
-.cw-dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: hsl(229, 48%, 55%);
-  flex-shrink: 0;
-  animation: cw-dot-pulse 2s ease-in-out infinite;
-  position: relative;
-  overflow: visible;
-}
-
-.cw-dot::after {
-  content: '';
-  position: absolute;
-  inset: 0;
-  border: 1px solid hsla(229, 48%, 55%, 0.4);
-  border-radius: inherit;
-  opacity: 0.4;
-  pointer-events: none;
-  transform: scale(1);
-  animation: cw-dot-ring 2s ease-in-out infinite;
-  will-change: transform, opacity;
-}
-
-@keyframes cw-dot-pulse {
-
-  0%,
-  100% {
-    opacity: 1;
-  }
-
-  50% {
-    opacity: 0.6;
-  }
-}
-
-@keyframes cw-dot-ring {
-
-  0%,
-  100% {
-    opacity: 0.4;
-    transform: scale(1);
-  }
-
-  50% {
-    opacity: 0;
-    transform: scale(2.4);
-  }
-}
-
-.cw-text {
-  font-size: calc(13px * var(--wm-panel-effective-scale, 1));
-  font-weight: 600;
-  color: var(--text, #e8e8e8);
-  white-space: nowrap;
-}
-
-.cw-cta {
-  padding: 6px 14px;
-  background: hsl(229, 48%, 55%);
-  border: none;
-  border-radius: 20px;
-  color: #fff;
-  font-size: calc(12px * var(--wm-panel-effective-scale, 1));
-  font-weight: 600;
-  cursor: pointer;
-  text-decoration: none;
-  white-space: nowrap;
-  transition: background 0.2s;
-}
-
-.cw-cta:hover {
-  background: hsl(229, 48%, 62%);
-}
-
-.cw-close {
-  background: none;
-  border: none;
-  color: var(--text-ghost, #444);
-  font-size: calc(16px * var(--wm-panel-effective-scale, 1));
-  cursor: pointer;
-  padding: 4px 6px;
-  border-radius: 50%;
-  flex-shrink: 0;
-  line-height: 1;
-  transition: color 0.15s, background 0.15s;
-}
-
-.cw-close:hover {
-  color: var(--text-dim, #888);
-  background: var(--overlay-light, rgba(255, 255, 255, 0.05));
-}
-
-.cw-dismiss {
-  font-size: calc(10px * var(--wm-panel-effective-scale, 1));
-  color: var(--text-faint, #555);
-  cursor: pointer;
-  background: none;
-  border: none;
-  padding: 0 8px;
-  transition: color 0.2s;
-}
-
-.cw-dismiss:hover {
-  color: var(--text-dim, #888);
-}
-
 /* ── Ultra-wide layout: map left, panels beside it ── */
 .map-width-resize-handle {
   display: none;
@@ -23398,6 +23560,131 @@ body.map-width-resizing {
 
 /* telegram-intel-tabs: now uses shared .panel-tabs / .panel-tab */
 
+.telegram-intel-controls {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 12px 12px;
+  border-bottom: 1px solid var(--border-subtle);
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--accent) 7%, transparent), transparent 70%),
+    var(--surface);
+}
+
+.telegram-intel-input-row {
+  display: flex;
+  gap: 8px;
+}
+
+.telegram-intel-input {
+  width: 100%;
+  min-width: 0;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg);
+  color: var(--text);
+  font-size: 12px;
+  padding: 10px 12px;
+}
+
+.telegram-intel-input:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 22%, transparent);
+}
+
+.telegram-intel-input:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.telegram-intel-preview {
+  min-height: 0;
+}
+
+.telegram-intel-preview-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 12px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--accent) 8%, var(--surface));
+}
+
+.telegram-intel-preview-card.is-loading,
+.telegram-intel-preview-card.is-error {
+  justify-content: flex-start;
+}
+
+.telegram-intel-preview-card.is-error {
+  color: var(--danger);
+  border-color: color-mix(in srgb, var(--danger) 35%, var(--border));
+  background: color-mix(in srgb, var(--danger) 9%, var(--surface));
+}
+
+.telegram-intel-preview-copy {
+  min-width: 0;
+}
+
+.telegram-intel-preview-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.telegram-intel-preview-meta {
+  margin-top: 2px;
+  font-size: 11px;
+  color: var(--text-dim);
+}
+
+.telegram-intel-preview-status {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--green);
+}
+
+.telegram-intel-watchlist-pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.telegram-intel-watchlist-pills.is-empty {
+  display: none;
+}
+
+.telegram-intel-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid color-mix(in srgb, var(--accent) 30%, var(--border));
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
+  color: var(--text);
+  font-size: 11px;
+  padding: 4px 10px;
+  cursor: pointer;
+}
+
+.telegram-intel-pill:hover {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 16%, transparent);
+}
+
+.telegram-intel-pill-remove {
+  font-size: 12px;
+  line-height: 1;
+  color: var(--text-dim);
+}
+
 .telegram-intel-items {
   display: flex;
   flex-direction: column;
@@ -23440,6 +23727,7 @@ body.map-width-resizing {
 }
 
 .telegram-intel-channel-wrapper .propaganda-badge,
+.telegram-intel-channel-wrapper .provenance-fact,
 .telegram-intel-channel-wrapper .tier-badge {
   flex-shrink: 0;
   margin-left: 0;
@@ -23455,6 +23743,18 @@ body.map-width-resizing {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.telegram-intel-custom-tag {
+  font-size: 8px;
+  font-weight: 800;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--bg);
+  background: color-mix(in srgb, var(--accent) 82%, black);
+  border-radius: 4px;
+  padding: 2px 4px;
+  line-height: 1;
 }
 
 .live-indicator {
@@ -26162,6 +26462,33 @@ body.map-width-resizing {
   background: var(--surface);
 }
 
+.upgrade-pro-section[data-billing-tone] {
+  --billing-tone: var(--billing-tone-unknown);
+  border-color: color-mix(in srgb, var(--billing-tone) 20%, transparent);
+  background: color-mix(in srgb, var(--billing-tone) 4%, transparent);
+}
+
+.upgrade-pro-section[data-billing-tone="active"] { --billing-tone: var(--billing-tone-active); }
+.upgrade-pro-section[data-billing-tone="attention"] { --billing-tone: var(--billing-tone-attention); }
+.upgrade-pro-section[data-billing-tone="ending"] { --billing-tone: var(--billing-tone-ending); }
+.upgrade-pro-section[data-billing-tone="ended"] { --billing-tone: var(--billing-tone-ended); }
+.upgrade-pro-section[data-billing-tone="unknown"] { --billing-tone: var(--billing-tone-unknown); }
+
+.upgrade-pro-tone-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--billing-tone);
+  flex-shrink: 0;
+}
+
+.upgrade-pro-plan-name {
+  color: var(--billing-tone);
+  font-weight: 600;
+  font-size: calc(13px * var(--wm-panel-effective-scale, 1));
+}
+
 .upgrade-pro-title {
   font-weight: 600;
   font-size: calc(14px * var(--wm-panel-effective-scale, 1));
@@ -26190,6 +26517,117 @@ body.map-width-resizing {
 }
 
 .upgrade-pro-cta:hover { opacity: 0.85; }
+
+.account-deletion-zone {
+  margin-top: 24px;
+  padding: 16px;
+  border: 1px solid color-mix(in srgb, var(--danger, #d64545) 35%, var(--border));
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--danger, #d64545) 6%, var(--surface));
+}
+
+.account-deletion-title {
+  font-weight: 600;
+  font-size: calc(14px * var(--wm-panel-effective-scale, 1));
+  color: var(--danger, #d64545);
+  margin: 0 0 8px;
+}
+
+.account-deletion-desc {
+  font-size: calc(12px * var(--wm-panel-effective-scale, 1));
+  color: var(--text-dim);
+  margin: 0 0 12px;
+  line-height: 1.45;
+}
+
+.delete-account-btn {
+  padding: 8px 14px;
+  border-radius: 4px;
+  border: 1px solid var(--danger, #d64545);
+  background: transparent;
+  color: var(--danger, #d64545);
+  font-weight: 600;
+  font-size: calc(13px * var(--wm-panel-effective-scale, 1));
+  cursor: pointer;
+}
+
+.delete-account-btn:hover {
+  background: color-mix(in srgb, var(--danger, #d64545) 12%, transparent);
+}
+
+.account-deletion-dialog-overlay {
+  position: fixed;
+  inset: 0;
+  background: var(--overlay-scrim, rgb(0 0 0 / 50%));
+  backdrop-filter: blur(2px);
+  display: none;
+  align-items: center;
+  justify-content: center;
+  /* Appended to document.body, not nested in #unifiedSettingsModal.
+     Must sit above .modal-overlay (9999) or the type-DELETE dialog is
+     invisible behind Settings. */
+  z-index: 10050;
+  padding: 20px;
+}
+
+.account-deletion-dialog-overlay.active {
+  display: flex;
+}
+
+.account-deletion-dialog {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  max-width: 420px;
+  width: 100%;
+  box-shadow: 0 8px 32px var(--shadow-color);
+  padding: 20px 20px 16px;
+}
+
+.account-deletion-dialog-title {
+  margin: 0 0 10px;
+  font-size: calc(16px * var(--wm-panel-effective-scale, 1));
+  color: var(--text);
+}
+
+.account-deletion-dialog-copy,
+.account-deletion-dialog-label {
+  margin: 0 0 10px;
+  color: var(--text-dim);
+  font-size: calc(13px * var(--wm-panel-effective-scale, 1));
+  line-height: 1.5;
+}
+
+.account-deletion-dialog-label {
+  display: block;
+  color: var(--text);
+  font-weight: 600;
+}
+
+.account-deletion-dialog-input {
+  width: 100%;
+  box-sizing: border-box;
+  margin-bottom: 8px;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg);
+  color: var(--text);
+  font-size: calc(14px * var(--wm-panel-effective-scale, 1));
+}
+
+.account-deletion-dialog-error {
+  min-height: 1.2em;
+  margin: 0 0 12px;
+  color: var(--danger, #d64545);
+  font-size: calc(12px * var(--wm-panel-effective-scale, 1));
+}
+
+.account-deletion-dialog-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+}
 
 /* -- Legal links + pre-payment assent (#6976) -- */
 /* The dashboard had no path to the Terms at all, and every upgrade CTA jumped
@@ -26263,26 +26701,33 @@ body.map-width-resizing {
 
 .manage-billing-btn:hover { color: var(--text); }
 
-/* ---- API Keys Settings Tab ---- */
+/* ---- API Keys + Embeds Settings Tabs ---- */
+/* Two tabs, two credential classes, one layout. The selectors are aliased
+   rather than duplicated so a spacing fix cannot land on one list and miss
+   the other; only .embed-keys-note below is specific to embed keys. */
 
-.api-keys-section {
+.api-keys-section,
+.embed-keys-section {
   padding: 16px 0;
 }
 
-.api-keys-desc {
+.api-keys-desc,
+.embed-keys-desc {
   font-size: calc(12px * var(--wm-panel-effective-scale, 1));
   color: var(--text-dim);
   margin: 0 0 16px;
   line-height: 1.5;
 }
 
-.api-keys-create-form {
+.api-keys-create-form,
+.embed-keys-create-form {
   display: flex;
   gap: 8px;
   margin-bottom: 12px;
 }
 
-.api-keys-name-input {
+.api-keys-name-input,
+.embed-keys-name-input {
   flex: 1;
   padding: 8px 12px;
   background: var(--surface);
@@ -26293,15 +26738,18 @@ body.map-width-resizing {
   outline: none;
 }
 
-.api-keys-name-input:focus {
+.api-keys-name-input:focus,
+.embed-keys-name-input:focus {
   border-color: var(--accent);
 }
 
-.api-keys-name-input::placeholder {
+.api-keys-name-input::placeholder,
+.embed-keys-name-input::placeholder {
   color: var(--text-dim);
 }
 
-.api-keys-created-banner {
+.api-keys-created-banner,
+.embed-keys-created-banner {
   padding: 12px;
   background: color-mix(in srgb, #22c55e 8%, transparent);
   border: 1px solid color-mix(in srgb, #22c55e 25%, transparent);
@@ -26309,20 +26757,23 @@ body.map-width-resizing {
   margin-bottom: 12px;
 }
 
-.api-keys-banner-title {
+.api-keys-banner-title,
+.embed-keys-banner-title {
   font-size: calc(12px * var(--wm-panel-effective-scale, 1));
   font-weight: 600;
   color: #22c55e;
   margin-bottom: 8px;
 }
 
-.api-keys-banner-key {
+.api-keys-banner-key,
+.embed-keys-banner-key {
   display: flex;
   align-items: center;
   gap: 8px;
 }
 
-.api-keys-key-value {
+.api-keys-key-value,
+.embed-keys-key-value {
   flex: 1;
   font-family: 'SF Mono', 'Monaco', 'Cascadia Code', monospace;
   font-size: calc(12px * var(--wm-panel-effective-scale, 1));
@@ -26334,21 +26785,25 @@ body.map-width-resizing {
   user-select: all;
 }
 
-.api-keys-error {
+.api-keys-error,
+.embed-keys-error {
   font-size: calc(12px * var(--wm-panel-effective-scale, 1));
   color: var(--semantic-critical);
   margin-bottom: 8px;
 }
 
 .api-keys-loading,
-.api-keys-empty {
+.embed-keys-loading,
+.api-keys-empty,
+.embed-keys-empty {
   font-size: calc(12px * var(--wm-panel-effective-scale, 1));
   color: var(--text-dim);
   padding: 16px 0;
   text-align: center;
 }
 
-.api-keys-item {
+.api-keys-item,
+.embed-keys-item {
   display: flex;
   align-items: center;
   gap: 12px;
@@ -26358,11 +26813,13 @@ body.map-width-resizing {
   margin-bottom: 6px;
 }
 
-.api-keys-item.revoked {
+.api-keys-item.revoked,
+.embed-keys-item.revoked {
   opacity: 0.5;
 }
 
-.api-keys-item-main {
+.api-keys-item-main,
+.embed-keys-item-main {
   flex: 1;
   display: flex;
   flex-direction: column;
@@ -26370,7 +26827,8 @@ body.map-width-resizing {
   min-width: 0;
 }
 
-.api-keys-item-name {
+.api-keys-item-name,
+.embed-keys-item-name {
   font-size: calc(13px * var(--wm-panel-effective-scale, 1));
   font-weight: 600;
   color: var(--text);
@@ -26379,13 +26837,15 @@ body.map-width-resizing {
   text-overflow: ellipsis;
 }
 
-.api-keys-item-prefix {
+.api-keys-item-prefix,
+.embed-keys-item-prefix {
   font-family: 'SF Mono', 'Monaco', 'Cascadia Code', monospace;
   font-size: calc(11px * var(--wm-panel-effective-scale, 1));
   color: var(--text-dim);
 }
 
-.api-keys-item-meta {
+.api-keys-item-meta,
+.embed-keys-item-meta {
   display: flex;
   flex-direction: column;
   gap: 2px;
@@ -26395,33 +26855,64 @@ body.map-width-resizing {
   white-space: nowrap;
 }
 
-.api-keys-item-revoked-badge {
+.api-keys-item-revoked-badge,
+.embed-keys-item-revoked-badge {
   color: var(--semantic-critical);
   font-weight: 600;
 }
 
-.api-keys-revoke-btn {
+.api-keys-revoke-btn,
+.embed-keys-revoke-btn {
   font-size: calc(12px * var(--wm-panel-effective-scale, 1));
   padding: 4px 10px;
   color: var(--semantic-critical);
   flex-shrink: 0;
 }
 
-.api-keys-revoke-btn:hover {
+.api-keys-revoke-btn:hover,
+.embed-keys-revoke-btn:hover {
   background: color-mix(in srgb, var(--semantic-critical) 10%, transparent);
 }
 
-.api-keys-revoked-section {
+.api-keys-revoked-section,
+.embed-keys-revoked-section {
   margin-top: 16px;
 }
 
-.api-keys-revoked-label {
+.api-keys-revoked-label,
+.embed-keys-revoked-label {
   font-size: calc(11px * var(--wm-panel-effective-scale, 1));
   font-weight: 600;
   color: var(--text-dim);
   text-transform: uppercase;
   letter-spacing: 0.05em;
   margin-bottom: 6px;
+}
+
+.embed-keys-docs-link {
+  color: var(--accent);
+  text-decoration: none;
+}
+
+.embed-keys-docs-link:hover,
+.embed-keys-docs-link:focus-visible {
+  text-decoration: underline;
+}
+
+.embed-keys-note {
+  padding: 10px 12px;
+  margin-bottom: 12px;
+  border: 1px solid color-mix(in srgb, var(--accent) 25%, var(--border));
+  border-left: 3px solid var(--accent);
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--accent) 7%, transparent);
+  font-size: calc(12px * var(--wm-panel-effective-scale, 1));
+  color: var(--text-dim);
+  line-height: 1.5;
+}
+
+.embed-keys-note strong {
+  color: var(--text);
 }
 
 .api-plan-limit-notices {
@@ -27678,6 +28169,50 @@ body.map-width-resizing {
   opacity: 1;
 }
 
+.us-notif-country-add-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.us-notif-country-add-input {
+  font: inherit;
+  font-size: calc(11px * var(--wm-panel-effective-scale, 1));
+  font-weight: 600;
+  width: 7em;
+  padding: 4px 10px;
+  background: var(--settings-surface-inset);
+  border: 1px solid var(--settings-border);
+  border-radius: 5px;
+  color: var(--settings-text);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.us-notif-country-add-input::placeholder {
+  color: var(--settings-text-secondary);
+  opacity: 0.7;
+  font-weight: 400;
+  text-transform: none;
+  letter-spacing: normal;
+}
+
+.us-notif-country-add-input:focus {
+  outline: none;
+  border-color: var(--settings-accent);
+}
+
+.us-notif-country-error {
+  font-size: calc(10px * var(--wm-panel-effective-scale, 1));
+  color: var(--settings-red);
+}
+
+.us-notif-country-hint {
+  margin-top: 6px;
+}
+
 .us-notif-slack-wrap {
   width: 100%;
   display: flex;
@@ -28060,3 +28595,238 @@ body.map-width-resizing {
   outline: 2px solid var(--text);
   outline-offset: -2px;
 }
+
+/* ---------------------------------------------------------------------------
+   Passkey offer prompt (post-sign-in)
+
+   The bottom edge is the most contested space in the mobile layout: the fixed
+   .mobile-tab-bar (58px + safe area, z 10003) and the .cached-mode-banner
+   (variable height, wraps to two lines on narrow viewports) both live there. A
+   hardcoded `bottom` overlaps one of them at some width.
+
+   Two custom properties, not one. The banner cannot offset itself, so a single
+   combined value cannot place both surfaces:
+     --wm-bottom-base    the tab bar plus safe-area inset (0 on desktop)
+     --wm-bottom-banner  the cached-mode banner's measured height, 0px absent
+   The card sits above both. Whichever surface changes height, the card moves.
+   The banner's height is measured by a ResizeObserver in the controller, since
+   App.ts creates, removes, and recreates it.
+   --------------------------------------------------------------------------- */
+:root {
+  --wm-bottom-base: env(safe-area-inset-bottom, 0px);
+  --wm-bottom-banner: 0px;
+}
+
+@media (max-width: 768px) {
+  :root {
+    /* Clears .mobile-tab-bar, whose min-height is the 58px below. */
+    --wm-bottom-base: calc(58px + env(safe-area-inset-bottom, 0px));
+  }
+}
+
+/*
+ * Matches `.update-toast`, the house pattern for an elevated notification with
+ * an action: green-tinted dark gradient, green primary, panel-scaled type.
+ *
+ * The first cut used the generic `--surface-active` / `--border` / `--accent`
+ * tokens and rendered as a foreign white-on-white card, because `--accent` is
+ * `#fff` in the dark theme. Nothing generic reads as "our UI" here.
+ */
+.passkey-offer-prompt {
+  position: fixed;
+  left: 50%;
+  bottom: calc(var(--wm-bottom-base) + var(--wm-bottom-banner) + 16px);
+  transform: translateX(-50%);
+  z-index: 10004; /* above .mobile-tab-bar (10003); it is an actionable prompt */
+  width: min(400px, calc(100vw - 32px));
+  box-sizing: border-box;
+  padding: 14px 16px;
+  border: 1px solid rgba(68, 255, 136, 0.25);
+  border-radius: 10px;
+  background: linear-gradient(135deg, #1a2332 0%, #0f1923 100%);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(68, 255, 136, 0.08);
+}
+
+.passkey-offer-prompt[hidden] {
+  display: none;
+}
+
+.passkey-offer-title {
+  margin: 0 0 4px;
+  padding-right: 20px; /* clear the close button */
+  font-size: calc(13px * var(--wm-panel-effective-scale, 1));
+  font-weight: 600;
+  letter-spacing: 0.2px;
+  color: #e8e8e8;
+}
+
+.passkey-offer-body {
+  margin: 0;
+  font-size: calc(11px * var(--wm-panel-effective-scale, 1));
+  line-height: 1.5;
+  letter-spacing: 0.3px;
+  color: #888;
+}
+
+/*
+ * Screen-reader only. The arrival sentence must not be painted: it restates the
+ * body copy, and rendering both put two sentences saying the same thing on one
+ * small card.
+ */
+.passkey-offer-announce {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* Visible when non-empty; carries only the status sentence, never the body copy. */
+.passkey-offer-status {
+  margin: 8px 0 0;
+  font-size: calc(11px * var(--wm-panel-effective-scale, 1));
+  letter-spacing: 0.3px;
+  color: var(--green);
+}
+
+.passkey-offer-status:empty {
+  margin: 0;
+}
+
+.passkey-offer-prompt[data-state="failed"] .passkey-offer-status {
+  color: #ff6b6b;
+}
+
+.passkey-offer-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+  align-items: center;
+  margin-top: 12px;
+}
+
+.passkey-offer-actions button {
+  padding: 6px 14px;
+  border-radius: 6px;
+  font-size: calc(11px * var(--wm-panel-effective-scale, 1));
+  font-weight: 600;
+  letter-spacing: 0.3px;
+  cursor: pointer;
+  transition: filter 0.15s, transform 0.15s;
+}
+
+.passkey-offer-actions button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.passkey-offer-actions button:not(:disabled):hover {
+  filter: brightness(1.15);
+}
+
+.passkey-offer-actions button:not(:disabled):active {
+  transform: scale(0.97);
+}
+
+.passkey-offer-accept {
+  border: none;
+  background: var(--green);
+  color: #0a0a0a;
+}
+
+.passkey-offer-dismiss {
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  background: transparent;
+  color: #888;
+}
+
+.passkey-offer-close {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border: none;
+  background: none;
+  color: #666;
+  font-size: calc(16px * var(--wm-panel-effective-scale, 1));
+  line-height: 1;
+  padding: 0;
+  cursor: pointer;
+  transition: color 0.15s;
+}
+
+.passkey-offer-close:hover {
+  color: #e8e8e8;
+}
+
+/* Mission Pro preview (plan U4/U5) — sits after a hosting panel's content. */
+.pro-preview {
+  margin: 8px 12px 12px;
+  padding: 10px 12px;
+  border: 1px solid var(--border-color, #2a3542);
+  border-radius: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.pro-preview[hidden] { display: none; }
+.pro-preview__badge {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.pro-preview__badge-tag {
+  color: var(--accent-color, #4fd6c2);
+  border: 1px solid currentColor;
+  border-radius: 4px;
+  padding: 1px 5px;
+  font-weight: 700;
+}
+.pro-preview__badge-sample { opacity: 0.65; }
+.pro-preview__dismiss {
+  margin-left: auto;
+  background: none;
+  border: none;
+  color: inherit;
+  opacity: 0.6;
+  cursor: pointer;
+  font-size: 14px;
+  line-height: 1;
+  padding: 2px 6px;
+}
+.pro-preview__dismiss:hover, .pro-preview__dismiss:focus-visible { opacity: 1; }
+.pro-preview__sample {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 12px;
+  opacity: 0.85;
+}
+.pro-preview__row { display: flex; justify-content: space-between; gap: 12px; }
+.pro-preview__row-label { opacity: 0.75; }
+.pro-preview__row-value { font-variant-numeric: tabular-nums; white-space: nowrap; }
+.pro-preview__copy { margin: 0; }
+.pro-preview__cta { align-self: flex-start; }
+.pro-preview__reopen {
+  background: none;
+  border: 1px dashed var(--border-color, #2a3542);
+  border-radius: 6px;
+  color: inherit;
+  opacity: 0.7;
+  cursor: pointer;
+  font-size: 11px;
+  padding: 3px 10px;
+  align-self: flex-start;
+}
+.pro-preview__reopen:hover, .pro-preview__reopen:focus-visible { opacity: 1; }

@@ -29,6 +29,7 @@ import { existsSync, mkdirSync, readFileSync, realpathSync, writeFileSync } from
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { Anthropic } from '@anthropic-ai/sdk';
+import { localePathTokens } from './_locale-keys.mjs';
 
 export const LOCALES = ['ar', 'bg', 'cs', 'de', 'el', 'es', 'fa', 'fr', 'hi', 'hr', 'hu', 'it', 'ja', 'ko', 'nl', 'pl', 'pt', 'ro', 'ru', 'sv', 'sw', 'th', 'tr', 'uk', 'vi', 'zh', 'zh-TW'];
 
@@ -93,19 +94,7 @@ export function flatten(obj, prefix = '', out = {}) {
 }
 
 function setNested(obj, dotted, value) {
-  // Path tokens are either object keys (split on `.`) or array indices
-  // (`name[3]`). Split into a flat token list with explicit string/number
-  // typing so we can materialise arrays vs objects on demand.
-  const tokens = [];
-  for (const part of dotted.split('.')) {
-    const m = part.match(/^([^[]*)((?:\[\d+\])+)?$/);
-    if (m && m[1]) tokens.push({ type: 'key', value: m[1] });
-    if (m && m[2]) {
-      for (const idx of m[2].matchAll(/\[(\d+)\]/g)) {
-        tokens.push({ type: 'index', value: Number(idx[1]) });
-      }
-    }
-  }
+  const tokens = localePathTokens(dotted);
   let cur = obj;
   for (let i = 0; i < tokens.length - 1; i++) {
     const tok = tokens[i];
@@ -168,7 +157,7 @@ async function translateBatch(client, langName, batch) {
   const items = batch.map(([k, v]) => `${k}\t${v}`).join('\n');
   const prompt = `You are a professional UI translator. Translate the following English UI strings to ${langName}.
 
-CRITICAL RULES:
+Rules:
 1. Preserve interpolation tokens EXACTLY as-is: {{count}}, {{name}}, {{tone}}, etc. — do NOT translate or move them.
 2. Preserve HTML tags EXACTLY: <strong>, <br>, <em>, <li>, <ul>. Do NOT translate tag names.
 3. Preserve emoji, numerals, URLs, and capitalisation style of acronyms (PRO, BREAKING, ALERT, AI, MCP, CII, RSS, ADS-B, AIS).
@@ -222,6 +211,22 @@ Output (key<TAB>${langName}):`;
 //   cs/pl/ru        → ['one','few','many','other']
 //   ar              → ['zero','one','two','few','many','other']
 //   ja/ko/zh/vi/th  → ['other']
+// The returned array is normalized to the CLDR canonical category order
+// (zero, one, two, few, many, other). V8 does NOT guarantee an ordering for
+// `pluralCategories` across versions — this Node (v22.23.2) returns
+// ['few','many','one','other'] for ru, which contradicted the docstring above
+// and made a deep-equal assertion on the order flaky across Node upgrades.
+// Every consumer treats the result as a SET (expectedKeysForLocale,
+// classifyKeys, completeness checks), so the normalization is safe; only the
+// order of generated JSON keys would change, which is cosmetic.
+const CLDR_PLURAL_ORDER = ['zero', 'one', 'two', 'few', 'many', 'other'];
+function canonicalPluralOrder(categories) {
+  return [...categories].sort((a, b) => {
+    const ia = CLDR_PLURAL_ORDER.indexOf(a);
+    const ib = CLDR_PLURAL_ORDER.indexOf(b);
+    return (ia === -1 ? CLDR_PLURAL_ORDER.length : ia) - (ib === -1 ? CLDR_PLURAL_ORDER.length : ib) || a.localeCompare(b);
+  });
+}
 export function getPluralCategories(loc) {
   try {
     // `?? ['one','other']` covers the case where pluralCategories itself is
@@ -230,7 +235,8 @@ export function getPluralCategories(loc) {
     // on a successful constructor that returns an options object without
     // the property. Without this guard the next `for (const cat of ...)`
     // throws TypeError mid-run.
-    return new Intl.PluralRules(loc).resolvedOptions().pluralCategories ?? ['one', 'other'];
+    const categories = new Intl.PluralRules(loc).resolvedOptions().pluralCategories;
+    return categories ? canonicalPluralOrder(categories) : ['one', 'other'];
   } catch {
     return ['one', 'other'];
   }

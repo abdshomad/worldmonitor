@@ -445,9 +445,13 @@ export function runClerkSurfaceOpen(
   }
 }
 
+function openLoadedClerkSignIn(): void {
+  clerkInstance?.openSignIn({ appearance: getAppearance() });
+}
+
 function openClerkSurface(action: 'open-sign-in' | 'open-sign-up'): void {
   const open = action === 'open-sign-in'
-    ? () => clerkInstance?.openSignIn({ appearance: getAppearance() })
+    ? openLoadedClerkSignIn
     : () => clerkInstance?.openSignUp({ appearance: getAppearance() });
   // Distinct reasons so Sentry can tell the "components not attached" race
   // (the surface open threw) apart from a "Clerk bundle never loaded" failure
@@ -457,21 +461,191 @@ function openClerkSurface(action: 'open-sign-in' | 'open-sign-up'): void {
     console.error(`[clerk] ${action} failed (${reason}):`, err);
     captureClerkSurfaceFailure(action, err, reason);
   };
+  const openClerk = (): void => runClerkSurfaceOpen(open, onFail('ui-components-not-ready'));
+  // The resume hook needs the loaded client, so it runs after the force-load too.
+  const openSurface = (): void => {
+    if (action === 'open-sign-up' && signUpResumeHook?.(openClerk)) return;
+    openClerk();
+  };
   if (clerkInstance) {
-    runClerkSurfaceOpen(open, onFail('ui-components-not-ready'));
+    openSurface();
     return;
   }
   // Deferred-load fast path: user clicked before the idle callback fired.
   // Force the load, then open once the SDK is live so the click never
   // silently no-ops.
   void initClerk()
-    .then(() => runClerkSurfaceOpen(open, onFail('ui-components-not-ready')))
+    .then(openSurface)
     .catch(onFail('clerk-load-failed'));
 }
 
 /** Open the Clerk sign-in modal. */
 export function openSignIn(): void {
   openClerkSurface('open-sign-in');
+}
+
+export function isClerkReady(): boolean {
+  return clerkInstance !== null;
+}
+
+/** True when Clerk's sign-in (or other auth) modal is already on screen. */
+export function isClerkSignInOpen(): boolean {
+  if (!clerkInstance || typeof document === 'undefined') return false;
+  try {
+    return Boolean(document.querySelector(
+      '.cl-modalBackdrop, .cl-modal, [data-clerk-component="SignIn"]',
+    ));
+  } catch {
+    return false;
+  }
+}
+
+const CLERK_SIGN_IN_OPEN_WAIT_MS = 2000;
+const CLERK_SURFACE_RETRY_TIMEOUT_MS = 50;
+
+/**
+ * Schedule a one-shot retry on the next animation frame when available, and
+ * always on a timeout so a background tab that never paints still retries.
+ */
+function scheduleClerkSurfaceRetry(cb: () => void): void {
+  let ran = false;
+  const run = (): void => {
+    if (ran) return;
+    ran = true;
+    cb();
+  };
+  if (typeof requestAnimationFrame === 'function') requestAnimationFrame(run);
+  setTimeout(run, CLERK_SURFACE_RETRY_TIMEOUT_MS);
+}
+
+export interface WaitForClerkSurfaceOpenOptions {
+  /** When set, success means this predicate is true, not merely that open() did not throw. */
+  isOpen?: () => boolean;
+  signal?: AbortSignal;
+}
+
+function abortClerkSurfaceWait(signal?: AbortSignal): never {
+  signal?.throwIfAborted();
+  throw new DOMException('The operation was aborted.', 'AbortError');
+}
+
+/**
+ * Wait until a Clerk surface open succeeds, persistently fails, or the wait
+ * cap elapses. Settlement must not depend on rAF-only scheduling. Exported
+ * so tests can drive the dual scheduler and wait cap without a Clerk instance.
+ *
+ * When `isOpen` is provided, a non-throwing `open()` is not enough: the
+ * waiter keeps polling until the surface is actually present or the cap
+ * elapses. An abort signal rejects without treating the surface as opened.
+ */
+export function waitForClerkSurfaceOpen(
+  open: () => void,
+  waitCapMs = CLERK_SIGN_IN_OPEN_WAIT_MS,
+  scheduleRetry: (cb: () => void) => void = scheduleClerkSurfaceRetry,
+  options?: WaitForClerkSurfaceOpenOptions,
+): Promise<boolean> {
+  return new Promise<boolean>((resolve, reject) => {
+    let settled = false;
+    let waitCap: ReturnType<typeof setTimeout> | undefined;
+    let presencePoll: ReturnType<typeof setTimeout> | undefined;
+    const signal = options?.signal;
+    const isOpen = options?.isOpen;
+
+    const cleanup = (): void => {
+      if (waitCap !== undefined) clearTimeout(waitCap);
+      if (presencePoll !== undefined) clearTimeout(presencePoll);
+      signal?.removeEventListener('abort', onAbort);
+    };
+    const finish = (ok: boolean): void => {
+      if (settled) return;
+      settled = true;
+      cleanup();
+      resolve(ok);
+    };
+    const failAbort = (): void => {
+      if (settled) return;
+      settled = true;
+      cleanup();
+      try {
+        abortClerkSurfaceWait(signal);
+      } catch (error) {
+        reject(error);
+      }
+    };
+    const onAbort = (): void => {
+      failAbort();
+    };
+
+    if (signal?.aborted) {
+      failAbort();
+      return;
+    }
+    signal?.addEventListener('abort', onAbort, { once: true });
+
+    const surfaceReady = (): boolean => !isOpen || isOpen();
+    let opened = false;
+    const tryFinishOpened = (): void => {
+      if (settled || !opened) return;
+      if (surfaceReady()) finish(true);
+    };
+    const pollForPresence = (): void => {
+      if (settled || !isOpen || presencePoll !== undefined) return;
+      presencePoll = setTimeout(() => {
+        presencePoll = undefined;
+        if (settled) return;
+        if (signal?.aborted) {
+          failAbort();
+          return;
+        }
+        tryFinishOpened();
+        if (!settled && opened) pollForPresence();
+      }, CLERK_SURFACE_RETRY_TIMEOUT_MS);
+    };
+
+    waitCap = setTimeout(() => finish(false), waitCapMs);
+    runClerkSurfaceOpen(
+      () => {
+        open();
+        opened = true;
+      },
+      () => finish(false),
+      (retryOpen) => {
+        scheduleRetry(() => {
+          if (settled) return;
+          if (signal?.aborted) {
+            failAbort();
+            return;
+          }
+          retryOpen();
+          tryFinishOpened();
+          if (!settled && opened && isOpen) pollForPresence();
+        });
+      },
+    );
+    tryFinishOpened();
+    if (!settled && opened && isOpen) pollForPresence();
+  });
+}
+
+/**
+ * Returns false when Clerk is disabled, failed to load, or the UI surface
+ * could not attach.
+ */
+export async function openSignInAndWait(signal?: AbortSignal): Promise<boolean> {
+  if (!isClerkAuthEnabled()) return false;
+  try {
+    await initClerk();
+  } catch {
+    return false;
+  }
+  if (signal?.aborted) abortClerkSurfaceWait(signal);
+  if (!clerkInstance || typeof clerkInstance.openSignIn !== 'function') return false;
+  return waitForClerkSurfaceOpen(
+    openLoadedClerkSignIn,
+    CLERK_SIGN_IN_OPEN_WAIT_MS,
+    scheduleClerkSurfaceRetry,
+    { isOpen: isClerkSignInOpen, signal },
+  );
 }
 
 /**
@@ -485,6 +659,37 @@ export function openSignIn(): void {
  */
 export function openSignUp(): void {
   openClerkSurface('open-sign-up');
+}
+
+/**
+ * Consulted by `openSignUp()` once Clerk is loaded. Returning true means the
+ * resume surface took the click; `openClerkSignUp` is the fallback it may call
+ * later if resuming fails.
+ */
+export type SignUpResumeHook = (openClerkSignUp: () => void) => boolean;
+
+let signUpResumeHook: SignUpResumeHook | null = null;
+
+export function registerSignUpResumeHook(hook: SignUpResumeHook | null): void {
+  signUpResumeHook = hook;
+}
+
+/** Mount Clerk's SignUp into a host element with the same retry as the modal surfaces. */
+export function mountSignUpInto(
+  host: HTMLDivElement,
+  props: { routing: 'hash'; fallbackRedirectUrl: string },
+): void {
+  runClerkSurfaceOpen(
+    () => clerkInstance?.mountSignUp(host, { ...props, appearance: getAppearance() }),
+    (err) => {
+      console.error('[clerk] mount-sign-up failed (ui-components-not-ready):', err);
+      captureClerkSurfaceFailure('mount-sign-up', err, 'ui-components-not-ready');
+    },
+  );
+}
+
+export function unmountSignUpFrom(host: HTMLDivElement): void {
+  clerkInstance?.unmountSignUp(host);
 }
 
 /**

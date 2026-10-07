@@ -195,7 +195,7 @@ function extractUpstreamUrls(initializer) {
 }
 
 function canonicalizeUpstreamUrl(upstream) {
-  const url = new URL(upstream);
+  const url = new URL(upstream, 'https://api.worldmonitor.app');
   url.hash = '';
   url.host = url.host.toLowerCase();
   const parameters = [...url.searchParams.entries()].sort(([left], [right]) => left.localeCompare(right));
@@ -595,10 +595,8 @@ describe('feed parity: client vs server (PR #3715 follow-up)', () => {
       ['latam:Brasil Paralelo', 'Intentionally client-only catalog source.'],
       ['latam:El Tiempo', 'Intentionally client-only catalog source.'],
       ['latam:La Silla Vacía', 'Intentionally client-only catalog source.'],
-      ['latam:Mexico News Daily', 'Intentionally client-only catalog source.'],
       ['latam:Mexico Security', 'Intentionally client-only catalog source.'],
       ['latam:AP Mexico', 'Intentionally client-only catalog source.'],
-      ['latam:France 24 LatAm', 'Intentionally client-only catalog source.'],
       ['asia:Indian Express', 'Intentionally client-only catalog source.'],
       ['asia:India News Network', 'Intentionally client-only catalog source.'],
       ['asia:Thai PBS', 'Intentionally client-only catalog source.'],

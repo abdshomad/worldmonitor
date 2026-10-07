@@ -394,7 +394,7 @@ test('GTA Update records permission but stays inactive pending activation gates'
   assert.equal(rawManifestActiveEntries(manifest).some((row) => row.host === 'gtaupdate.com'), false);
 });
 
-test('TPS Open Data records the exact OGL-Ontario licence before reviewed', () => {
+test('TPS MCI records the exact OGL-Ontario licence before reviewed', () => {
   const inventory = scanUpstreamHosts(rootDir);
   const manifest = loadManifest(rootDir);
   for (const host of ['data.tps.ca', 'www.tps.ca']) {
@@ -406,9 +406,25 @@ test('TPS Open Data records the exact OGL-Ontario licence before reviewed', () =
     assert.match(entry.license, /Open Government Licence - Ontario/);
     assert.match(entry.attribution, /Contains information licensed under the Open Government Licence - Ontario/);
     assert.match(entry.license, /0a239a5563a344a3bbf8452504ed8d68/);
-    assert.match(entry.license, /46c7581a136445c78831acb657a4fb0d/);
+    assert.doesNotMatch(entry.license, /46c7581a136445c78831acb657a4fb0d/);
     assert.doesNotMatch(entry.license, /C4S_Public_NoGO/);
     assert.doesNotMatch(entry.license, /privacy-filtered public live/);
+  }
+});
+
+test('current TPS Calls CKAN hosts record the unresolved package licence', () => {
+  const inventory = scanUpstreamHosts(rootDir);
+  const manifest = loadManifest(rootDir);
+  for (const host of ['ckan0.cf.opendata.inter.prod-toronto.ca', 'open.toronto.ca']) {
+    assert.ok(inventory.some((entry) => entry.host === host), `${host} must be observed`);
+    const entry = [...manifest.entries, ...manifest.logicalEntries].find((row) => row.host === host);
+    assert.ok(entry, `${host} must have a generated attribution row`);
+    assert.equal(entry.status, 'terms-review');
+    assert.equal(entry.provider, 'City of Toronto Open Data');
+    assert.match(entry.license, /license_id=notspecified/);
+    assert.match(entry.license, /bfffadee-e6e5-4404-8455-e67e9ea11ba7/);
+    assert.match(entry.attribution, /Calls for Service Attended/);
+    assert.doesNotMatch(entry.attribution, /Open Government Licence/);
   }
 });
 
@@ -437,6 +453,10 @@ test('C4S CAD and TPS Open Data stay distinct catalog identities on the shared A
     'the Open Data identity group must not absorb the C4S ArcGIS host',
   );
   assert.deepEqual([...PROVIDER_IDENTITY_GROUPS['tps-open-data'].memberHosts].sort(), ['data.tps.ca', 'www.tps.ca']);
+  assert.deepEqual(
+    [...PROVIDER_IDENTITY_GROUPS['city-of-toronto-open-data'].memberHosts].sort(),
+    ['ckan0.cf.opendata.inter.prod-toronto.ca', 'open.toronto.ca', 'secure.toronto.ca'],
+  );
 });
 
 test('uppercase URL constants are included in the upstream inventory', () => {
@@ -448,9 +468,9 @@ test('uppercase URL constants are included in the upstream inventory', () => {
 
 test('live HLS playback origins are observed with an explicit presentation exclusion', () => {
   const inventory = scanUpstreamHosts(rootDir);
-  assert.ok(inventory.some((entry) => entry.host === 'pe-fa-lp02a.9c9media.com'));
+  assert.ok(inventory.some((entry) => entry.host === 'live-hls-apps-aje-fa.getaj.net'));
   const manifest = loadManifest(rootDir);
-  const entry = manifest.entries.find((candidate) => candidate.host === 'pe-fa-lp02a.9c9media.com');
+  const entry = manifest.entries.find((candidate) => candidate.host === 'live-hls-apps-aje-fa.getaj.net');
   assert.equal(entry?.status, 'excluded');
   assert.match(entry?.attribution ?? '', /presentation-only HLS stream/);
 });
@@ -532,6 +552,85 @@ test('scanUpstreamHosts does not crash on empty leftover api/[domain]/v1 trees',
   try {
     mkdirSync(join(fixture.dir, 'api', '[__docs_stats_probe__]', 'v1'), { recursive: true });
     assert.doesNotThrow(() => scanUpstreamHosts(fixture.dir));
+  } finally {
+    fixture.cleanup();
+  }
+});
+
+function writeUrlModule(path, host) {
+  mkdirSync(dirname(path), { recursive: true });
+  writeFileSync(path, `const SOURCE_URL = 'https://${host}/v1/data';\nexport const url = SOURCE_URL;\n`);
+}
+
+test('the source walk ignores generated inventory modules and compiled handler siblings', () => {
+  const fixture = makeFixtureCheckout();
+  try {
+    writeUrlModule(join(fixture.dir, 'api/_inventory-facts.generated.js'), 'pollution-generated.example');
+    writeUrlModule(join(fixture.dir, 'api/worldmonitor/probe/v1/list-probe.ts'), 'authored-ts.example');
+    writeUrlModule(join(fixture.dir, 'api/worldmonitor/probe/v1/list-probe.js'), 'pollution-compiled.example');
+    writeUrlModule(join(fixture.dir, 'api/authored-handler.js'), 'authored-js.example');
+    writeUrlModule(join(fixture.dir, 'scripts/legacy-probe.js'), 'scripts-js.example');
+    writeUrlModule(join(fixture.dir, 'scripts/legacy-probe.ts'), 'scripts-ts.example');
+
+    const inventory = scanUpstreamHosts(fixture.dir);
+    const hosts = inventory.map((entry) => entry.host).sort();
+    assert.deepEqual(
+      hosts,
+      ['authored-js.example', 'authored-ts.example', 'fixture.example', 'scripts-js.example', 'scripts-ts.example'],
+      'generated *.generated.* files and compiled api/ .js siblings of .ts handlers must not enter the inventory',
+    );
+    assert.equal(
+      inventory.find((entry) => entry.host === 'authored-ts.example')?.references[0]?.path,
+      'api/worldmonitor/probe/v1/list-probe.ts',
+    );
+    assert.equal(
+      inventory.find((entry) => entry.host === 'authored-js.example')?.references[0]?.path,
+      'api/authored-handler.js',
+    );
+    assert.equal(
+      inventory.find((entry) => entry.host === 'scripts-js.example')?.references[0]?.path,
+      'scripts/legacy-probe.js',
+    );
+    assert.equal(
+      inventory.find((entry) => entry.host === 'scripts-ts.example')?.references[0]?.path,
+      'scripts/legacy-probe.ts',
+    );
+
+    const { errors } = checkSourceAttribution(fixture.dir);
+    assert.ok(
+      errors.some((error) => error.includes('missing manifest entry for authored-js.example')),
+      `authored JS without a sibling .ts must remain visible: ${JSON.stringify(errors)}`,
+    );
+    assert.ok(
+      errors.some((error) => error.includes('missing manifest entry for scripts-js.example')),
+      `authored scripts/ JS with a sibling .ts must remain visible: ${JSON.stringify(errors)}`,
+    );
+    assert.equal(
+      errors.some((error) => /pollution-(?:generated|compiled)\.example/.test(error)),
+      false,
+      `generated pollution must not create attribution drift: ${JSON.stringify(errors)}`,
+    );
+  } finally {
+    fixture.cleanup();
+  }
+});
+
+test('the check gate stays green when Docker generators write untracked JS into scanned roots', () => {
+  const fixture = makeFixtureCheckout();
+  try {
+    // Same pollution the self-host Dockerfile creates: inventory-facts plus a
+    // compiled handler sibling that re-embeds the authored URL. Today the
+    // walk treats those as new references and the gate reports stale kinds.
+    writeUrlModule(join(fixture.dir, 'api/_inventory-facts.generated.js'), 'fixture.example');
+    writeFileSync(join(fixture.dir, 'api/probe.ts'), 'export const ready = true;\n');
+    writeUrlModule(join(fixture.dir, 'api/probe.js'), 'fixture.example');
+
+    const { errors } = checkSourceAttribution(fixture.dir);
+    assert.deepEqual(
+      errors,
+      [],
+      `untracked generator output must not fail the attribution gate: ${JSON.stringify(errors)}`,
+    );
   } finally {
     fixture.cleanup();
   }
@@ -912,13 +1011,13 @@ test('a playback-only host that gains a real fetch stops being excluded', () => 
     observed: true,
     kind: 'feed',
     status: 'excluded',
-    references: [{ path: 'src/components/LiveNewsPanel.ts' }],
+    references: [{ path: 'src/config/live-video-sources.ts' }],
   };
   const rebuilt = buildManifest(
     [{
       host: 'stream.example',
       kinds: ['structured'],
-      references: [{ path: 'scripts/seed-example.mjs' }, { path: 'src/components/LiveNewsPanel.ts' }],
+      references: [{ path: 'scripts/seed-example.mjs' }, { path: 'src/config/live-video-sources.ts' }],
     }],
     { entries: [playbackOnly], logicalEntries: [] },
   );
@@ -930,7 +1029,7 @@ test('a playback-only host that gains a real fetch stops being excluded', () => 
   // The same host while still playback-only stays excluded — otherwise the
   // assertions above would pass against a rule that never fires.
   const unchanged = buildManifest(
-    [{ host: 'stream.example', kinds: ['feed'], references: [{ path: 'src/components/LiveNewsPanel.ts' }] }],
+    [{ host: 'stream.example', kinds: ['feed'], references: [{ path: 'src/config/live-video-sources.ts' }] }],
     { entries: [playbackOnly], logicalEntries: [] },
   );
   assert.equal(unchanged.entries.find((entry) => entry.host === 'stream.example').status, 'excluded');

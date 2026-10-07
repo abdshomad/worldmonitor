@@ -82,6 +82,7 @@ const FULL_PANELS: Record<string, PanelConfig> = {
   'fsi': { name: 'Financial Stress', enabled: false, priority: 2 },
   'yield-curve': { name: 'Yield Curve', enabled: false, priority: 2 },
   'earnings-calendar': { name: 'Earnings Calendar', enabled: false, priority: 2 },
+  'material-events': { name: 'SEC Material Events', enabled: false, priority: 2 },
   'economic-calendar': { name: 'Economic Calendar', enabled: false, priority: 2 },
   'cot-positioning': { name: 'COT Positioning', enabled: true, priority: 2 },
   'liquidity-shifts': { name: 'Liquidity Shifts', enabled: true, priority: 2 },
@@ -503,6 +504,7 @@ const FINANCE_PANELS: Record<string, PanelConfig> = {
   'fsi': { name: 'Financial Stress', enabled: true, priority: 1 },
   'yield-curve': { name: 'Yield Curve', enabled: true, priority: 1 },
   'earnings-calendar': { name: 'Earnings Calendar', enabled: true, priority: 1 },
+  'material-events': { name: 'SEC Material Events', enabled: false, priority: 2 },
   'economic-calendar': { name: 'Economic Calendar', enabled: true, priority: 1 },
   'cot-positioning': { name: 'COT Positioning', enabled: true, priority: 2 },
   'liquidity-shifts': { name: 'Liquidity Shifts', enabled: true, priority: 1 },
@@ -525,6 +527,9 @@ const FINANCE_PANELS: Record<string, PanelConfig> = {
   'world-clock': { name: 'World Clock', enabled: true, priority: 2 },
   monitors: { name: 'My Monitors', enabled: true, priority: 2 },
   'latest-brief': { name: 'Latest Brief', enabled: true, priority: 1, premium: 'locked' as const },
+  'nq-pulse': { name: 'NQ Pulse', enabled: false, priority: 1 },
+  'nq-catalysts': { name: 'NQ Catalysts', enabled: false, priority: 1 },
+  'nq-news': { name: 'NQ News', enabled: false, priority: 2 },
 };
 
 const FINANCE_MAP_LAYERS: MapLayers = {
@@ -1161,6 +1166,12 @@ function getVariantPanelConfigs(variant: string): Record<string, PanelConfig> | 
     : undefined;
 }
 
+/** True when `panelId` is in the selected monitor's native catalog, not merely in ALL_PANELS. */
+export function isPanelNativeToVariant(panelId: string, variant: string): boolean {
+  const configs = getVariantPanelConfigs(variant);
+  return Boolean(configs && Object.prototype.hasOwnProperty.call(configs, panelId));
+}
+
 /** All panels from all variants — canonical cross-variant registry. */
 export const ALL_PANELS: Record<string, PanelConfig> = {
   ...HAPPY_PANELS,
@@ -1516,7 +1527,7 @@ export const PANEL_CATEGORY_MAP: Record<string, { labelKey: string; panelKeys: s
   },
   marketsFinance: {
     labelKey: 'header.panelCatMarketsFinance',
-    panelKeys: ['commodities', 'energy-complex', 'energy-risk-overview', 'pipeline-status', 'storage-facility-map', 'oil-inventories', 'fuel-prices', 'chokepoint-strip', 'fuel-shortages', 'energy-disruptions', 'hormuz-tracker', 'energy-crisis', 'markets', 'economic', 'global-procurement', 'trade-policy', 'sanctions-pressure', 'supply-chain', 'china-corridors', 'china-activity-nowcast', 'finance', 'polymarket', 'macro-signals', 'gulf-economies', 'etf-flows', 'stablecoins', 'crypto', 'heatmap', 'aaii-sentiment', 'cot-positioning', 'earnings-calendar', 'economic-calendar', 'fear-greed', 'fsi', 'macro-tiles', 'market-breadth', 'news-market-correlation', 'liquidity-shifts', 'national-debt', 'positioning-247', 'wsb-ticker-scanner', 'yield-curve', 'gold-intelligence', 'bigmac', 'fx', 'market-implications'],
+    panelKeys: ['commodities', 'energy-complex', 'energy-risk-overview', 'pipeline-status', 'storage-facility-map', 'oil-inventories', 'fuel-prices', 'chokepoint-strip', 'fuel-shortages', 'energy-disruptions', 'hormuz-tracker', 'energy-crisis', 'markets', 'economic', 'global-procurement', 'trade-policy', 'sanctions-pressure', 'supply-chain', 'china-corridors', 'china-activity-nowcast', 'finance', 'polymarket', 'macro-signals', 'gulf-economies', 'etf-flows', 'stablecoins', 'crypto', 'heatmap', 'aaii-sentiment', 'cot-positioning', 'earnings-calendar', 'material-events', 'economic-calendar', 'fear-greed', 'fsi', 'macro-tiles', 'market-breadth', 'news-market-correlation', 'liquidity-shifts', 'national-debt', 'positioning-247', 'wsb-ticker-scanner', 'yield-curve', 'gold-intelligence', 'bigmac', 'fx', 'market-implications'],
     variants: ['full', 'energy'],
   },
   topical: {
@@ -1555,7 +1566,7 @@ export const PANEL_CATEGORY_MAP: Record<string, { labelKey: string; panelKeys: s
   // Finance variant
   finMarkets: {
     labelKey: 'header.panelCatMarkets',
-    panelKeys: ['markets', 'stock-analysis', 'stock-backtest', 'daily-market-brief', 'markets-news', 'heatmap', 'macro-signals', 'analysis', 'polymarket'],
+    panelKeys: ['markets', 'stock-analysis', 'stock-backtest', 'daily-market-brief', 'markets-news', 'heatmap', 'macro-signals', 'analysis', 'polymarket', 'nq-pulse', 'nq-catalysts', 'nq-news'],
     variants: ['finance'],
   },
   fixedIncomeFx: {

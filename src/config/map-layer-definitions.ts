@@ -336,7 +336,7 @@ export const LAYER_EXPLANATIONS: Partial<Record<keyof MapLayers, LayerExplanatio
     category: 'News / Hotspots',
     purpose: 'Highlights monitored geopolitical hotspots and raises their level when related news and escalation signals converge.',
     source: 'WorldMonitor hotspot registry, RSS/GDELT news intelligence, hotspot escalation scoring, military activity, and CII context.',
-    freshness: 'Hotspot locations are curated/static. News feeds are freshness-tracked separately; live-news RSS cache expectations are around 5 minutes, while GDELT intelligence has longer seeded/cache budgets.',
+    freshness: 'Hotspot locations are curated/static. News feeds are freshness-tracked separately; hotspot levels are recomputed when the dashboard news feeds refresh, around 20 minutes apart, while GDELT intelligence has longer seeded/cache budgets.',
     confidence: 'Useful as a triage cue, not a citation-grade claim without opening the underlying news and country context.',
     limitations: [
       'News volume and keyword matching can overrepresent highly covered regions.',
@@ -407,16 +407,27 @@ export function isSunsetLayer(key: keyof MapLayers): boolean {
   return !IRAN_ATTACKS_ENABLED && key === 'iranAttacks';
 }
 
+export function getOrderedLayerKeys(variant: MapVariant): Array<keyof MapLayers> {
+  return (VARIANT_LAYER_ORDER[variant] ?? VARIANT_LAYER_ORDER.full)
+    .filter(k => !isSunsetLayer(k));
+}
+
+export function getCompleteLayerCatalogKeys(variant: MapVariant): Array<keyof MapLayers> {
+  const primary = getOrderedLayerKeys(variant);
+  const seen = new Set(primary);
+  const rest = (Object.keys(LAYER_REGISTRY) as Array<keyof MapLayers>)
+    .filter(k => !seen.has(k) && !isSunsetLayer(k));
+  return [...primary, ...rest];
+}
+
 export function getLayersForVariant(variant: MapVariant, kind: RendererKind): LayerDefinition[] {
-  const keys = VARIANT_LAYER_ORDER[variant] ?? VARIANT_LAYER_ORDER.full;
-  return keys
-    .filter(k => !isSunsetLayer(k))
+  return getOrderedLayerKeys(variant)
     .map(k => LAYER_REGISTRY[k])
     .filter(d => d.renderers.includes(kind));
 }
 
 export function getAllowedLayerKeys(variant: MapVariant): Set<keyof MapLayers> {
-  return new Set((VARIANT_LAYER_ORDER[variant] ?? VARIANT_LAYER_ORDER.full).filter(k => !isSunsetLayer(k)));
+  return new Set(getOrderedLayerKeys(variant));
 }
 
 export function sanitizeLayersForVariant(layers: MapLayers, variant: MapVariant): MapLayers {
@@ -426,6 +437,15 @@ export function sanitizeLayersForVariant(layers: MapLayers, variant: MapVariant)
     if (!allowed.has(key)) sanitized[key] = false;
   }
   return sanitized;
+}
+
+export function sanitizeResilienceScoreForRenderer(
+  layers: MapLayers,
+  isDeckGLActive: boolean,
+): MapLayers {
+  return layers.resilienceScore && !isDeckGLActive
+    ? { ...layers, resilienceScore: false }
+    : layers;
 }
 
 /**

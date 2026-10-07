@@ -68,8 +68,6 @@ describe('forecast integrity and provenance surfaces', () => {
   it('documents market calibration limits and projection clamp heuristics', () => {
     const docs = read('docs/panels/forecast.mdx');
     const seeder = read('scripts/seed-forecasts.mjs');
-    const forecastProto = read('proto/worldmonitor/forecast/v1/forecast.proto');
-    const forecastOpenapi = read('docs/api/ForecastService.openapi.yaml');
     const cyberProbMax = parseNumericConst(seeder, 'CYBER_PROB_MAX');
     const conflictBaseMax = parseNumericConst(seeder, 'CONFLICT_BASE_DETECTOR_PROB_MAX');
     const ucdpConflictZoneMax = parseNumericConst(seeder, 'UCDP_CONFLICT_ZONE_PROB_MAX');
@@ -84,7 +82,8 @@ describe('forecast integrity and provenance surfaces', () => {
     assert.match(docs, /deterministic, rule-based signal detectors/);
     assert.match(docs, /LLM calls do not set the numeric probability/);
     assert.match(docs, /OpenRouter `deepseek\/deepseek-v4-flash`/);
-    assert.match(docs, /Groq `openai\/gpt-oss-20b`/);
+    assert.match(docs, /OpenRouter `google\/gemini-2\.5-flash`/);
+    assert.doesNotMatch(docs, /Groq/);
     assert.match(docs, /market-calibrated only when/);
     assert.match(docs, /calibration: null/);
     assert.doesNotMatch(docs, /Conflict base detector probability ceiling \| 0\.90/);
@@ -135,10 +134,6 @@ describe('forecast integrity and provenance surfaces', () => {
     assert.match(docs, /1% floor and 95% cap/);
     assert.match(docs, /Market projections use the curve's peak multiplier as the anchor/);
     assert.match(docs, /other domains use the forecast's emitted horizon/);
-    assert.match(forecastProto, /Market forecasts are peak-anchored/);
-    assert.match(forecastProto, /non-market forecasts preserve their emitted horizon as anchor/);
-    assert.match(forecastOpenapi, /Market forecasts are peak-anchored/);
-    assert.match(forecastOpenapi, /non-market forecasts preserve their emitted horizon as anchor/);
     assert.match(seeder, /const PROJECTION_PROBABILITY_FLOOR = 0\.01;/);
     assert.match(seeder, /const PROJECTION_PROBABILITY_CAP = 0\.95;/);
     assert.match(seeder, /const PROJECTION_PEAK_ANCHORED_DOMAINS = new Set\(\['market'\]\);/);

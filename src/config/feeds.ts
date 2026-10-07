@@ -12,12 +12,15 @@ const railwayRss = rssProxyUrl;
 
 // Source tier system — canonical definition lives in server/_shared/source-tiers.ts
 // so server-side code can import it without pulling in client-only modules.
-export { SOURCE_TIERS, getSourceTier } from '../../server/_shared/source-tiers';
+export { SOURCE_TIERS, declaredSourceTier, getSourceTier } from '../../server/_shared/source-tiers';
 export {
+  PERSPECTIVE_LABEL_CAVEAT,
   SOURCE_PROPAGANDA_RISK,
   SOURCE_TYPES,
   UNREVIEWED_SOURCE_RISK,
+  composeProvenanceSummary,
   describePropagandaBadge,
+  getProvenanceFacts,
   getSourcePropagandaRisk,
   getSourceProvenanceState,
   getSourceTierBadgeTitle,
@@ -28,10 +31,14 @@ export {
   hasReviewedSourceType,
   isStateAffiliatedSource,
 } from '../../shared/source-provenance';
-export { resolveTelegramSourceName } from '../../shared/telegram-channel-trust';
+export {
+  resolveRegisteredTelegramSourceName,
+  resolveTelegramSourceName,
+} from '../../shared/telegram-channel-trust';
 export { computeCredibilityScore } from '../../shared/news-credibility.js';
 export type {
   PropagandaRisk,
+  ProvenanceFact,
   SourceProvenanceState,
   SourceRiskProfile,
   SourceType,
@@ -417,6 +424,9 @@ export const FULL_FEEDS: Record<string, Feed[]> = {
     { name: 'UNHCR', url: rss('https://news.google.com/rss/search?q=site:unhcr.org+OR+UNHCR+refugees+when:3d&hl=en-US&gl=US&ceid=US:en') },
   ],
   africa: [
+    // Regional desks widen country grounding beyond the world-news feeds (#7748).
+    { name: 'Guardian Africa', url: rss('https://www.theguardian.com/world/africa/rss') },
+    { name: 'France 24 Africa', url: rss('https://www.france24.com/en/africa/rss') },
     { name: 'Africa News', url: rss('https://news.google.com/rss/search?q=(Africa+OR+Nigeria+OR+Kenya+OR+"South+Africa"+OR+Ethiopia)+when:2d&hl=en-US&gl=US&ceid=US:en') },
     { name: 'Sahel Crisis', url: rss('https://news.google.com/rss/search?q=(Sahel+OR+Mali+OR+Niger+OR+"Burkina+Faso"+OR+Wagner)+when:3d&hl=en-US&gl=US&ceid=US:en') },
     { name: 'News24', url: rss('https://feeds.news24.com/articles/news24/TopStories/rss') },
@@ -457,6 +467,7 @@ export const FULL_FEEDS: Record<string, Feed[]> = {
     { name: 'Radio Ndeke Luka', url: rss('https://www.radiondekeluka.org/feed/'), lang: 'fr' },
   ],
   latam: [
+    { name: 'Guardian Caribbean', url: rss('https://www.theguardian.com/world/caribbean/rss') },
     { name: 'Latin America', url: rss('https://news.google.com/rss/search?q=(Brazil+OR+Mexico+OR+Argentina+OR+Venezuela+OR+Colombia+OR+Haiti)+when:2d&hl=en-US&gl=US&ceid=US:en') },
     { name: 'BBC Latin America', url: rss('https://feeds.bbci.co.uk/news/world/latin_america/rss.xml') },
     { name: 'Reuters LatAm', url: rss('https://news.google.com/rss/search?q=site:reuters.com+(Brazil+OR+Mexico+OR+Argentina)+when:3d&hl=en-US&gl=US&ceid=US:en') },
@@ -507,7 +518,7 @@ export const FULL_FEEDS: Record<string, Feed[]> = {
     { name: 'NDTV India', url: rss('https://feeds.feedburner.com/ndtvkhabar-latest'), lang: 'hi' },
     { name: 'Amar Ujala', url: rss('https://www.amarujala.com/rss/national.xml'), lang: 'hi' },
     { name: 'CNA', url: rss('https://www.channelnewsasia.com/api/v1/rss-outbound-feed?_format=xml') },
-    { name: 'MIIT (China)', url: rss('https://news.google.com/rss/search?q=site:miit.gov.cn+when:7d&hl=zh-CN&gl=CN&ceid=CN:zh-Hans'), lang: 'zh', strategicDefault: true },
+    { name: 'MIIT (China)', url: '/api/miit-news', lang: 'zh', strategicDefault: true },
     { name: 'MOFCOM (China)', url: rss('https://news.google.com/rss/search?q=site:mofcom.gov.cn+when:7d&hl=zh-CN&gl=CN&ceid=CN:zh-Hans'), lang: 'zh', strategicDefault: true },
     // Thailand
     { name: 'Bangkok Post', url: rss('https://news.google.com/rss/search?q=site:bangkokpost.com+when:1d&hl=en-US&gl=US&ceid=US:en'), lang: 'th', strategicDefault: true },
@@ -522,6 +533,8 @@ export const FULL_FEEDS: Record<string, Feed[]> = {
     { name: 'ABC News Australia', url: rss('https://www.abc.net.au/news/feed/2942460/rss.xml') },
     { name: 'Guardian Australia', url: rss('https://www.theguardian.com/australia-news/rss') },
     // Pacific Islands
+    { name: 'Guardian Pacific', url: rss('https://www.theguardian.com/world/pacific-islands/rss') },
+    { name: 'France 24 Asia Pacific', url: rss('https://www.france24.com/en/asia-pacific/rss') },
     { name: 'Island Times (Palau)', url: rss('https://islandtimes.org/feed/') },
     // Central Asia (#5953) — Russia rear area, China BRI, sanctions leakage
     { name: 'Eurasianet', url: rss('https://eurasianet.org/rss') },
@@ -1117,6 +1130,18 @@ export const FEEDS = SITE_VARIANT === 'tech'
 //  • data-loader `loadNews()` — loads preset categories + custom enabled panels
 //  • panel-layout — creates a NewsPanel for any enabled category, not just preset
 // See src/config/feed-resolution.ts for the merge + resolution helpers.
+// On-demand categories are in the canonical registry so an enabled matching
+// panel can resolve feeds, but they are NOT part of any variant FEEDS preset.
+export const ON_DEMAND_FEEDS: Record<string, Feed[]> = {
+  'nq-news': [
+    { name: 'Reuters Nasdaq Futures', url: rss('https://news.google.com/rss/search?q=site:reuters.com+(Nasdaq+futures+OR+NQ+OR+"E-mini")+when:1d&hl=en-US&gl=US&ceid=US:en') },
+    { name: 'Nasdaq-100 & QQQ', url: rss('https://news.google.com/rss/search?q=("Nasdaq-100"+OR+QQQ+OR+"Nasdaq+100")+when:1d&hl=en-US&gl=US&ceid=US:en') },
+    { name: 'Federal Reserve', url: rss('https://www.federalreserve.gov/feeds/press_all.xml') },
+    { name: 'NQ Influence Basket', url: rss('https://news.google.com/rss/search?q=(AAPL+OR+Apple+OR+MSFT+OR+Microsoft+OR+NVDA+OR+NVIDIA+OR+AMZN+OR+Amazon+OR+GOOGL+OR+Alphabet+OR+META+OR+AVGO+OR+Broadcom+OR+TSLA+OR+Tesla)+when:1d&hl=en-US&gl=US&ceid=US:en') },
+    { name: 'Semiconductors', url: rss('https://news.google.com/rss/search?q=(semiconductor+OR+chip+OR+"AI+chip"+OR+TSMC+OR+ASML)+when:1d&hl=en-US&gl=US&ceid=US:en') },
+  ],
+};
+
 export const CANONICAL_FEEDS: Record<string, Feed[]> = mergeCanonicalFeeds([
   FULL_FEEDS,
   TECH_FEEDS,
@@ -1124,6 +1149,7 @@ export const CANONICAL_FEEDS: Record<string, Feed[]> = mergeCanonicalFeeds([
   COMMODITY_FEEDS,
   ENERGY_FEEDS,
   HAPPY_FEEDS,
+  ON_DEMAND_FEEDS,
 ]);
 
 export const SOURCE_REGION_MAP: Record<string, { labelKey: string; feedKeys: string[] }> = {
@@ -1425,6 +1451,15 @@ export const CANADA_DEPTH_OPT_IN_SOURCES = [
   'Montreal Gazette',
 ] as const;
 
+/** New regional desks remain opt-in for returning denylist profiles (#7748). */
+export const CURATED_REGIONAL_OPT_IN_SOURCES = [
+  'Guardian Africa',
+  'France 24 Africa',
+  'Guardian Caribbean',
+  'Guardian Pacific',
+  'France 24 Asia Pacific',
+] as const;
+
 /** Chronological feed introductions used to reconstruct untouched cap states. */
 export const REGIONAL_FEED_ROLLOUT_STAGES = [
   {
@@ -1498,6 +1533,16 @@ export const REGIONAL_FEED_ROLLOUT_STAGES = [
     introducedNames: [
       ...CRISIS_DESK_ROLLOUT_SOURCES,
     ],
+    protectedNames: [
+      ...FRONTLINE_EUROPE_PROTECTED_SOURCES,
+      ...REGIONAL_FEED_ROLLOUT_DEFAULT_SOURCES,
+      ...CANADA_EN_DEFAULT_SOURCES,
+      ...CRISIS_FLOOR_EN_DEFAULT_SOURCES,
+      ...CRISIS_FLOOR_STRATEGIC_DEFAULT_SOURCES,
+    ],
+  },
+  {
+    introducedNames: [...CURATED_REGIONAL_OPT_IN_SOURCES],
     protectedNames: [
       ...FRONTLINE_EUROPE_PROTECTED_SOURCES,
       ...REGIONAL_FEED_ROLLOUT_DEFAULT_SOURCES,

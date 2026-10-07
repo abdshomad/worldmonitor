@@ -27,6 +27,10 @@ const apiDir = resolve(root, 'docs/api');
 
 const HTTP_METHODS = new Set(['get', 'post', 'put', 'delete', 'patch', 'options', 'head']);
 const GET_METHOD = new Set(['get']);
+// No projection-disabled roster any more: EVERY GET advertises the parameter,
+// and the licence obligation on the four paths that used to refuse it is
+// discharged by the attribution rider the gateway merges into the projected
+// response (shared/attribution-rider.ts).
 const serviceJsonSpecs = readdirSync(apiDir)
   .filter((f) => /Service\.openapi\.json$/.test(f))
   .sort();
@@ -139,17 +143,17 @@ describe('OpenAPI jmespath projection parameter contract', () => {
     );
   });
 
-  it('per-service JSON specs advertise jmespath on every discovered GET', () => {
+  it('per-service JSON specs advertise jmespath on every eligible discovered GET', () => {
     for (const file of serviceJsonSpecs) assertJmespathContract(jsonSpecsByFile.get(file), file);
     assert.ok(jsonServiceGetIds.length > 0, 'GET-operation discovery must not be empty');
   });
 
-  it('per-service YAML specs advertise jmespath on every discovered GET', () => {
+  it('per-service YAML specs advertise jmespath on every eligible discovered GET', () => {
     for (const file of serviceYamlSpecs) assertJmespathContract(yamlSpecsByFile.get(file), file);
     assertExactOperationParity(yamlServiceGetIds, jsonServiceGetIds, 'YAML and JSON service specs must expose the same service/method/path set');
   });
 
-  it('the unified bundle advertises jmespath on every discovered GET', () => {
+  it('the unified bundle advertises jmespath on every eligible discovered GET', () => {
     const bundle = loadUnifiedOpenApiSpec();
     assertJmespathContract(bundle, 'worldmonitor.openapi.yaml');
     const bundleGetIds = openApiOperationIds(bundle, { methods: GET_METHOD });

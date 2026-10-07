@@ -16,7 +16,7 @@
     "predictionMarkets": "Prognosemärkte",
     "loadingMarkets": "Prognosemärkte werden geladen...",
     "infrastructure": "Infrastrukturexposition",
-    "briefUnavailable": "KI-Lagebericht nicht verfügbar – konfigurieren Sie GROQ_API_KEY in den Einstellungen.",
+    "briefUnavailable": "KI-Lagebericht nicht verfügbar – konfigurieren Sie OPENROUTER_API_KEY in den Einstellungen.",
     "cached": "Zwischengespeichert",
     "fresh": "Aktuell",
     "noMarkets": "Keine aktiven Märkte für dieses Land.",
@@ -86,6 +86,7 @@
       "suppliers": "Arms suppliers ({{start}}–{{end}})",
       "source": "Sources: World Bank and SIPRI Arms Transfers Database. TIV measures transfer volume, not financial value.",
       "sourceWorldBank": "Source: World Bank.",
+      "snapshotAssembled": "Datenstand von {{source}} zusammengestellt am {{time}}",
       "unavailable": "Not available",
       "coverage": "Mapped coverage",
       "supplierRetained": "Supplier data retained from the last successful importer refresh."
@@ -125,11 +126,13 @@
       "doNotTravel": "Nicht reisen",
       "reconsiderTravel": "Reise überdenken",
       "exerciseCaution": "Vorsicht walten lassen",
+      "normalPrecautions": "Übliche Vorsichtsmaßnahmen",
       "advisory": "Reisehinweis",
       "activeSirens": "Aktive Sirenen",
       "sirens24h": "Sirenen / 24h",
       "aviationDisruptions": "Luftfahrtstörungen",
-      "gpsJammingZones": "GPS-Störzonen"
+      "gpsJammingZones": "GPS-Störzonen",
+      "temporalUnavailable": "Zeitliche Beobachtungen nicht verfügbar"
     },
     "countryFacts": "Länderfakten",
     "loadingFacts": "Länderfakten werden geladen...",
@@ -192,7 +195,7 @@
       "decisionSignalsUnavailable": "Der China-Entscheidungssignal-Snapshot ist derzeit nicht verfügbar."
     },
     "foodStocks": "Food stocks",
-    "foodStocksHelp": "USDA PSD commodity stocks-to-use by marketing year, with the world ratio alongside for context. FAOSTAT fills production only where PSD has no country coverage.",
+    "foodStocksHelp": "USDA PSD commodity stocks-to-use by marketing year, with the world ratio alongside for context. FAOSTAT Food Balances supplies production and domestic supply when PSD has no complete country balance.",
     "loadingFoodStocks": "Loading food stocks…",
     "foodStocksUnavailable": "Food stocks unavailable.",
     "foodStocksProLocked": "Upgrade to PRO for commodity stocks-to-use",
@@ -232,6 +235,71 @@
       "manufacturingShare": "Manufacturing employment",
       "source": "Sources: {{sources}}.",
       "retained": "{{stage}} data retained from the last successful refresh."
+    },
+    "fiveFactorScorecard": {
+      "title": "Fünf-Faktor-Resilienz-Scorecard",
+      "help": "Frozen v1 Evidenzwerte für Nahrung, Energie, Demografie, Technologie und Verteidigung. Erweitern Sie eine Zeile, um Eingaben, Quellenherkunft und Gründe für fehlende Daten zu prüfen.",
+      "loading": "Lade die fünf-Faktor-Scorecard…",
+      "unavailable": "Fünf-Faktor-Scorecard nicht verfügbar.",
+      "proLocked": "Upgrade auf PRO für die fünf-Faktor-Resilienz-Scorecard",
+      "insufficient": "Nicht genügend Daten",
+      "notAvailable": "Nicht verfügbar",
+      "noEvidence": "Keine Evidenz für diese Säule verfügbar.",
+      "score": "{{score}}/5",
+      "coverage": "{{coverage}}% Abdeckung",
+      "methodologyVersion": "Methodologie v{{version}}",
+      "methodologyLink": "Methodologie ansehen",
+      "pillars": {
+        "food": "Nahrung",
+        "energy": "Energie",
+        "demographics": "Demografie",
+        "technology": "Technologie",
+        "defense": "Verteidigung"
+      },
+      "reasons": {
+        "source-unavailable": "Quelle nicht verfügbar",
+        "country-unavailable": "Land nicht verfügbar",
+        "invalid-value": "Ungültiger Quellenwert",
+        "stale": "Evidenz veraltet",
+        "coverage-below-floor": "Abdeckung unter dem Bewertungsboden",
+        "required-group-missing": "Erforderliche Evidenzgruppe fehlt",
+        "missing-population": "Bevölkerung nicht verfügbar",
+        "redistribution-blocked": "Quellenumverteilung nicht erlaubt",
+        "pillar-unavailable": "Säule nicht verfügbar"
+      },
+      "inputs": {
+        "population": "Bevölkerung",
+        "food_productionBalance": "Produktionsbilanz",
+        "food_stocksToUse": "Lagerbestände zur Nutzung",
+        "food_waterSecurity": "Wassersicherheit",
+        "food_importDiversity": "Importdiversität",
+        "energy_productionBalance": "Produktionsbilanz",
+        "energy_lowCarbonShare": "Anteil erneuerbarer Energie",
+        "energy_gridEfficiency": "Netzwerkeffizienz",
+        "demographics_totalDependency": "Gesamte Abhängigkeit",
+        "demographics_oldAgeDependency": "Altersabhängigkeit",
+        "demographics_workingAgeProjection": "Prognose Erwerbsbevölkerung",
+        "demographics_tertiaryEnrollment": "Drittstufenschulbesuch",
+        "demographics_researchersPerMillion": "Forscher pro Million",
+        "demographics_stemGraduateShare": "Anteil STEM-Absolventen",
+        "demographics_trainedIndustrialShare": "Anteil ausgebildeter Industriearbeiter",
+        "demographics_manufacturingEmploymentShare": "Anteil Beschäftigung in der Industrie",
+        "technology_internetUse": "Internetnutzung",
+        "technology_mobileSubscriptions": "Mobilabonnements",
+        "technology_fixedBroadband": "Feste Breitbandverbindung",
+        "technology_rdSpend": "Forschung und Entwicklungsausgaben",
+        "technology_researchersPerMillion": "Forscher pro Million",
+        "technology_stemGraduateShare": "Anteil STEM-Absolventen",
+        "technology_electricityAccess": "Energiezugang",
+        "defense_expenditureUsd": "Militärausgaben",
+        "defense_expenditurePctGdp": "Militärlast",
+        "defense_personnel": "Personal der Streitkräfte",
+        "defense_industrialBalance": "Verteidigungsindustrielle Bilanz",
+        "defense_supplierDiversity": "Waffenlieferanten-Diversität"
+      }
+    },
+    "defenseIndustrialBase": {
+      "proLocked": "Upgraden Sie auf PRO für Waffenlieferanten-Abhängigkeiten und militärische Kapazität"
     }
   },
   "header": {
@@ -691,7 +759,7 @@
       "fresh": "Aktuell",
       "noMarkets": "Keine Prognosemärkte gefunden",
       "predictionMarkets": "Prognosemärkte",
-      "unavailable": "KI-Lagebericht nicht verfügbar – konfigurieren Sie GROQ_API_KEY in den Einstellungen."
+      "unavailable": "KI-Lagebericht nicht verfügbar – konfigurieren Sie OPENROUTER_API_KEY in den Einstellungen."
     },
     "countryBrief": {
       "components": {
@@ -727,7 +795,7 @@
       "predictionMarkets": "Prognosemärkte",
       "loadingMarkets": "Prognosemärkte werden geladen...",
       "infrastructure": "Infrastrukturexposition",
-      "briefUnavailable": "KI-Lagebericht nicht verfügbar – konfigurieren Sie GROQ_API_KEY in den Einstellungen.",
+      "briefUnavailable": "KI-Lagebericht nicht verfügbar – konfigurieren Sie OPENROUTER_API_KEY in den Einstellungen.",
       "cached": "Zwischengespeichert",
       "fresh": "Aktuell",
       "noMarkets": "Keine Prognosemärkte gefunden",
@@ -807,9 +875,12 @@
         "space": "WELTRAUM"
       },
       "paused": "Webcams pausiert",
-      "pausedIdle": "Webcams pausiert — Maus bewegen zum Fortsetzen",
       "play": "Abspielen",
-      "previewStatus": "Live-Vorschau"
+      "previewStatus": "Bereit zum Abspielen",
+      "connecting": "Verbindung wird hergestellt…",
+      "unverified": "Dieser Stream kann nicht als live bestätigt werden",
+      "offline": "{{city}} ist gerade offline",
+      "noFeeds": "Keine Live-Webcams in dieser Region verfügbar"
     },
     "regulation": {
       "timeline": "Zeitleiste",
@@ -905,7 +976,8 @@
       "refineryStage": "Refine",
       "stageUnavailable": "No published figures for this stage",
       "withheldNote": "W withheld",
-      "productionCaption": "Country shares of actual production. The map deposits layer shows where resources sit; this table shows who mines or refines them."
+      "productionCaption": "Country shares of actual production. The map deposits layer shows where resources sit; this table shows who mines or refines them.",
+      "productionProLocked": "Upgraden Sie auf PRO für Anteile von Bergbau- und Raffinerieländern mit Konzentration (HHI) nach Stufe"
     },
     "tradePolicy": {
       "tariffs": "Zölle",
@@ -1229,9 +1301,6 @@
       "base": "Basis",
       "nuclear": "Nuklear"
     },
-    "community": {
-      "joinDiscussion": "Gestalten Sie mit, was als Nächstes kommt"
-    },
     "threatLabels": {
       "critical": "KRIT",
       "high": "HOCH",
@@ -1240,8 +1309,16 @@
       "info": "INFO"
     },
     "pizzint": {
+      "indexSource": "Index: World Monitor · Standortdaten:",
+      "statusNormal": "NORMAL",
+      "statusNoData": "KEINE DATEN",
+      "statusNoBaseline": "KEIN REFERENZWERT",
+      "vsUsual": "gegenüber üblich",
       "title": "Pentagon-Pizza-Index",
       "tensionsTitle": "Geopolitische Spannungen",
+      "tensionsSource": "Spannungen: World Monitor anhand von GDELT-Ereignissen",
+      "insufficientData": "Unzureichende Daten",
+      "pizzaUnavailable": "Pizzeria-Aktivität nicht verfügbar",
       "source": "Quelle:",
       "defcon": "DEFCON {{level}}",
       "updated": "Aktualisiert {{timeAgo}}",
@@ -1255,11 +1332,11 @@
       "minutesAgo": "Vor {{m}}m",
       "hoursAgo": "Vor {{h}}h",
       "defconLabels": {
-        "1": "GESPANNTE PISTOLE – MAXIMALE BEREITSCHAFT",
-        "2": "SCHNELLES TEMPO – STREITKRÄFTE BEREIT",
-        "3": "ROUND HOUSE – EINSATZBEREITSCHAFT DER STREITKRÄFTE ERHÖHEN",
-        "4": "DOUBLE TAKE – ERHÖHTE AUFKLÄRUNGSBEREITSCHAFT",
-        "5": "AUSBLENDUNG – NIEDRIGSTE BEREITSCHAFT"
+        "1": "Maximale Aktivität",
+        "2": "Hohe Aktivität",
+        "3": "Erhöhte Aktivität",
+        "4": "Über dem Normalwert",
+        "5": "Normale Aktivität"
       }
     },
     "playback": {
@@ -1564,6 +1641,16 @@
       "loading": "Verbindung zum Telegram-Relay wird hergestellt...",
       "empty": "Keine Nachrichten verfügbar",
       "disabled": "Telegram-Relay nicht aktiv",
+      "watchlistPlaceholder": "Öffentlichen Kanal per @username hinzufügen",
+      "resolving": "Kanal wird geprüft...",
+      "invalidUsername": "Verwende einen öffentlichen Telegram-@username",
+      "resolveFailed": "Kanal konnte nicht gefunden werden",
+      "watchlistLimit": "Du kannst bis zu {{count}} eigene Kanäle verfolgen",
+      "previewMembers": "{{count}} Mitglieder",
+      "addChannel": "Kanal hinzufügen",
+      "added": "Hinzugefügt",
+      "remove": "Entfernen",
+      "custom": "Eigener Kanal",
       "filterAll": "Alle",
       "filterBreaking": "Eilmeldung",
       "filterConflict": "Konflikte",
@@ -1687,7 +1774,7 @@
     },
     "insights": {
       "noStories": "Noch keine aktuellen oder quellenübergreifenden Meldungen",
-      "infoTooltip": "<strong>KI-gestützte Analyse</strong><br>• <strong>World Brief</strong>: KI-Zusammenfassung (Groq/OpenRouter)<br>• <strong>Sentiment</strong>: Nachrichtentonanalyse<br>• <strong>Velocity</strong>: schnelllebige Meldungen<br>• <strong>Focal Points</strong>: korreliert Nachrichtenentitäten mit Kartensignalen (Militär, Proteste, Ausfälle)<br><em>Nur Desktop • Unterstützt von Llama 3.3 + Focal Point Detection</em>",
+      "infoTooltip": "<strong>KI-gestützte Analyse</strong><br>• <strong>World Brief</strong>: KI-Zusammenfassung (OpenRouter)<br>• <strong>Sentiment</strong>: Nachrichtentonanalyse<br>• <strong>Velocity</strong>: schnelllebige Meldungen<br>• <strong>Focal Points</strong>: korreliert Nachrichtenentitäten mit Kartensignalen (Militär, Proteste, Ausfälle)<br><em>Nur Desktop • Unterstützt von Llama 3.3 + Focal Point Detection</em>",
       "step": "Schritt {{step}}/{{total}}",
       "waitingForData": "Warten auf Nachrichtendaten...",
       "rankingStories": "Wichtige Meldungen werden priorisiert...",
@@ -1697,7 +1784,7 @@
       "streamQualityDesc": "Qualität für alle Live-Streams festlegen (niedriger spart Bandbreite)",
       "mapFlashLabel": "Live-Ereignispuls",
       "mapFlashDesc": "Orte auf der Karte aufblitzen lassen, wenn Eilmeldungen eintreffen",
-      "aiFlowCloudLabel": "Cloud-KI (Groq & OpenRouter)",
+      "aiFlowCloudLabel": "Cloud-KI (OpenRouter)",
       "aiFlowCloudDesc": "Schlagzeilen zur KI-Zusammenfassung an die Cloud senden (empfohlen)",
       "aiFlowBrowserLabel": "Lokales Browser-Modell",
       "aiFlowBrowserDesc": "KI lokal in Ihrem Browser ausführen",
@@ -1762,7 +1849,10 @@
       "provenanceTitle": "Herkunft der Berichterstattung: Anzahl der erfassten Meldungen und unterschiedlichen Quellen, aus denen dieser Lagebericht ausgewählt wurde",
       "compiledFrom": "Zusammengestellt aus {{stories}} Meldungen aus {{sources}} Quellen",
       "briefFreshness": "Generiert vor {{minutes}}m · neueste Quelle {{hours}}h alt",
-      "briefStoryDetails": "Story-Details ({{count}})"
+      "briefStoryDetails": "Details zur Meldung ({{count}})",
+      "streamIdleStopLabel": "Live-Video bei Inaktivität stoppen",
+      "streamIdleStopDesc": "Stoppt Live News und Live Webcams nach dieser Zeit ohne Aktivität und zeigt einen Hinweis im Panel an.",
+      "streamIdleStopNever": "Nie"
     },
     "etfFlows": {
       "unavailable": "ETF-Daten vorübergehend nicht verfügbar",
@@ -1773,6 +1863,7 @@
       "etfs": "ETFs",
       "netInflow": "NETTO-ZUFLUSS",
       "netOutflow": "NETTO-ABFLUSS",
+      "netNeutral": "NETTO-NEUTRAL",
       "table": {
         "ticker": "Ticker",
         "issuer": "Emittent",
@@ -1855,15 +1946,11 @@
     },
     "liveNews": {
       "notLive": "{{name}} sendet derzeit nicht live",
-      "cannotEmbed": "{{name}} kann hier nicht abgespielt werden — möglicherweise in Ihrer Region eingeschränkt (Fehler {{code}})",
-      "botCheck": "YouTube verlangt eine Anmeldung, um {{name}} abzuspielen",
       "signInToYouTube": "Bei YouTube anmelden",
       "openOnYouTube": "Auf YouTube öffnen",
       "manage": "Kanäle verwalten",
       "addChannel": "Kanal hinzufügen",
       "remove": "Entfernen",
-      "youtubeHandle": "YouTube-Handle (z. B. @Channel)",
-      "youtubeHandleOrUrl": "YouTube-Handle oder URL",
       "displayName": "Anzeigename (optional)",
       "channelSettings": "Kanaleinstellungen",
       "save": "Speichern",
@@ -1878,13 +1965,25 @@
       "regionMiddleEast": "Naher Osten",
       "regionAfrica": "Afrika",
       "regionOceania": "Ozeanien",
-      "invalidHandle": "Geben Sie einen gültigen YouTube-Handle ein (z. B. @KanalName)",
       "verifying": "Wird überprüft…",
       "noResults": "Keine Kanäle gefunden für \"{{term}}\"",
       "hlsUrl": "HLS-Stream-URL (optional)",
       "invalidHlsUrl": "Geben Sie eine gültige HLS-Stream-URL ein (.m3u8)",
       "playLiveFeed": "Live-Feed abspielen",
-      "readyStatus": "Bereit, wenn Sie es sind"
+      "readyStatus": "Bereit, wenn Sie es sind",
+      "embedBlocked": "YouTube zeigt {{name}} aktuell nicht auf anderen Websites ab",
+      "unavailable": "{{name}} kann gerade nicht wiedergegeben werden",
+      "noStream": "Für {{name}} ist noch kein Live-Stream eingerichtet",
+      "needsChannelUrl": "Fügen Sie {{name}} mit dessen Kanal-URL (youtube.com/channel/UC…) oder einer Live-Video-URL erneut hinzu",
+      "connecting": "Verbinde mit {{name}}…",
+      "recording": "Aufnahme",
+      "unverified": "Kann nicht bestätigen, dass dieser Stream live ist",
+      "playNextChannel": "Nächsten Kanal abspielen",
+      "channelOrVideoUrl": "YouTube-Kanal oder Video-URL",
+      "channelUrlHint": "Kanal-URL (youtube.com/channel/UC…) oder Live-Video-URL einfügen",
+      "youtubeChannel": "YouTube-Kanal",
+      "insecureStream": "{{name}} verwendet einen unsicheren (http) Stream, den Browser blockieren. Fügen Sie ihn mit einer sicheren (https) Stream-URL erneut hinzu",
+      "httpsStreamHint": "Browser blockieren unsichere (http) Streams. Fügen Sie eine sichere (https) Stream-URL ein"
     },
     "securityAdvisories": {
       "loading": "Reisehinweise werden geladen...",
@@ -1964,6 +2063,22 @@
       "metals": {
         "gold": "Gold",
         "silver": "Silver"
+      },
+      "divergence": {
+        "compositeValue": "Physischer Stressindex: {{value}} / 100",
+        "fiveDayTrend": "Fünf-Handelstage-Prämientrend",
+        "regimes": {
+          "normal": "Normal",
+          "elevated": "Erhöht",
+          "stressed": "Angespannt",
+          "extreme": "Extrem"
+        },
+        "states": {
+          "insufficientHistory": "Wird aufgewärmt: {{count}} / {{required}} Handelspunkte",
+          "staleInput": "Physische Benchmark ist veraltet",
+          "missingInput": "Divergenzsignal nicht verfügbar"
+        },
+        "twentyDayTrend": "Aufschlag-Trend über 20 Handelstage"
       }
     },
     "crypto": {
@@ -2080,7 +2195,7 @@
       "infoTooltip": "<strong>Wirtschaftskalender</strong> Geplante makroökonomische Veröffentlichungen: CPI, NFP, GDP, PMI und Zentralbankentscheidungen. Zeigt Prognose vs. Ist vs. Vorwert. Ereignisse mit hoher Auswirkung hervorgehoben. Quelle: Wirtschaftsdatenanbieter."
     },
     "fsi": {
-      "infoTooltip": "<strong>Finanzstress-Indikator</strong> Kansas City Fed Financial Stress Index (KCFSI): misst Stress an US-Finanzmärkten anhand von 11 Indikatoren, darunter Renditespreads, Volatilität und Kreuzkorrelationen. Positive Werte zeigen überdurchschnittlichen Stress an. Quelle: Federal Reserve Bank of Kansas City.",
+      "infoTooltip": "<strong>Finanzstressindikator</strong> WorldMonitor-Verhältnis von Hochzinsanleihen zu langfristigen US-Staatsanleihen, bereinigt um Aktienvolatilität und den Hochzins-Spread: (HYG / TLT) / (VIX × HY spread / 100). Dies ist nicht der Financial Stress Index der Federal Reserve Bank von Kansas City. Ein Wert von 1.5 oder höher bedeutet niedrigen Stress; unter 0.3 bedeutet hohen Stress.",
       "title": "Finanzstress-Indikator",
       "usFsiValue": "US-FSI-WERT",
       "cissTitle": "EU CISS (systemischer Stressindikator Euroraum)",
@@ -2120,6 +2235,26 @@
         "failedToLoad": "Fehler beim Laden"
       },
       "cissStale": "EZB hat keinen neueren Wert veröffentlicht – dieser Messwert könnte veraltet sein."
+    },
+    "supplyVulnerability": {
+      "title": "Rohstoffverwundbarkeit",
+      "help": "Länderexposition nach Rohstoff, abgeleitet aus Lieferantenkonzentration, Seetransit und verfügbaren strategischen Reserven.",
+      "loading": "Rohstoffverwundbarkeit wird geladen…",
+      "unavailable": "Daten zur Rohstoffverwundbarkeit sind nicht verfügbar",
+      "noCoverage": "Unzureichende Nachweise für dieses Land",
+      "unknown": "Unbekannt",
+      "concentration": "Konzentration",
+      "transit": "Transitverkehr",
+      "buffer": "Reserve",
+      "sources": "Quellen",
+      "methodology": "Methodik",
+      "hormuzTitle": "Rohstoffabhängigkeiten",
+      "dependentCountries": "Abhängige Länder",
+      "dependentCommodities": "Abhängige Rohstoffe",
+      "stateOk": "Aktuell",
+      "stateStale": "Veraltete Eingabe",
+      "stateInsufficient": "Unzureichende Daten",
+      "proLocked": "Upgraden Sie auf PRO für Rohstoff-Anfälligkeitsbewertung"
     },
     "hormuzTracker": {
       "infoTooltip": "<strong>Hormuz-Handelstracker</strong> AIS-Schiffsverfolgung in Echtzeit durch die Straße von Hormuz, den kritischsten Öl-Engpass der Welt. Überwacht Tankeranzahl, Störungsereignisse und wöchentliche Flussänderungen. Etwa 20 % der globalen Ölversorgung passiert hier täglich.",
@@ -2201,7 +2336,7 @@
       }
     },
     "marketImplications": {
-      "infoTooltip": "<strong>AI-Marktauswirkungen</strong> LLM-generierte Handelssignale aus Live-Geopolitik, Rohstoffen und Makrozustand nach jedem Prognosezyklus.<ul><li><strong>Richtung</strong>: LONG / SHORT / HEDGE mit Konfidenzwert</li><li><strong>Zeitrahmen</strong>: 1W, 2W, 1M oder 3M Horizont</li><li><strong>Katalysator</strong>: Wichtiger Auslöser hinter dem Signal</li><li><strong>Risiko</strong>: Warnung oder Ungültigkeitsbedingung</li></ul><em>Nur zu Informationszwecken. Keine Anlageberatung.</em>",
+      "infoTooltip": "<strong>AI-Marktauswirkungen</strong> LLM-generierte Handelssignale aus Live-Geopolitik, Rohstoffen und Makrozustand nach jedem Prognosezyklus.<ul><li><strong>Richtung</strong>: LONG / SHORT / HEDGE</li><li><strong>Zeitrahmen</strong>: 1W, 2W, 1M oder 3M Horizont</li><li><strong>Katalysator</strong>: Wichtiger Auslöser hinter dem Signal</li><li><strong>Risiko</strong>: Warnung oder Ungültigkeitsbedingung</li></ul><em>Nur zu Informationszwecken. Keine Anlageberatung.</em>",
       "title": "KI-Marktauswirkungen",
       "directions": {
         "long": "LONG",
@@ -2214,10 +2349,64 @@
       "signals_one": "{{count}} Signal",
       "signals_other": "{{count}} Signale",
       "disclaimer": "KI-generierte Handelssignale nur zu Informationszwecken. Keine Anlageberatung. Führen Sie immer eigene Recherchen durch.",
-      "unavailable": "AI-Marktimplikationen werden nach jedem Prognoselauf generiert. Bitte versuchen Sie es in Kürze erneut."
+      "unavailable": "AI-Marktimplikationen werden nach jedem Prognoselauf generiert. Bitte versuchen Sie es in Kürze erneut.",
+      "unscored": "Narrative Szenarien, nicht auf Genauigkeit bewertet."
     },
     "forecast": {
-      "infoTooltip": "<strong>KI-Prognosen</strong> KI-generierte Wahrscheinlichkeitsschätzungen für geopolitische und wirtschaftliche Ereignisse:<ul><li>Bereichsübergreifende Abdeckung: Konflikte, Märkte, Lieferkette, Cyber, Politik</li><li>Jede Prognose zeigt geschätzte Wahrscheinlichkeit, Konfidenzgrad und Zeithorizont</li><li>Kalibriert an den Basiswerten von Prognosemärkten, wo verfügbar</li></ul>Prognosen werden aktualisiert, wenn neue Aufklärungssignale eintreffen. Filtern Sie nach Bereich mit den Registerkarten oben."
+      "infoTooltip": "<strong>KI-Prognosen</strong> KI-generierte Wahrscheinlichkeitsschätzungen für geopolitische und wirtschaftliche Ereignisse:<ul><li>Bereichsübergreifende Abdeckung: Konflikte, Märkte, Lieferkette, Cyber, Politik</li><li>Jede Prognose zeigt geschätzte Wahrscheinlichkeit, Konfidenzgrad und Zeithorizont</li><li>Kalibriert an den Basiswerten von Prognosemärkten, wo verfügbar</li></ul>Prognosen werden aktualisiert, wenn neue Aufklärungssignale eintreffen. Filtern Sie nach Bereich mit den Registerkarten oben.",
+      "record": {
+        "label": "Bilanz",
+        "labelHint": "Wie die veröffentlichten Prognosen nach ihrer Auflösung in den letzten {{days}} Tagen abgeschnitten haben. Zeiger auf eine Zahl halten, um ihre Bedeutung zu sehen.",
+        "unavailable": "Derzeit nicht verfügbar",
+        "insufficient": "Noch nicht genug bewertete Prognosen",
+        "brier": "Brier-Score {{score}} (n={{n}})",
+        "brierHint": "Brier-Score über {{n}} bewertete Prognosen: die mittlere quadratische Abweichung zwischen der prognostizierten Wahrscheinlichkeit und dem tatsächlichen Ausgang. 0 ist perfekt, 0,25 entspricht einem Münzwurf, niedriger ist besser.",
+        "baseRate": "Basisrate {{score}} (n={{n}})",
+        "baseRateHint": "Was ein Prognostiker erreicht hätte, der immer die beobachtete Ja-Quote nennt, auf denselben {{n}} Prognosen ({{pct}} % endeten mit Ja). Wer besser ist, liefert echte Information.",
+        "void": "Ungültig {{pct}} % ({{count}} von {{resolved}})",
+        "voidHint": "Aufgelöste Prognosen, die nicht bewertet werden konnten, von {{resolved}} aufgelösten im Zeitraum.",
+        "stale": "Veraltet",
+        "staleHint": "Zuletzt bewertet am {{date}}. Die Bewertung ist seitdem nicht gelaufen, daher sind diese Zahlen älter, als sie sein sollten.",
+        "fullRecord": "Vollständige Bilanz"
+      },
+      "reliability": {
+        "measured": "{{domain}} n={{n}} · Brier {{score}} vs Basisrate {{base}}",
+        "measuredHint": "Wie veröffentlichte {{domain}}-Prognosen bei {{n}} bewerteten Prognosen in den letzten {{days}} Tagen abgeschnitten haben. Die Basisrate ist das Ergebnis, das man durch konstante Antworten mit der beobachteten Ja-Quote des Bereichs erhalten würde. Niedriger ist besser. Dies ist die Bilanz des Bereichs, nicht dieser Prognose.",
+        "unmeasured": "Noch nicht gemessen",
+        "unmeasuredHint": "{{domain}}-Prognosen haben {{n}} bewertete Ergebnisse in den letzten {{days}} Tagen. Ein Bereich benötigt {{min}}, bevor seine Genauigkeit angezeigt wird."
+      },
+      "resolution": {
+        "last": "Zuletzt: {{outcome}}",
+        "lastSr": "Das vorherige Fenster dieser Prognose wurde mit {{outcome}} aufgelöst.",
+        "history": "Letzte Fenster, neueste zuerst: {{list}}",
+        "outcome": {
+          "yes": "JA",
+          "no": "NEIN",
+          "void": "UNGÜLTIG"
+        },
+        "void": {
+          "no_establishable_metric": "Der Feed hatte keinen Messwert für diese Frage",
+          "value_source_never_settled": "Der Feed veröffentlichte keinen festgestellten Wert",
+          "count_source_window_not_retained": "Der Feed behielt das Fragefenster nicht mehr",
+          "unsupported_window": "Die Frage konnte nicht gegen ihren Feed überprüft werden",
+          "unsupported_metric_key": "Die Frage konnte nicht gegen ihren Feed überprüft werden",
+          "not_hard_spec": "Die Frage konnte nicht gegen ihren Feed überprüft werden",
+          "missing_threshold": "Der Frage fehlte ein Schwellenwert",
+          "missing_deadline": "Der Frage fehlte eine Frist",
+          "missing_generated_at": "Der Prognose fehlte das Startdatum",
+          "beyond_archive_horizon": "Das Nachrichtenarchiv deckte das Fragefenster nicht mehr ab",
+          "no_archive_evidence": "Das Nachrichtenarchiv hatte nichts zum Thema",
+          "all_judges_void": "Beide Bewerter fanden die Evidenz unzureichend",
+          "judge_disagreement": "Die Bewerter waren sich uneinig",
+          "judge_retry_exhausted": "Die Bewerter gaben kein Urteil ab",
+          "withheld_unpublished": "Diese Art von Prognose wird nicht mehr veröffentlicht",
+          "other": "Konnte nicht aufgelöst werden"
+        }
+      },
+      "horizons": {
+        "label": "Auch bewertet bei: {{list}}",
+        "hint": "Die Schlagzeilen-Wahrscheinlichkeit wird am eigenen Zeithorizont der Prognose bewertet. Die Projektion an jedem dieser Horizonte wird ebenfalls bewertet, anhand ihres Quell-Feeds, unter Verwendung des zuerst für diese Prognose veröffentlichten Wertes. Projektionswerte werden nicht angezeigt, da der aktuelle Wert vom bewerteten abweichen kann."
+      }
     },
     "escalationCorrelation": {
       "infoTooltip": "<strong>Eskalationsmonitor</strong> Erkennt konvergierende geopolitische Signale:<ul><li>Korreliert Militärbewegungen, Konfliktereignisse und Nachrichten-Spitzen</li><li>Bewertet Konvergenzzonen nach Schweregrad (kritisch/hoch/mittel/niedrig)</li><li>Verfolgt Eskalations- oder Deeskalationstrends im Laufe der Zeit</li></ul>Klicken Sie auf eine Kachel, um zur Region auf der Karte zu springen."
@@ -2515,7 +2704,14 @@
       "signals_one": "{{count}} Signal",
       "signals_other": "{{count}} Signale",
       "analyzing": "Wird analysiert...",
-      "viewOnMap": "Auf Karte anzeigen"
+      "viewOnMap": "Auf Karte anzeigen",
+      "waiting": "Warten auf die nächste Datenaktualisierung. Dieses Panel wird automatisch aktualisiert.",
+      "offline": "Warten auf eine Verbindung. Dieses Panel wird automatisch aktualisiert, sobald Sie wieder online sind.",
+      "updated": "Aktualisiert {{time}}",
+      "saved": "Letzte bekannte Aktualisierung {{time}} · Suche nach Aktualisierungen",
+      "savedOffline": "Letzte bekannte Aktualisierung {{time}} · Offline",
+      "localSignals": "Basierend auf geladenen Dashboard-Signalen",
+      "emptySaved": "Keine Konvergenz in der letzten bekannten Aktualisierung."
     },
     "thermalEscalation": {
       "title": "Thermische Eskalation",
@@ -2665,6 +2861,68 @@
       "rubBase": "Russische Zentralbank — Rubel pro 1 Einheit",
       "rubPerUnit": "Rubel pro Einheit",
       "sourceCbr": "Quelle: Russische Zentralbank"
+    },
+    "passkeyOffer": {
+      "title": "Passkey speichern?",
+      "body": "Melden Sie sich beim nächsten Mal mit Ihrem Fingerabdruck, Gesicht oder der Geräte-PIN an — kein Passwort zum Merken.",
+      "accept": "Passkey speichern",
+      "dismiss": "Später",
+      "close": "Schließen",
+      "announce": "Speichern Sie einen Passkey, um sich beim nächsten Anmelden schneller anzumelden.",
+      "busy": "Gerät wird vorbereitet…",
+      "succeeded": "Passkey gespeichert. Sie können ihn beim nächsten Anmelden verwenden.",
+      "retryable": "Das konnte nicht abgeschlossen werden. Sie können es erneut versuchen.",
+      "failed": "Wir konnten keinen Passkey auf diesem Gerät speichern."
+    },
+    "decisionBrief": {
+      "commodityTitle": "Entscheidungsvorlage für Rohstoffe",
+      "commodity": "Rohstoff / Produkt",
+      "blockedChokepoint": "Als blockiert angenommener Engpass",
+      "commodityCapture": "Rohstoffvergleich erfassen",
+      "title": "Entscheidungsbrief",
+      "fuel": "Brennstoff",
+      "chokepoint": "Engpass",
+      "baseline": "Unterbrechung im Ausgangsszenario",
+      "comparison": "Unterbrechung im Vergleichsszenario",
+      "capture": "Beide erfassen / aktualisieren",
+      "downloadHtml": "Entscheidungsbrief als HTML herunterladen",
+      "downloadJson": "Entscheidungsbrief als JSON herunterladen",
+      "back": "← Zurück zum Länderbrief",
+      "select": "Wählen Sie eine Energieunterbrechung und erfassen Sie dann beide Szenarien.",
+      "changed": "Auswahl geändert. Erfassen Sie vor dem Export beide Szenarien.",
+      "loading": "Beide Szenarien werden erfasst…",
+      "captured": "Erfasst. Prüfen Sie vor dem Download die Beobachtungsdaten und Einschränkungen.",
+      "failed": "Die Szenarien konnten nicht erfasst werden. Prüfen Sie Ihren Zugang und versuchen Sie es erneut. Es ist kein Ergebnis zum Exportieren verfügbar.",
+      "locked": "Der Entscheidungsbrief ist mit Pro verfügbar."
+    },
+    "liveMedia": {
+      "idleStatus": "Wegen Inaktivität angehalten",
+      "idleBody": "Live-Video nach {{duration}} ohne Maus-, Tastatur- oder Touch-Aktivität gestoppt.",
+      "idleResume": "Fortsetzen",
+      "idleKeepPlaying": "Live-Video bei Inaktivität weiterspielen",
+      "idleSettingsHint": "Dies können Sie jederzeit unter Einstellungen › Medien ändern.",
+      "idleKeepPlayingToast": "Live-Video wird bei Inaktivität weitergespielt. Ändern Sie dies unter Einstellungen › Medien."
+    },
+    "corroboration": {
+      "singlePublisher": "Einzelner Verleger",
+      "singlePublisherHint": "Bislang berichtet nur ein Verleger darüber. Dies beschreibt die Berichterstattung, nicht die Genauigkeit.",
+      "tier4Only": "Nur niedrigstufige Quellen",
+      "tier4OnlyHint": "Jedes Medium, das darüber berichtet, ist eine Tier-4-Quelle (Aggregatoren und Blogs). Dies beschreibt die Berichterstattung, nicht die Genauigkeit.",
+      "rosterListed": "({{listed}} aufgeführt)",
+      "rosterFeeds": "Gesehene Feeds: {{labels}}",
+      "rosterLegend": "Tiers ordnen Quellen ein; sie beurteilen diese Aussage nicht.",
+      "tierDocsLink": "Wie Tiers vergeben werden",
+      "tierChip": "T{{tier}}",
+      "tierChipUndeclared": "T?",
+      "tierTitle1": "Tier 1: Nachrichtenagenturen und offizielle Stellen",
+      "tierTitle2": "Tier 2: Große Medien",
+      "tierTitle3": "Tier 3: Fach-, Regional- und Think-Tank-Quellen",
+      "tierTitle4": "Tier 4: Aggregatoren und Blogs",
+      "tierTitleUndeclared": "Tier nicht angegeben: noch nicht geprüft",
+      "rosterSummary": "Berichtet von {{publishers}}",
+      "rosterSummaryTier1": "Berichtet von {{publishers}}, darunter {{tier1}} Tier-1",
+      "rosterPublishers_one": "{{count}} Verleger",
+      "rosterPublishers_other": "{{count}} Verlegern"
     }
   },
   "popups": {
@@ -2702,6 +2960,10 @@
     "protest": {
       "acledVerified": "ACLED (verifiziert)",
       "gdelt": "GDELT",
+      "records": "Einträge",
+      "mediaSignal": "Unbestätigter Medienhinweis",
+      "relatedArticle": "Zugehöriger Artikel",
+      "mediaSignalDetail": "Dieser Ort wird in Artikeln über Unruhen erwähnt. Ein Ereignis vor Ort ist nicht bestätigt.",
       "riots": "Unruhen",
       "highSeverity": "Hoher Schweregrad"
     },
@@ -3148,8 +3410,8 @@
   "signals": {
     "context": {
       "prediction_leads_news": {
-        "whyItMatters": "Prognosemärkte preisen Informationen oft ein, bevor sie zur Nachricht werden — Händler haben möglicherweise frühzeitigen Zugang zu Entwicklungen.",
-        "actionableInsight": "In den nächsten 1-6 Stunden auf Breaking News achten, die die Marktbewegung erklären könnten.",
+        "whyItMatters": "Ein Vorhersagemarkt hat sich bewegt, während die Berichterstattung zum Thema gering blieb – der Markt könnte auf Informationen reagieren, über die noch nicht berichtet wurde.",
+        "actionableInsight": "Achten Sie auf aktuelle Meldungen, die die Marktbewegung erklären könnten.",
         "confidenceNote": "Höheres Vertrauen, wenn sich mehrere Prognosemärkte in die gleiche Richtung bewegen."
       },
       "news_leads_markets": {
@@ -3446,7 +3708,8 @@
   "auth": {
     "signIn": "Anmelden",
     "createAccount": "Konto erstellen",
-    "settings": "Einstellungen"
+    "settings": "Einstellungen",
+    "passkeyOffer": {}
   },
   "mcp": {
     "connectPanel": "MCP verbinden",

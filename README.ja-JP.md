@@ -1,17 +1,15 @@
 # World Monitor
 
-[English](README.md) | [简体中文](README.zh-CN.md)
+[English](README.md) | [Русский](README.ru.md) | [简体中文](README.zh-CN.md)
 
 **リアルタイム・グローバルインテリジェンスダッシュボード** — AI によるニュース集約、地政学モニタリング、インフラ追跡を統合された状況認識インターフェースで提供します。
 
 [![GitHub stars](https://img.shields.io/github/stars/koala73/worldmonitor?style=social)](https://github.com/koala73/worldmonitor/stargazers)
-[![Discord](https://img.shields.io/badge/Discord-Join-5865F2?style=flat&logo=discord&logoColor=white)](https://discord.gg/re63kWKxaz)
 [![License: AGPL v3](https://img.shields.io/badge/License-AGPL%20v3-blue.svg)](https://www.gnu.org/licenses/agpl-3.0)
 [![TypeScript](https://img.shields.io/badge/TypeScript-007ACC?style=flat&logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
 [![Last commit](https://img.shields.io/github/last-commit/koala73/worldmonitor)](https://github.com/koala73/worldmonitor/commits/main)
 [![Latest release](https://img.shields.io/github/v/release/koala73/worldmonitor?style=flat)](https://github.com/koala73/worldmonitor/releases/latest)
 [![npm: worldmonitor](https://img.shields.io/npm/v/worldmonitor?logo=npm&label=npm)](https://www.npmjs.com/package/worldmonitor)
-[![smithery badge](https://smithery.ai/badge/worldmonitor/wm-mcp)](https://smithery.ai/servers/worldmonitor/wm-mcp)
 [![skills.sh](https://skills.sh/b/koala73/worldmonitor)](https://skills.sh/koala73/worldmonitor)
 
 <p align="center">
@@ -110,7 +108,7 @@ npm run dev:energy     # energy.worldmonitor.app
 |----------|-------------|
 | **フロントエンド** | Vanilla TypeScript、Vite、globe.gl + Three.js、deck.gl + MapLibre GL |
 | **デスクトップ** | Tauri 2 (Rust) + Node.js サイドカー |
-| **AI/ML** | Ollama / Groq / OpenRouter、Transformers.js (ブラウザ側) |
+| **AI/ML** | Ollama / OpenRouter、Transformers.js (ブラウザ側) |
 | **API コントラクト** | Protocol Buffers、sebuf HTTP アノテーション |
 | **デプロイ** | Vercel Edge Functions、Railway リレー、Tauri、PWA |
 | **キャッシュ** | Redis (Upstash)、3 層キャッシュ、CDN、Service Worker |

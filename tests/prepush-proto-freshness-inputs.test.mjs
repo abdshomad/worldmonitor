@@ -17,10 +17,14 @@ import { tmpdir } from 'node:os';
 import { dirname, join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { execFileSync } from 'node:child_process';
+import { parse as parseYaml } from 'yaml';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const MAKEFILE = readFileSync(join(ROOT, 'Makefile'), 'utf8').replace(/\r\n/g, '\n');
 const HOOK = readFileSync(join(ROOT, '.husky', 'pre-push'), 'utf8').replace(/\r\n/g, '\n');
+const PROTO_WORKFLOW = parseYaml(
+  readFileSync(join(ROOT, '.github', 'workflows', 'proto-check.yml'), 'utf8'),
+);
 
 function extractGenerateRecipe() {
   const match = MAKEFILE.match(/^generate:.*?\n((?:\t[^\n]*\n|#[^\n]*\n|\s*\n)+)/m);
@@ -105,7 +109,7 @@ function makeProtoInputRepo() {
     writeFileSync(target, contents);
   };
   git(['init', '--quiet', '--initial-branch=main', '.']);
-  git(['config', 'user.email', 'proto-freshness@example.invalid']);
+  git(['config', 'user.email', 'proto-freshness@wm-fixture.localhost']);
   git(['config', 'user.name', 'Proto Freshness Fixture']);
   write('proto/service.proto', 'syntax = "proto3";\n');
   write('Makefile', 'generate:\n\t@true\n');
@@ -163,6 +167,14 @@ describe('proto-freshness inputs cover every make generate script and generation
       [],
       `PROTO_INPUTS omits generate inputs (false skip / stale docs/api):\n${missing.map((path) => `  ${path}`).join('\n')}`,
     );
+  });
+
+  test('the CI path registry covers every pre-push proto input', () => {
+    const ciInputs = [
+      ...(PROTO_WORKFLOW.env?.CODEGEN_INPUT_PATHS ?? '').split(/\s+/),
+      ...(PROTO_WORKFLOW.env?.GENERATED_PATHS ?? '').split(/\s+/),
+    ].filter(Boolean).map((path) => path.replace(/\/$/, ''));
+    assert.deepEqual([...protoInputs].sort(), ciInputs.sort(), 'local and CI registries must be identical');
   });
 
   test('the proto trigger uses PROTO_INPUTS so an injector-only edit cannot skip the gate', () => {

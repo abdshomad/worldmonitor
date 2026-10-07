@@ -10,10 +10,12 @@ import {
   isLayerToggleAllowed,
   isLayerEntitled,
   sanitizeLockedLayers,
+  sanitizeResilienceScoreForRenderer,
   shouldSanitizeLockedLayers,
   type RendererKind,
 } from '@/config/map-layer-definitions';
 import { isProTierResolved } from '@/services/widget-store';
+import { t } from '@/services/i18n';
 import type { MapComponent, MapComponentOptions } from './Map';
 import type { DeckGLMap, DeckMapView, CountryClickPayload } from './DeckGLMap';
 import type { GlobeMap } from './GlobeMap';
@@ -21,6 +23,7 @@ import type {
   MapLayers,
   Hotspot,
   NewsItem,
+  NewsLocationMarker,
   InternetOutage,
   RelatedAsset,
   AssetType,
@@ -116,6 +119,8 @@ export interface MapContainerState {
 
 export interface MapContainerOptions {
   chrome?: boolean;
+  mapLibreWorkerUrl?: string;
+  preferDesktopRenderer?: boolean;
   isFreeTierFallbackActive?: () => boolean;
 }
 
@@ -123,6 +128,12 @@ export type ViewportTransitionFailureReason =
   | 'viewport_superseded'
   | 'renderer_changed'
   | 'viewport_interrupted';
+
+export interface MapRendererSwitchResult {
+  renderer: 'globe' | 'deck' | 'svg';
+  mode: 'globe' | 'flat';
+  fallback: boolean;
+}
 
 export class ViewportTransitionError extends Error {
   public constructor(public readonly reason: ViewportTransitionFailureReason) {
@@ -149,7 +160,6 @@ interface TechEventMarker {
 }
 
 type FireMarker = { lat: number; lon: number; brightness: number; frp: number; confidence: number; region: string; acq_date: string; daynight: string };
-type NewsLocationMarker = { lat: number; lon: number; title: string; threatLevel: string; timestamp?: Date };
 type CIIScore = { code: string; score: number; level: string };
 
 /**
@@ -159,6 +169,7 @@ type CIIScore = { code: string; score: number; level: string };
 export class MapContainer {
   private container: HTMLElement;
   private isMobile: boolean;
+  private readonly preferDesktopRenderer: boolean;
   private deckGLMap: DeckGLMap | null = null;
   private svgMap: MapComponent | null = null;
   private globeMap: GlobeMap | null = null;
@@ -167,6 +178,7 @@ export class MapContainer {
   private useDeckGL: boolean;
   private useGlobe: boolean;
   private readonly chrome: boolean;
+  private readonly mapLibreWorkerUrl: string | undefined;
   private readonly svgLayerToggleGuard: NonNullable<MapComponentOptions['canToggleLayer']>;
   private readonly isFreeTierFallbackActive: (() => boolean) | null;
   private isResizingInternal = false;
@@ -180,6 +192,7 @@ export class MapContainer {
     this.markHumanViewportInteraction();
   };
   private rendererReady = false;
+  private rendererInitError: Error | null = null;
   private rendererReadyWaiters = new Set<{
     resolve: () => void;
     reject: (error: Error) => void;
@@ -200,6 +213,7 @@ export class MapContainer {
   private cachedOnStateChanged: ((state: MapContainerState) => void) | null = null;
   private cachedOnLayerChange: ((layer: keyof MapLayers, enabled: boolean, source: 'user' | 'programmatic') => void) | null = null;
   private cachedOnTimeRangeChanged: ((range: TimeRange) => void) | null = null;
+  private cachedOnNewsClicked: ((item: Pick<NewsLocationMarker, 'article' | 'title'>) => void) | null = null;
   private cachedOnCountryClicked: ((country: CountryClickPayload) => void) | null = null;
   private cachedOnHotspotClicked: ((hotspot: Hotspot) => void) | null = null;
   private cachedOnAircraftPositionsUpdate: ((positions: PositionSample[]) => void) | null = null;
@@ -260,6 +274,7 @@ export class MapContainer {
     this.container = container;
     this.initialState = initialState;
     this.chrome = options.chrome ?? true;
+    this.mapLibreWorkerUrl = options.mapLibreWorkerUrl;
     this.svgLayerToggleGuard = (layer, currentlyEnabled) => isLayerToggleAllowed(
       layer,
       currentlyEnabled === true,
@@ -267,6 +282,7 @@ export class MapContainer {
     );
     this.isFreeTierFallbackActive = options.isFreeTierFallbackActive ?? null;
     this.isMobile = isMobileDevice();
+    this.preferDesktopRenderer = options.preferDesktopRenderer ?? false;
     this.useGlobe = preferGlobe && this.hasGlobeSupport();
 
     this.useDeckGL = !this.useGlobe && this.shouldUseDeckGL();
@@ -279,8 +295,11 @@ export class MapContainer {
     this.container.addEventListener('touchstart', this.invalidateViewportAuthority, { passive: true });
     this.container.addEventListener('keydown', this.invalidateViewportAuthority);
 
-    if (!this.useDeckGL && this.initialState.layers?.resilienceScore) {
-      this.initialState = { ...this.initialState, layers: { ...this.initialState.layers, resilienceScore: false } };
+    if (this.initialState.layers) {
+      const layers = sanitizeResilienceScoreForRenderer(this.initialState.layers, this.useDeckGL);
+      if (layers !== this.initialState.layers) {
+        this.initialState = { ...this.initialState, layers };
+      }
     }
 
     // init() attaches the resize observer synchronously (before its first await),
@@ -326,7 +345,7 @@ export class MapContainer {
     // Keep the default mobile path on the lightweight SVG renderer. High-end
     // phones can still request globe mode explicitly via the persisted mode,
     // but they should not pull Deck/MapLibre before first paint by default.
-    if (this.isMobile) return false;
+    if (this.isMobile && !this.preferDesktopRenderer) return false;
     if (!this.hasWebGLSupport()) return false;
     return true;
   }
@@ -360,8 +379,11 @@ export class MapContainer {
   }
 
   private sanitizeNonDeckLayers(): void {
-    if (this.initialState.layers?.resilienceScore) {
-      this.initialState = { ...this.initialState, layers: { ...this.initialState.layers, resilienceScore: false } };
+    if (this.initialState.layers) {
+      const layers = sanitizeResilienceScoreForRenderer(this.initialState.layers, false);
+      if (layers !== this.initialState.layers) {
+        this.initialState = { ...this.initialState, layers };
+      }
     }
   }
 
@@ -404,6 +426,7 @@ export class MapContainer {
     // currently selected generation may publish readiness; otherwise an old
     // async renderer could wake callers that are waiting on its replacement.
     if (!this.isCurrentRendererInit(token)) return;
+    this.rendererInitError = null;
     this.rendererReady = true;
     this.rendererDemandRequested = false;
     this.releaseRendererDemand = null;
@@ -622,6 +645,40 @@ export class MapContainer {
     void this.initSvgMap('[MapContainer] Initializing SVG map (globe fallback mode)', fallbackToken);
   }
 
+  private handleDeckGLRuntimeFailure(token: number, error: unknown): void {
+    if (token !== this.rendererInitToken || !this.useDeckGL) return;
+    console.warn('[MapContainer] DeckGL runtime failure, falling back to SVG map', error);
+    const snapshot = this.getState();
+    const center = this.getCenter();
+    this.initialState = snapshot;
+    this.pendingCenter = center ? { ...center, zoom: snapshot.zoom } : null;
+    try {
+      this.deckGLMap?.destroy();
+    } catch (destroyError) {
+      console.warn('[MapContainer] DeckGL teardown failed during SVG fallback', destroyError);
+    }
+    this.deckGLMap = null;
+    this.useDeckGL = false;
+    const fallbackToken = ++this.rendererInitToken;
+    this.showRendererShell('svg');
+    void this.initSvgMap('[MapContainer] Initializing SVG map (DeckGL runtime fallback)', fallbackToken).catch((error: unknown) => {
+      if (!this.isCurrentRendererInit(fallbackToken)) return;
+      this.rendererInitError = error instanceof Error ? error : new Error(String(error));
+      console.warn('[MapContainer] SVG fallback initialization failed', this.rendererInitError);
+      try {
+        this.svgMap?.destroy();
+      } catch (destroyError) {
+        console.warn('[MapContainer] Partial SVG teardown failed', destroyError);
+      }
+      this.svgMap = null;
+      this.prepareRendererDom('svg-mode');
+      this.container.textContent = t('common.unavailable');
+      const waiters = Array.from(this.rendererReadyWaiters);
+      this.rendererReadyWaiters.clear();
+      for (const waiter of waiters) waiter.reject(this.rendererInitError);
+    });
+  }
+
   private async createDeckGLMap(token: number): Promise<void> {
     console.log('[MapContainer] Initializing deck.gl map (desktop mode)');
     try {
@@ -633,7 +690,13 @@ export class MapContainer {
       this.deckGLMap = new DeckGLMap(this.container, {
         ...this.initialState,
         view: this.initialState.view as DeckMapView,
-      }, { chrome: this.chrome });
+      }, {
+        chrome: this.chrome,
+        // Mid-session MapLibre rebuilds (fallback basemap after WebGL loss)
+        // can throw GPUInitializationError outside whenReady(); degrade to SVG.
+        onFatalError: (error) => this.handleDeckGLRuntimeFailure(token, error),
+        mapLibreWorkerUrl: this.mapLibreWorkerUrl,
+      });
       this.rehydrateActiveMap();
       // DeckGLMap defers MapLibre construction behind an async init. Await it so
       // a WebGL/map-construction throw still reaches this catch and degrades to
@@ -655,6 +718,7 @@ export class MapContainer {
 
   private async init(): Promise<void> {
     const token = ++this.rendererInitToken;
+    this.rendererInitError = null;
     this.rendererReady = false;
     this.showRendererShell(this.getPendingRendererKind());
     this.startResizeObserver();
@@ -678,18 +742,21 @@ export class MapContainer {
   }
 
   /** Switch to 3D globe mode at runtime (called from Settings). */
-  public switchToGlobe(): void {
-    if (this.useGlobe) return;
-    const snapshot = this.getState();
-    const center = this.getCenter();
-    this.resizeObserver?.disconnect();
-    this.resizeObserver = null;
-    this.destroyFlatMap();
-    this.useGlobe = true;
-    this.useDeckGL = false;
-    this.initialState = snapshot;
-    this.pendingCenter = center ? { ...center, zoom: snapshot.zoom } : null;
-    void this.init();
+  public switchToGlobe(): Promise<MapRendererSwitchResult> {
+    if (!this.useGlobe) {
+      const snapshot = this.getState();
+      const center = this.getCenter();
+      this.resizeObserver?.disconnect();
+      this.resizeObserver = null;
+      this.destroyFlatMap();
+      this.useGlobe = true;
+      this.useDeckGL = false;
+      const layers = sanitizeResilienceScoreForRenderer(snapshot.layers, false);
+      this.initialState = layers === snapshot.layers ? snapshot : { ...snapshot, layers };
+      this.pendingCenter = center ? { ...center, zoom: snapshot.zoom } : null;
+      void this.init();
+    }
+    return this.waitForRendererSwitch('globe');
   }
 
   /** Reload basemap style (called when map provider changes in Settings). */
@@ -698,27 +765,28 @@ export class MapContainer {
   }
 
   /** Switch back to flat map at runtime (called from Settings). */
-  public switchToFlat(): void {
-    if (!this.useGlobe) return;
-    const snapshot = this.getState();
-    const center = this.getCenter();
-    this.resizeObserver?.disconnect();
-    this.resizeObserver = null;
-    this.globeInitToken++;
-    this.globeMap?.destroy();
-    this.globeMap = null;
-    this.useGlobe = false;
-    this.useDeckGL = this.shouldUseDeckGL();
-    this.initialState = !this.useDeckGL && snapshot.layers.resilienceScore
-      ? { ...snapshot, layers: { ...snapshot.layers, resilienceScore: false } }
-      : snapshot;
-    this.pendingCenter = center ? { ...center, zoom: snapshot.zoom } : null;
-    // Cancel any pending deck demand gate from a prior flat init before
-    // re-initializing, mirroring destroyFlatMap(), so a stale gate can't abort
-    // the new init during the afterFirstPaint() window.
-    this.rendererDemandCleanup?.();
-    this.rendererDemandCleanup = null;
-    void this.init();
+  public switchToFlat(): Promise<MapRendererSwitchResult> {
+    if (this.useGlobe) {
+      const snapshot = this.getState();
+      const center = this.getCenter();
+      this.resizeObserver?.disconnect();
+      this.resizeObserver = null;
+      this.globeInitToken++;
+      this.globeMap?.destroy();
+      this.globeMap = null;
+      this.useGlobe = false;
+      this.useDeckGL = this.shouldUseDeckGL();
+      const layers = sanitizeResilienceScoreForRenderer(snapshot.layers, this.useDeckGL);
+      this.initialState = layers === snapshot.layers ? snapshot : { ...snapshot, layers };
+      this.pendingCenter = center ? { ...center, zoom: snapshot.zoom } : null;
+      // Cancel any pending deck demand gate from a prior flat init before
+      // re-initializing, mirroring destroyFlatMap(), so a stale gate can't abort
+      // the new init during the afterFirstPaint() window.
+      this.rendererDemandCleanup?.();
+      this.rendererDemandCleanup = null;
+      void this.init();
+    }
+    return this.waitForRendererSwitch('flat');
   }
 
   private rehydrateActiveMap(): void {
@@ -727,6 +795,7 @@ export class MapContainer {
     if (this.cachedOnLayerChange) this.setOnLayerChange(this.cachedOnLayerChange);
     if (this.cachedOnTimeRangeChanged) this.onTimeRangeChanged(this.cachedOnTimeRangeChanged);
     if (this.cachedOnCountryClicked) this.onCountryClicked(this.cachedOnCountryClicked);
+    if (this.cachedOnNewsClicked) this.onNewsClicked(this.cachedOnNewsClicked);
     if (this.cachedOnHotspotClicked) this.onHotspotClicked(this.cachedOnHotspotClicked);
     if (this.cachedOnAircraftPositionsUpdate) this.setOnAircraftPositionsUpdate(this.cachedOnAircraftPositionsUpdate);
     if (this.cachedOnMapContextMenu) this.onMapContextMenu(this.cachedOnMapContextMenu);
@@ -792,6 +861,20 @@ export class MapContainer {
     for (const layer of this.hiddenLayerToggles) this.hideLayerToggle(layer);
   }
 
+  private currentRendererSwitchResult(requested: 'globe' | 'flat'): MapRendererSwitchResult {
+    const renderer = this.useGlobe ? 'globe' : this.useDeckGL ? 'deck' : 'svg';
+    return {
+      renderer,
+      mode: this.useGlobe ? 'globe' : 'flat',
+      fallback: requested === 'globe' ? !this.useGlobe : this.useGlobe,
+    };
+  }
+
+  private async waitForRendererSwitch(requested: 'globe' | 'flat'): Promise<MapRendererSwitchResult> {
+    await this.whenRendererReady();
+    return this.currentRendererSwitchResult(requested);
+  }
+
   public isGlobeMode(): boolean {
     return this.useGlobe;
   }
@@ -804,6 +887,7 @@ export class MapContainer {
   public whenRendererReady(): Promise<void> {
     if (this.rendererReady && this.hasActiveRenderer()) return Promise.resolve();
     if (this.destroyed) return Promise.reject(new Error('Map renderer is no longer available.'));
+    if (this.rendererInitError) return Promise.reject(this.rendererInitError);
     this.rendererDemandRequested = true;
     this.releaseRendererDemand?.();
     return new Promise((resolve, reject) => {
@@ -963,11 +1047,11 @@ export class MapContainer {
     return this.svgMap?.getTimeRange() ?? this.initialState.timeRange;
   }
 
-  public setLayers(layers: MapLayers): void {
+  public setLayers(layers: MapLayers, options: { bypassEntitlementSanitization?: boolean } = {}): void {
     // Strip resilience on non-DeckGL, then locked premium layers for settled free users (#6045).
     // Wait for isProTierResolved so Pro users don't lose resilienceScore during Clerk/Convex boot.
-    let sanitized = !this.useDeckGL && layers.resilienceScore ? { ...layers, resilienceScore: false } : layers;
-    if (shouldSanitizeLockedLayers(
+    let sanitized = sanitizeResilienceScoreForRenderer(layers, this.useDeckGL);
+    if (!options.bypassEntitlementSanitization && shouldSanitizeLockedLayers(
       hasPremiumAccess(getAuthState()),
       isProTierResolved(),
       this.isFreeTierFallbackActive?.() === true,
@@ -990,10 +1074,10 @@ export class MapContainer {
 
   // ─── Data setters ────────────────────────────────────────────────────────────
 
-  public setEarthquakes(earthquakes: Earthquake[]): void {
+  public setEarthquakes(earthquakes: Earthquake[], options: { replaceEmpty?: boolean } = {}): void {
     this.cachedEarthquakes = earthquakes;
     if (this.useGlobe) { this.globeMap?.setEarthquakes(earthquakes); return; }
-    if (this.useDeckGL) { this.deckGLMap?.setEarthquakes(earthquakes); } else { this.svgMap?.setEarthquakes(earthquakes); }
+    if (this.useDeckGL) { this.deckGLMap?.setEarthquakes(earthquakes); } else { this.svgMap?.setEarthquakes(earthquakes, options); }
   }
 
   public setConflictEvents(events: AcledConflictEvent[]): void {
@@ -1577,6 +1661,12 @@ export class MapContainer {
     }
   }
 
+  public onNewsClicked(callback: (item: Pick<NewsLocationMarker, 'article' | 'title'>) => void): void {
+    this.cachedOnNewsClicked = callback;
+    if (this.useGlobe) { this.globeMap?.setOnNewsClick(callback); return; }
+    if (this.useDeckGL) { this.deckGLMap?.setOnNewsClick(callback); } else { this.svgMap?.setOnNewsClick(callback); }
+  }
+
   public onCountryClicked(callback: (country: CountryClickPayload) => void): void {
     this.cachedOnCountryClicked = callback;
     if (this.useGlobe) { this.globeMap?.setOnCountryClick(callback); return; }
@@ -1664,8 +1754,8 @@ export class MapContainer {
     }
     const state: ScenarioVisualState = {
       scenarioId,
-      disruptedChokepointIds: result.affectedChokepointIds,
-      affectedIso2s: result.topImpactCountries.map((c: { iso2: string }) => c.iso2),
+      disruptedChokepointIds: result.template?.disruptionPct === 0 ? [] : result.affectedChokepointIds,
+      affectedIso2s: result.topImpactCountries.filter(c => c.totalImpact > 0).map(c => c.iso2),
     };
     this.cachedScenarioState = state;
     this.applyScenarioState(state);
@@ -1719,6 +1809,7 @@ export class MapContainer {
     this.cachedOnLayerChange = null;
     this.cachedOnTimeRangeChanged = null;
     this.cachedOnCountryClicked = null;
+    this.cachedOnNewsClicked = null;
     this.cachedOnHotspotClicked = null;
     this.cachedOnAircraftPositionsUpdate = null;
     this.cachedOnMapContextMenu = null;

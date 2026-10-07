@@ -358,7 +358,7 @@
       "loadingIndex": "Laddar index...",
       "loadingMarkets": "Laddar förutsägelsemarknader...",
       "generatingBrief": "Genererar underrättelseöversikt...",
-      "unavailable": "AI-kort inte tillgänglig — konfigurera GROQ_API_KEY i Inställningar.",
+      "unavailable": "AI-kort inte tillgänglig — konfigurera OPENROUTER_API_KEY i Inställningar.",
       "cached": "cachelagrad",
       "fresh": "Färsk",
       "noMarkets": "Inga förutsägande marknader hittades",
@@ -398,7 +398,7 @@
       "predictionMarkets": "Förutsägelsemarknader",
       "loadingMarkets": "Laddar förutsägelsemarknader...",
       "infrastructure": "Infrastrukturexponering",
-      "briefUnavailable": "AI-kort inte tillgänglig — konfigurera GROQ_API_KEY i Inställningar.",
+      "briefUnavailable": "AI-kort inte tillgänglig — konfigurera OPENROUTER_API_KEY i Inställningar.",
       "cached": "cachelagrad",
       "fresh": "Färsk",
       "noMarkets": "Inga förutsägande marknader hittades",
@@ -492,9 +492,12 @@
         "space": "RYMDEN"
       },
       "paused": "Webbkameror pausade",
-      "pausedIdle": "Webbkameror pausade — flytta musen för att återuppta",
       "play": "Spela",
-      "previewStatus": "Liveförhandsvisning"
+      "previewStatus": "Redo att spela",
+      "connecting": "Ansluter…",
+      "unverified": "Kan inte bekräfta att denna ström är live",
+      "offline": "{{city}} är offline just nu",
+      "noFeeds": "Inga aktiva webbkameror i denna region just nu"
     },
     "playback": {
       "live": "LIVE",
@@ -759,9 +762,6 @@
       "base": "Bas",
       "nuclear": "Kärnteknisk"
     },
-    "community": {
-      "joinDiscussion": "Help Shape What's Next"
-    },
     "threatLabels": {
       "critical": "KRIT",
       "high": "HÖG",
@@ -770,8 +770,16 @@
       "info": "INFO"
     },
     "pizzint": {
+      "indexSource": "Index: World Monitor · platsdata:",
+      "statusNormal": "NORMALT",
+      "statusNoData": "INGA DATA",
+      "statusNoBaseline": "INGEN REFERENS",
+      "vsUsual": "jämfört med normalt",
       "title": "Pentagon Pizza Index",
       "tensionsTitle": "Geopolitiska spänningar",
+      "tensionsSource": "Spänningar: World Monitor utifrån GDELT-händelser",
+      "insufficientData": "Otillräckliga data",
+      "pizzaUnavailable": "Pizzeriornas aktivitet är inte tillgänglig",
       "source": "Källa:",
       "defcon": "DEFCON {{level}}",
       "updated": "Uppdaterad {{timeAgo}}",
@@ -785,11 +793,11 @@
       "minutesAgo": "{{m}}m sedan",
       "hoursAgo": "{{h}}h sedan",
       "defconLabels": {
-        "1": "SPÄND PISTOL - MAXIMAL BEREDSKAP",
-        "2": "SNABBT FAST - FÖRVARARNA KLART",
-        "3": "RUNDT HUS - ÖKA KRAFTBEREDDIGHETEN",
-        "4": "DUBBEL TAKE - ÖKAD INTELLIGENSKLOCK",
-        "5": "FADE OUT - LÄGSTA BEREDSKAP"
+        "1": "Maximal aktivitet",
+        "2": "Hög aktivitet",
+        "3": "Förhöjd aktivitet",
+        "4": "Över normalt",
+        "5": "Normal aktivitet"
       }
     },
     "stablecoins": {
@@ -1108,6 +1116,16 @@
       "loading": "Ansluter till Telegram-relä...",
       "empty": "Inga meddelanden tillgängliga",
       "disabled": "Telegram-relä inte aktivt",
+      "watchlistPlaceholder": "Lägg till offentlig kanal via @username",
+      "resolving": "Söker efter kanalen...",
+      "invalidUsername": "Använd ett offentligt Telegram-@username",
+      "resolveFailed": "Kanalen kunde inte hittas",
+      "watchlistLimit": "Du kan följa upp till {{count}} anpassade kanaler",
+      "previewMembers": "{{count}} medlemmar",
+      "addChannel": "Lägg till kanal",
+      "added": "Tillagd",
+      "remove": "Ta bort",
+      "custom": "Anpassad",
       "filterAll": "Alla",
       "filterBreaking": "Brådskande",
       "filterConflict": "Konflikter",
@@ -1230,7 +1248,7 @@
       "sourcesDetail": "{{active}}/{{total}} sources"
     },
     "insights": {
-      "infoTooltip": "<strong>AI-driven analys</strong><br>• <strong>World Brief</strong>: AI-sammanfattning (Groq/OpenRouter)<br>• <strong>Sentiment</strong>: Nyhetstonanalys<br>• <strong>__2__hastighet: snabbrörlig PH______2__position: <strong>Fokalpunkter</strong>: Korrelerar nyhetsenheter med kartsignaler (militär, protester, avbrott)<br><em>Endast skrivbord • Drivs av Llama 3.3 + Focal Point Detection</em>",
+      "infoTooltip": "<strong>AI-driven analys</strong><br>• <strong>World Brief</strong>: AI-sammanfattning (OpenRouter)<br>• <strong>Sentiment</strong>: Nyhetstonanalys<br>• <strong>__2__hastighet: snabbrörlig PH______2__position: <strong>Fokalpunkter</strong>: Korrelerar nyhetsenheter med kartsignaler (militär, protester, avbrott)<br><em>Endast skrivbord • Drivs av Llama 3.3 + Focal Point Detection</em>",
       "noStories": "Inga breaking- eller flerkällshistorier ännu",
       "step": "Step {{step}}/{{total}}",
       "waitingForData": "Waiting for news data...",
@@ -1239,7 +1257,7 @@
       "generatingBrief": "Generating world brief...",
       "mapFlashLabel": "Live Event Pulse",
       "mapFlashDesc": "Flash locations on the map when breaking news arrives",
-      "aiFlowCloudLabel": "Moln-AI (Groq & OpenRouter)",
+      "aiFlowCloudLabel": "Moln-AI (OpenRouter)",
       "aiFlowCloudDesc": "Skicka rubriker till molnet för AI-sammanfattning (rekommenderat)",
       "aiFlowBrowserLabel": "Lokal webbläsarmodell",
       "aiFlowBrowserDesc": "Kör AI lokalt i din webbläsare",
@@ -1306,7 +1324,10 @@
       "provenanceTitle": "Täckningshärkomst: hur många inmatade historier och unika källor denna kortfattade sammanfattning valdes från",
       "compiledFrom": "Kompilerat från {{stories}} berättelser från {{sources}} källor",
       "briefFreshness": "Genererad {{minutes}}m sedan · senaste källa {{hours}}h gammal",
-      "briefStoryDetails": "Story details ({{count}})"
+      "briefStoryDetails": "Detaljer om nyheten ({{count}})",
+      "streamIdleStopLabel": "Stoppa livevideo när inaktiv",
+      "streamIdleStopDesc": "Stoppar Live News och Live Webcams efter denna tid utan aktivitet och visar ett meddelande i panelen.",
+      "streamIdleStopNever": "Aldrig"
     },
     "techHubs": {
       "infoTooltip": "<strong>Teknisk hubbaktivitet</strong><br>Visar tekniska nav med mest nyhetsaktivitet.<br><br><em>Aktivitetsnivåer:</em><br>• <span style=\"color: {{highColor}}\">Hög</span> — Nyheter från 50+ PH_• 50+ stil: {{elevatedColor}}\">Höjd</span> — Poäng 20-49<br>• <span style=\"color: {{lowColor}}\">Låg</span> — Poäng under 20<br><br>Klicka på ett nav för att zooma till dess plats."
@@ -1367,6 +1388,7 @@
       "etfs": "ETF:er",
       "netInflow": "NETTOINFLÖDE",
       "netOutflow": "NETTOUTFLÖDE",
+      "netNeutral": "NETTONEUTRALT",
       "table": {
         "ticker": "Ticker",
         "issuer": "Utgivare",
@@ -1450,13 +1472,10 @@
     },
     "liveNews": {
       "notLive": "{{name}} is not currently live",
-      "cannotEmbed": "{{name}} kan inte spelas här — kan vara begränsat i din region (fel {{code}})",
       "openOnYouTube": "Open on YouTube",
       "manage": "Hantera kanaler",
       "addChannel": "Lägg till kanal",
       "remove": "Ta bort",
-      "youtubeHandle": "YouTube-handtag (t.ex. @Channel)",
-      "youtubeHandleOrUrl": "YouTube-handtag eller URL",
       "displayName": "Visningsnamn (valfritt)",
       "channelSettings": "Kanalinställningar",
       "save": "Spara",
@@ -1471,15 +1490,26 @@
       "regionMiddleEast": "Mellanöstern",
       "regionAfrica": "Afrika",
       "regionOceania": "Oceanien",
-      "botCheck": "YouTube kräver inloggning för att spela {{name}}",
-      "invalidHandle": "Ange ett giltigt YouTube-handtag (t.ex. @Kanalnamn)",
       "signInToYouTube": "Logga in på YouTube",
       "verifying": "Verifierar…",
       "noResults": "Inga kanaler hittades för \"{{term}}\"",
       "hlsUrl": "HLS-ström-URL (valfritt)",
       "invalidHlsUrl": "Ange en giltig HLS-ström-URL (.m3u8)",
       "playLiveFeed": "Spela liveflöde",
-      "readyStatus": "Redo när du är det"
+      "readyStatus": "Redo när du är det",
+      "embedBlocked": "YouTube spelar inte {{name}} inbäddad på andra webbplatser just nu",
+      "unavailable": "{{name}} kan inte spelas upp just nu",
+      "noStream": "Ingen live-ström är konfigurerad för {{name}} än",
+      "needsChannelUrl": "Lägg till {{name}} igen med dess kanal-URL (youtube.com/channel/UC…) eller en live-video-URL",
+      "connecting": "Ansluter till {{name}}…",
+      "recording": "Inspelning",
+      "unverified": "Kan inte bekräfta att denna ström är live",
+      "playNextChannel": "Spela nästa kanal",
+      "channelOrVideoUrl": "YouTube-kanal eller video-URL",
+      "channelUrlHint": "Klistra in en kanal-URL (youtube.com/channel/UC…) eller en live-video-URL",
+      "youtubeChannel": "YouTube-kanal",
+      "insecureStream": "{{name}} använder en osäker (http) ström som webbläsare blockerar. Lägg till den igen med en säker (https) ström-URL",
+      "httpsStreamHint": "Webbläsare blockerar osäkra (http) strömmar. Klistra in en säker (https) ström-URL"
     },
     "securityAdvisories": {
       "loading": "Hämtar resevarningar...",
@@ -1601,7 +1631,8 @@
       "refineryStage": "Refine",
       "stageUnavailable": "No published figures for this stage",
       "withheldNote": "W withheld",
-      "productionCaption": "Country shares of actual production. The map deposits layer shows where resources sit; this table shows who mines or refines them."
+      "productionCaption": "Country shares of actual production. The map deposits layer shows where resources sit; this table shows who mines or refines them.",
+      "productionProLocked": "Uppgradera till PRO för gruv- och raffinaderiländer med koncentration (HHI) per etapp."
     },
     "positiveNewsFeed": {
       "noStories": "Inga berättelser i denna kategori ännu"
@@ -1649,6 +1680,22 @@
       "metals": {
         "gold": "Gold",
         "silver": "Silver"
+      },
+      "divergence": {
+        "compositeValue": "Fysisk stressindex: {{value}} / 100",
+        "fiveDayTrend": "Femhandelsdag premiumtrend",
+        "regimes": {
+          "normal": "Normal",
+          "elevated": "Förhöjd",
+          "stressed": "Under stress",
+          "extreme": "Extrem"
+        },
+        "states": {
+          "insufficientHistory": "Värms upp: {{count}} / {{required}} handelspunkter",
+          "staleInput": "Fysisk benchmark är föråldrad",
+          "missingInput": "Divergenssignal ej tillgänglig"
+        },
+        "twentyDayTrend": "Premietrendad över tjugo handelsdagar"
       }
     },
     "crypto": {
@@ -1765,7 +1812,7 @@
       "infoTooltip": "<strong>Ekonomisk kalender</strong> Schemalagda makroekonomiska publiceringar: CPI, NFP, GDP, PMI och centralbanksbeslut. Visar prognos vs. faktisk vs. föregående. Händelser med hög påverkan markerade. Källa: ekonomiska dataleverantörer."
     },
     "fsi": {
-      "infoTooltip": "<strong>Finansiell stressindikator</strong> Kansas City Feds Financial Stress Index (KCFSI): mäter stress på amerikanska finansmarknader med 11 indikatorer inklusive avkastningsspreadar, volatilitet och korskorrelationer. Positiva värden indikerar stress över genomsnittet. Källa: Federal Reserve Bank of Kansas City.",
+      "infoTooltip": "<strong>Finansiell stressindikator</strong> WorldMonitors kvot mellan högavkastande krediter och långfristiga amerikanska statsobligationer, justerad för aktievolatilitet och högavkastningsspreaden: (HYG / TLT) / (VIX × HY spread / 100). Detta är inte Federal Reserve Bank of Kansas Citys Financial Stress Index. Ett värde på 1.5 eller högre betyder låg stress; under 0.3 betyder hög stress.",
       "title": "Financial Stress Indicator",
       "usFsiValue": "US FSI-VÄRDE",
       "cissTitle": "EU CISS (euroområdets systemriskövervakning)",
@@ -1805,6 +1852,26 @@
         "failedToLoad": "Det gick inte att läsa in"
       },
       "cissStale": "ECB har inte publicerat ett nyare värde — denna avläsning kan vara föråldrad."
+    },
+    "supplyVulnerability": {
+      "title": "Råvarusårbarhet",
+      "help": "Landets exponering per råvara utifrån leverantörskoncentration, sjötransport och tillgängliga strategiska reserver.",
+      "loading": "Läser in råvarusårbarhet…",
+      "unavailable": "Data om råvarusårbarhet är inte tillgängliga",
+      "noCoverage": "Otillräckligt underlag för detta land",
+      "unknown": "Okänt",
+      "concentration": "Koncentration",
+      "transit": "Transitflöde",
+      "buffer": "Reserv",
+      "sources": "Källor",
+      "methodology": "Metodik",
+      "hormuzTitle": "Råvaruberoenden",
+      "dependentCountries": "Beroende länder",
+      "dependentCommodities": "Beroende råvaror",
+      "stateOk": "Aktuellt",
+      "stateStale": "Inaktuell indata",
+      "stateInsufficient": "Otillräckliga data",
+      "proLocked": "Uppgradera till PRO för råvarusårbarhetsbedömning"
     },
     "hormuzTracker": {
       "infoTooltip": "<strong>Hormuz handelsspårare</strong> Live AIS-fartygsspårning genom Hormuzsundet, världens mest kritiska oljeflaskhals. Övervakar tankerantal, störningshändelser och veckovisa flödesförändringar. Cirka 20% av den globala oljeförsörjningen passerar här dagligen.",
@@ -1886,7 +1953,7 @@
       }
     },
     "marketImplications": {
-      "infoTooltip": "<strong>AI-marknadsbetydelse</strong> LLM-genererade handelssignaler härledda från levande geopolitiska, råvaru- och makroläge efter varje prognosecykel.<ul><li><strong>Riktning</strong>: LÅNGSIKTIGT / KORTSIKTIGT / SÄKRING med konfidensbedömning</li><li><strong>Tidsram</strong>: 1V, 2V, 1M eller 3M horisont</li><li><strong>Drivkraft</strong>: Nyckelkatalysator bakom signalen</li><li><strong>Risk</strong>: Reservation eller ogiltighetsvillkor</li></ul><em>Endast för informationsändamål. Inte investeringsråd.</em>",
+      "infoTooltip": "<strong>AI-marknadsbetydelse</strong> LLM-genererade handelssignaler härledda från levande geopolitiska, råvaru- och makroläge efter varje prognosecykel.<ul><li><strong>Riktning</strong>: LÅNGSIKTIGT / KORTSIKTIGT / SÄKRING</li><li><strong>Tidsram</strong>: 1V, 2V, 1M eller 3M horisont</li><li><strong>Drivkraft</strong>: Nyckelkatalysator bakom signalen</li><li><strong>Risk</strong>: Reservation eller ogiltighetsvillkor</li></ul><em>Endast för informationsändamål. Inte investeringsråd.</em>",
       "title": "AI-marknadspåverkan",
       "directions": {
         "long": "LÅNGT",
@@ -1899,10 +1966,64 @@
       "signals_one": "{{count}} signal",
       "signals_other": "{{count}} signaler",
       "disclaimer": "AI-genererade handelssignaler endast för informationssyften. Inte investeringsrådgivning. Gör alltid din egen forskning.",
-      "unavailable": "AI-marknadspåverkan genereras efter varje prognosakörning. Kontrollera snart igen."
+      "unavailable": "AI-marknadspåverkan genereras efter varje prognosakörning. Kontrollera snart igen.",
+      "unscored": "Narrativa scenarier, ej bedömda för noggrannhet."
     },
     "forecast": {
-      "infoTooltip": "<strong>AI-prognoser</strong> AI-genererade sannolikhetsuppskattningar för geopolitiska och ekonomiska händelser:<ul><li>Täckning över domäner: konflikt, marknader, försörjningskedjor, cyber, politik</li><li>Varje prognos visar uppskattad sannolikhet, konfidensnivå och tidshoriont</li><li>Kalibrerad mot prediktionsmarknadsbaser där tillgängligt</li></ul>Prognoser uppdateras när nya efterrättelsetecken kommer in. Filtrera efter domän med flikarna ovan."
+      "infoTooltip": "<strong>AI-prognoser</strong> AI-genererade sannolikhetsuppskattningar för geopolitiska och ekonomiska händelser:<ul><li>Täckning över domäner: konflikt, marknader, försörjningskedjor, cyber, politik</li><li>Varje prognos visar uppskattad sannolikhet, konfidensnivå och tidshoriont</li><li>Kalibrerad mot prediktionsmarknadsbaser där tillgängligt</li></ul>Prognoser uppdateras när nya efterrättelsetecken kommer in. Filtrera efter domän med flikarna ovan.",
+      "record": {
+        "label": "Facit hittills",
+        "labelHint": "Hur de publicerade prognoserna bedömdes när de avgjorts, under de senaste {{days}} dagarna. Håll muspekaren över ett tal för att se vad det betyder.",
+        "unavailable": "Inte tillgängligt just nu",
+        "insufficient": "Inte tillräckligt många bedömda prognoser ännu",
+        "brier": "Brier-poäng {{score}} (n={{n}})",
+        "brierHint": "Brier-poäng för {{n}} bedömda prognoser: medelvärdet av kvadraten på skillnaden mellan prognosens sannolikhet och vad som hände. 0 är perfekt, 0,25 motsvarar ett myntkast, lägre är bättre.",
+        "baseRate": "Basfrekvens {{score}} (n={{n}})",
+        "baseRateHint": "Vad någon som alltid svarar den observerade ja-andelen hade fått på samma {{n}} prognoser ({{pct}} % avgjordes med ja). Att slå den betyder att prognoserna tillför information.",
+        "void": "Ogiltiga {{pct}} % ({{count}} av {{resolved}})",
+        "voidHint": "Avgjorda prognoser som inte kunde bedömas, av {{resolved}} avgjorda under perioden.",
+        "stale": "Inaktuellt",
+        "staleHint": "Senast bedömt {{date}}. Bedömningen har inte körts sedan dess, så dessa siffror är äldre än de borde vara.",
+        "fullRecord": "Fullständigt facit"
+      },
+      "reliability": {
+        "measured": "{{domain}} n={{n}} · Brier {{score}} vs basfrekvens {{base}}",
+        "measuredHint": "Hur publicerade {{domain}}-prognoser har presterat över {{n}} bedömda prognoser de senaste {{days}} dagarna. Basfrekvensen är vad man skulle ha fått genom att alltid svara ja enligt domänens observerade frekvens. Lägre är bättre. Detta är domänens historik, inte denna prognos.",
+        "unmeasured": "Ännu inte mätt",
+        "unmeasuredHint": "{{domain}}-prognoser har {{n}} bedömda resultat de senaste {{days}} dagarna. En domän behöver {{min}} innan dess noggrannhet visas."
+      },
+      "resolution": {
+        "last": "Senast: {{outcome}}",
+        "lastSr": "Den förra perioden för denna prognos avgjordes som {{outcome}}.",
+        "history": "Senaste perioder, nyast först: {{list}}",
+        "outcome": {
+          "yes": "JA",
+          "no": "NEJ",
+          "void": "OGILTIG"
+        },
+        "void": {
+          "no_establishable_metric": "Källan hade inget mätvärde för denna fråga",
+          "value_source_never_settled": "Källan publicerade aldrig ett slutgiltigt värde",
+          "count_source_window_not_retained": "Källan behöll inte längre frågeperioden",
+          "unsupported_window": "Frågan kunde inte kontrolleras mot sin källa",
+          "unsupported_metric_key": "Frågan kunde inte kontrolleras mot sin källa",
+          "not_hard_spec": "Frågan kunde inte kontrolleras mot sin källa",
+          "missing_threshold": "Frågan saknade ett tröskelvärde",
+          "missing_deadline": "Frågan saknade en tidsgräns",
+          "missing_generated_at": "Prognosen saknade sitt startdatum",
+          "beyond_archive_horizon": "Nyhetsarkivet täckte inte längre frågeperioden",
+          "no_archive_evidence": "Nyhetsarkivet hade inget om ämnet",
+          "all_judges_void": "Båda domarna fann bevisen otillräckliga",
+          "judge_disagreement": "Domarna var oeniga",
+          "judge_retry_exhausted": "Domarna återkom utan dom",
+          "withheld_unpublished": "Den här typen av prognos publiceras inte längre",
+          "other": "Kunde inte avgöras"
+        }
+      },
+      "horizons": {
+        "label": "Också bedömt vid: {{list}}",
+        "hint": "Huvudsannolikheten graderas vid prognosens egen horisont. Projektionen vid var och en av dessa horisonter graderas också mot dess källfeed, med det värde som först publicerades för denna prognos. Projektionsvärden visas inte eftersom det aktuella värdet kan skilja sig från det graderade."
+      }
     },
     "escalationCorrelation": {
       "infoTooltip": "<strong>Eskaleringsövervakning</strong> Detekterar konvergerande geopolitiska signaler:<ul><li>Korrelerar militära rörelser, konflikthändelser och nyhetsspikar</li><li>Poängsätter konvergenszoner efter allvarlighetsgrad (kritisk/hög/medel/låg)</li><li>Spårar eskalerings- eller de-eskaleringstrender över tid</li></ul>Klicka på ett kort för att zooma in på regionen på kartan."
@@ -2200,7 +2321,14 @@
       "signals_one": "{{count}} signal",
       "signals_other": "{{count}} signaler",
       "analyzing": "Analyserar...",
-      "viewOnMap": "Visa på karta"
+      "viewOnMap": "Visa på karta",
+      "waiting": "Väntar på nästa datauppdatering. Den här panelen uppdateras automatiskt.",
+      "offline": "Väntar på en anslutning. Den här panelen uppdateras automatiskt när du är online igen.",
+      "updated": "Uppdaterad {{time}}",
+      "saved": "Senast kända uppdatering {{time}} · Söker efter uppdateringar",
+      "savedOffline": "Senast kända uppdatering {{time}} · Frånkopplad",
+      "localSignals": "Baserat på inlästa signaler i instrumentpanelen",
+      "emptySaved": "Ingen konvergens i den senast kända uppdateringen."
     },
     "thermalEscalation": {
       "title": "Värmeskalering",
@@ -2350,6 +2478,68 @@
       "rubBase": "Rysslands centralbank — rubel per 1 enhet",
       "rubPerUnit": "Rubel per enhet",
       "sourceCbr": "Källa: Rysslands centralbank"
+    },
+    "passkeyOffer": {
+      "title": "Spara en passkey?",
+      "body": "Logga in nästa gång med ditt fingeravtryck, ansikte eller enhets-PIN — inget lösenord att komma ihåg.",
+      "accept": "Spara passkey",
+      "dismiss": "Inte nu",
+      "close": "Stäng",
+      "announce": "Spara en passkey för att logga in snabbare nästa gång.",
+      "busy": "Väntar på din enhet…",
+      "succeeded": "Passkey sparad. Du kan använda den nästa gång du loggar in.",
+      "retryable": "Det blev inte klart. Du kan försöka igen.",
+      "failed": "Vi kunde inte spara en passkey på den här enheten."
+    },
+    "decisionBrief": {
+      "commodityTitle": "Beslutsunderlag för råvaror",
+      "commodity": "Råvara / produkt",
+      "blockedChokepoint": "Antagen blockerad passage",
+      "commodityCapture": "Spara råvarujämförelse",
+      "title": "Beslutsunderlag",
+      "fuel": "Bränsle",
+      "chokepoint": "Flaskhals",
+      "baseline": "Störning i grundscenario",
+      "comparison": "Störning i jämförelsescenario",
+      "capture": "Hämta / uppdatera båda",
+      "downloadHtml": "Ladda ned beslutsunderlag som HTML",
+      "downloadJson": "Ladda ned beslutsunderlag som JSON",
+      "back": "← Tillbaka till landsöversikten",
+      "select": "Välj en energistörning och hämta sedan båda scenarierna.",
+      "changed": "Urvalet har ändrats. Hämta båda scenarierna före export.",
+      "loading": "Hämtar båda scenarierna…",
+      "captured": "Hämtat. Kontrollera observationsdatum och begränsningar före nedladdning.",
+      "failed": "Det gick inte att hämta scenarierna. Kontrollera din åtkomst och försök igen. Inget resultat kan exporteras.",
+      "locked": "Beslutsunderlaget är tillgängligt med Pro."
+    },
+    "liveMedia": {
+      "idleStatus": "Pausad på grund av inaktivitet",
+      "idleBody": "Livevideo stoppades efter {{duration}} utan mus-, tangent- eller pekaktivitet.",
+      "idleResume": "Återuppta",
+      "idleKeepPlaying": "Fortsätt spela när inaktiv",
+      "idleSettingsHint": "Ändra detta när som helst i Inställningar › Media.",
+      "idleKeepPlayingToast": "Livevideo fortsätter spela när inaktiv. Ändra i Inställningar › Media."
+    },
+    "corroboration": {
+      "singlePublisher": "En enda utgivare",
+      "singlePublisherHint": "Endast en utgivare rapporterar om detta hittills. Detta beskriver bevakningen, inte korrektheten.",
+      "tier4Only": "Endast låg-nivå-källor",
+      "tier4OnlyHint": "Alla medier som rapporterar om detta är tier-4-källor (aggregatorer och bloggar). Detta beskriver bevakningen, inte korrektheten.",
+      "rosterListed": "({{listed}} listade)",
+      "rosterFeeds": "Sedda flöden: {{labels}}",
+      "rosterLegend": "Nivåerna rangordnar källor; de bedömer inte detta påstående.",
+      "tierDocsLink": "Hur nivåerna tilldelas",
+      "tierChip": "N{{tier}}",
+      "tierChipUndeclared": "N?",
+      "tierTitle1": "Nivå 1: Nyhetsbyråer och officiella organ",
+      "tierTitle2": "Nivå 2: Större medieorgan",
+      "tierTitle3": "Nivå 3: Specialiserade och regionala källor samt tankesmedjor",
+      "tierTitle4": "Nivå 4: Aggregatorer och bloggar",
+      "tierTitleUndeclared": "Nivå inte angiven: ännu inte granskad",
+      "rosterSummary": "Rapporterat av {{publishers}}",
+      "rosterSummaryTier1": "Rapporterat av {{publishers}}, varav {{tier1}} på nivå 1",
+      "rosterPublishers_one": "{{count}} utgivare",
+      "rosterPublishers_other": "{{count}} utgivare"
     }
   },
   "popups": {
@@ -2387,14 +2577,18 @@
     "protest": {
       "acledVerified": "ACLED (verifierad)",
       "gdelt": "GDELT",
+      "records": "poster",
+      "mediaSignal": "Obekräftad mediesignal",
+      "relatedArticle": "Relaterad artikel",
+      "mediaSignalDetail": "Denna plats nämns i artiklar om oroligheter. En lokal händelse har inte verifierats.",
       "riots": "Upplopp",
       "highSeverity": "Hög allvarlighet"
     },
     "gpsJamming": {
-      "title": "GPS/GNSS-störning",
-      "navPerformance": "Nav Performance",
-      "samples": "ADS-B Samples",
-      "aircraft": "Aircraft",
+      "title": "GPS/GNSS-störningar",
+      "navPerformance": "Påverkade luftfartyg",
+      "samples": "Antal påverkade luftfartyg",
+      "aircraft": "Totalt antal observerade luftfartyg",
       "h3Hex": "H3 Hex"
     },
     "flight": {
@@ -2833,8 +3027,8 @@
   "signals": {
     "context": {
       "prediction_leads_news": {
-        "whyItMatters": "Prognosmarknader prisar ofta in information innan det blir nyheter -- handlare kan ha tidig tillgang till utvecklingen.",
-        "actionableInsight": "Bevaka breaking news de narmaste 1-6 timmarna som kan forklara marknadsrorelsen.",
+        "whyItMatters": "En prediktionsmarknad rörde sig medan nyhetsbevakningen av ämnet förblev låg – marknaden kan reagera på information som ännu inte har rapporterats.",
+        "actionableInsight": "Håll utkik efter nyheter som kan förklara marknadsrörelsen.",
         "confidenceNote": "Hogre tillforlitlighet om flera prognosmarknader ror sig i samma riktning."
       },
       "news_leads_markets": {
@@ -3104,7 +3298,7 @@
     "predictionMarkets": "Förutsägelsemarknader",
     "loadingMarkets": "Laddar förutsägelsemarknader...",
     "infrastructure": "Infrastrukturexponering",
-    "briefUnavailable": "AI-sammanfattning ej tillgänglig — konfigurera GROQ_API_KEY i Inställningar.",
+    "briefUnavailable": "AI-sammanfattning ej tillgänglig — konfigurera OPENROUTER_API_KEY i Inställningar.",
     "cached": "Cachelagrad",
     "fresh": "Aktuell",
     "noMarkets": "Inga förutsägelsemarknader hittades",
@@ -3174,6 +3368,7 @@
       "suppliers": "Arms suppliers ({{start}}–{{end}})",
       "source": "Sources: World Bank and SIPRI Arms Transfers Database. TIV measures transfer volume, not financial value.",
       "sourceWorldBank": "Source: World Bank.",
+      "snapshotAssembled": "Ögonblicksbild för {{source}} sammanställd {{time}}",
       "unavailable": "Not available",
       "coverage": "Mapped coverage",
       "supplierRetained": "Supplier data retained from the last successful importer refresh."
@@ -3213,11 +3408,13 @@
       "doNotTravel": "Res inte",
       "reconsiderTravel": "Ompröva resa",
       "exerciseCaution": "Iaktta försiktighet",
+      "normalPrecautions": "Normala försiktighetsåtgärder",
       "advisory": "Reseråd",
       "activeSirens": "Aktiva sirener",
       "sirens24h": "Sirener / 24h",
       "aviationDisruptions": "Flygstörningar",
-      "gpsJammingZones": "GPS-störningszoner"
+      "gpsJammingZones": "GPS-störningszoner",
+      "temporalUnavailable": "Temporala observationer ej tillgängliga"
     },
     "countryFacts": "Fakta om landet",
     "loadingFacts": "Laddar fakta om landet...",
@@ -3283,7 +3480,7 @@
       "decisionSignalsUnavailable": "Ögonblicksbilden av Kinas beslutssignaler är för närvarande inte tillgänglig."
     },
     "foodStocks": "Food stocks",
-    "foodStocksHelp": "USDA PSD commodity stocks-to-use by marketing year, with the world ratio alongside for context. FAOSTAT fills production only where PSD has no country coverage.",
+    "foodStocksHelp": "USDA PSD commodity stocks-to-use by marketing year, with the world ratio alongside for context. FAOSTAT Food Balances supplies production and domestic supply when PSD has no complete country balance.",
     "loadingFoodStocks": "Loading food stocks…",
     "foodStocksUnavailable": "Food stocks unavailable.",
     "foodStocksProLocked": "Upgrade to PRO for commodity stocks-to-use",
@@ -3323,6 +3520,71 @@
       "manufacturingShare": "Manufacturing employment",
       "source": "Sources: {{sources}}.",
       "retained": "{{stage}} data retained from the last successful refresh."
+    },
+    "fiveFactorScorecard": {
+      "title": "Femfaktorsresilienspoängbord",
+      "help": "Frysta v1 bevispoäng för livsmedel, energi, demografi, teknik och försvar. Expandera en rad för att inspektera indata, källhärledning och anledningar till saknad data.",
+      "loading": "Läser in femfaktorspoängbordet…",
+      "unavailable": "Femfaktorspoängbordet är inte tillgängligt.",
+      "proLocked": "Upgradera till PRO för femfaktorsresilienspoängbordet",
+      "insufficient": "Ofullständig data",
+      "notAvailable": "Inte tillgängligt",
+      "noEvidence": "Inget bevis är tillgängligt för denna pelare.",
+      "score": "{{score}}/5",
+      "coverage": "{{coverage}}% täckning",
+      "methodologyVersion": "Metodologi v{{version}}",
+      "methodologyLink": "Visa metodik",
+      "pillars": {
+        "food": "Mat",
+        "energy": "Energi",
+        "demographics": "Demografi",
+        "technology": "Teknik",
+        "defense": "Försvar"
+      },
+      "reasons": {
+        "source-unavailable": "Källa ej tillgänglig",
+        "country-unavailable": "Land ej tillgängligt",
+        "invalid-value": "Ogiltigt källvärde",
+        "stale": "Bevis är föråldrade",
+        "coverage-below-floor": "Täckning under poängsättningsgränsen",
+        "required-group-missing": "Obligatorisk bevisgrupp saknas",
+        "missing-population": "Befolkning otillgänglig",
+        "redistribution-blocked": "Omklassificering från källan är inte tillåten",
+        "pillar-unavailable": "Pelare otillgänglig"
+      },
+      "inputs": {
+        "population": "Population",
+        "food_productionBalance": "Produktionsbalans",
+        "food_stocksToUse": "Lager att använda",
+        "food_waterSecurity": "Vattensäkerhet",
+        "food_importDiversity": "Importdiversitet",
+        "energy_productionBalance": "Produktionsbalans",
+        "energy_lowCarbonShare": "Andel lågkolonergi",
+        "energy_gridEfficiency": "Nätverkningsverkningsgrad",
+        "demographics_totalDependency": "Total beroendegrad",
+        "demographics_oldAgeDependency": "Beroendegrad äldre",
+        "demographics_workingAgeProjection": "Prognos arbetskraft",
+        "demographics_tertiaryEnrollment": "Högskoleinplacering",
+        "demographics_researchersPerMillion": "Forskare per miljon",
+        "demographics_stemGraduateShare": "Andel STEM-examen",
+        "demographics_trainedIndustrialShare": "Andel utbildad industriarbetskraft",
+        "demographics_manufacturingEmploymentShare": "Andel tillverkningsanställda",
+        "technology_internetUse": "Internetanvändning",
+        "technology_mobileSubscriptions": "Mobilabonnemang",
+        "technology_fixedBroadband": "Fast bredband",
+        "technology_rdSpend": "Utvecklingsutgifter",
+        "technology_researchersPerMillion": "Forskare per miljon",
+        "technology_stemGraduateShare": "Andel STEM-examen",
+        "technology_electricityAccess": "Tillgång till el",
+        "defense_expenditureUsd": "Militära utgifter",
+        "defense_expenditurePctGdp": "Militär börda",
+        "defense_personnel": "Vapenförbandets personal",
+        "defense_industrialBalance": "Försvarsindustriell balans",
+        "defense_supplierDiversity": "Diversifiering av vapenleverantörer"
+      }
+    },
+    "defenseIndustrialBase": {
+      "proLocked": "Uppgradera till PRO för vapenleverantörsberoende och militär kapacitet"
     }
   },
   "preferences": {
@@ -3446,7 +3708,8 @@
   "auth": {
     "signIn": "Logga in",
     "createAccount": "Skapa konto",
-    "settings": "Inställningar"
+    "settings": "Inställningar",
+    "passkeyOffer": {}
   },
   "mcp": {
     "connectPanel": "Anslut MCP",

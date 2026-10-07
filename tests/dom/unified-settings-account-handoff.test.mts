@@ -71,6 +71,9 @@ vi.mock('@/services/entitlements', () => ({
   hasFeature: (feature: string) => Boolean(
     (entitlementMocks.state?.features as Record<string, unknown> | undefined)?.[feature],
   ),
+  hasEmbedAccessForAccount: (role: 'free' | 'pro' | undefined) => (
+    role === 'pro' || Boolean(entitlementMocks.state?.features.embedAccess)
+  ),
   isEntitled: (planKey?: string) => (
     entitlementMocks.state !== null
     && (planKey === undefined || entitlementMocks.state.planKey === planKey)
@@ -155,7 +158,10 @@ vi.mock('@/services/billing', () => ({
   removeBusinessSeat: async () => ({ status: 'removed' as const }),
 }));
 
-vi.mock('@/services/billing-state', () => ({
+// Partial so the real status-tone helpers stay available: a full stub goes
+// stale the moment billing-state gains an export the panel renders (#7315).
+vi.mock('@/services/billing-state', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/services/billing-state')>()),
   deriveBillingUxState: () => 'active',
   getReactivationHref: () => '/pro#pricing',
 }));
@@ -370,6 +376,16 @@ afterEach(() => {
 });
 
 describe('UnifiedSettings real auth-subscription handoff', () => {
+  it('offers the canonical MCP endpoint when no clients are connected', () => {
+    internal.mcpClients = [];
+    internal.mcpClientsLoading = false;
+    internal.renderMcpClientsList();
+
+    const copy = internal.overlay.querySelector<HTMLButtonElement>('.mcp-clients-copy-url-btn');
+    expect(copy?.dataset.copyValue).toBe('https://worldmonitor.app/mcp');
+    expect(internal.overlay.textContent).not.toContain('api.worldmonitor.app/mcp');
+  });
+
   it('keeps checking past 12 seconds while entitlement verification is still in flight', () => {
     vi.useFakeTimers();
     panelGatingMocks.hasPremiumAccess = false;

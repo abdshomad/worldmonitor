@@ -83,6 +83,26 @@ describe('api/mcp — user API keys on /mcp (#4859) + pre-check hardening (#4860
 
   // ── #4859 — user keys accepted, entitlement-gated ──
 
+  it('dashboard OAuth bearer without a plaintext key uses the user quota', async () => {
+    const { deps, pipe } = makeUserKeyDeps({
+      resolveBearerToContext: async () => ({ kind: 'user_key', userId: USER_KEY_USER_ID }),
+      pipelineOpts: { initialCount: 50 },
+    });
+    const res = await mcpHandler(proReq('POST', callBody('get_market_data')), deps);
+    assert.equal(res.status, 429);
+    assert.equal((await res.json()).error?.code, -32029);
+    assert.equal(pipe.count, 50);
+  });
+
+  it('dashboard OAuth bearer cannot bypass entitlement verification', async () => {
+    const { deps } = makeUserKeyDeps({
+      resolveBearerToContext: async () => ({ kind: 'user_key', userId: USER_KEY_USER_ID }),
+      getEntitlements: async () => { throw new Error('unavailable'); },
+    });
+    const res = await mcpHandler(proReq('POST', callBody('get_market_data')), deps);
+    assert.equal(res.status, 503);
+  });
+
   it('happy: valid user key + mcpAccess entitlement → describe_tool 200', async () => {
     const { deps, pipe } = makeUserKeyDeps();
     const res = await mcpHandler(userKeyReq(callBody('describe_tool', { tool_name: 'get_market_data' })), deps);
@@ -100,6 +120,48 @@ describe('api/mcp — user API keys on /mcp (#4859) + pre-check hardening (#4860
     const res = await mcpHandler(userKeyReq(callBody('get_market_data')), deps);
     assert.equal(res.status, 200);
     assert.equal(pipe.count, 1, 'user_key tools/call must consume the daily quota (no unmetered cache-tool loophole)');
+  });
+
+  it('serves the archived ordinary market response within budget and preserves API-key panel allowance reuse', async () => {
+    const { readFileSync } = await import('node:fs');
+    const fixture = JSON.parse(readFileSync(new URL('./fixtures/jmespath-samples/fat-get-market-data.response.json', import.meta.url), 'utf8'));
+    const original = structuredClone(fixture);
+    const keyToSection = {
+      'market:stocks-bootstrap:v1': 'stocks-bootstrap', 'market:commodities-bootstrap:v1': 'commodities-bootstrap',
+      'market:physical-premium:v1': 'physical-premium', 'market:physical-divergence:v1': 'physical-divergence',
+      'market:crypto:v1': 'crypto', 'market:sectors:v2': 'sectors', 'market:etf-flows:v1': 'etf-flows',
+      'market:gulf-quotes:v1': 'gulf-quotes', 'market:fear-greed:v1': 'fear-greed',
+    };
+    process.env.UPSTASH_REDIS_REST_URL = 'https://api-market-fixture.invalid';
+    process.env.UPSTASH_REDIS_REST_TOKEN = 'fixture';
+    const reads = [];
+    globalThis.fetch = async input => {
+      const url = new URL(String(input));
+      assert.equal(url.origin, 'https://api-market-fixture.invalid');
+      assert.ok(url.pathname.startsWith('/get/'));
+      const key = decodeURIComponent(url.pathname.slice(5));
+      assert.ok(Object.hasOwn(keyToSection, key) || ['seed-meta:market:stocks', 'seed-meta:market:sectors'].includes(key));
+      reads.push(key);
+      return Response.json({ result: JSON.stringify(Object.hasOwn(keyToSection, key) ? fixture.data[keyToSection[key]] : { fetchedAt: Date.now() }) });
+    };
+    const { deps, pipe } = makeUserKeyDeps();
+    for (const reused of [false, true]) {
+      const response = await mcpHandler(userKeyReq(callBody('get_market_data')), deps);
+      assert.equal(response.status, 200);
+      const body = await response.json();
+      const value = body.result.structuredContent;
+      assert.equal(value._budget_exceeded, undefined);
+      assert.ok(Buffer.byteLength(body.result.content[0].text) <= 131072);
+      assert.ok(value.data['stocks-bootstrap'].quotes.length > 0);
+      assert.ok(value.data['commodities-bootstrap'].quotes.length > 0);
+      assert.equal(value.transportCoverage.count_scope, 'post_filter_snapshot');
+      assert.equal(value.panelRequest.panel, 'markets');
+      assert.equal(value.panelRequest.reused, reused);
+      assert.equal(pipe.count, 1);
+    }
+    assert.equal(reads.length, 22);
+    assert.equal(pipe.ops.flat().filter(operation => operation[0] === 'SET' && String(operation[1]).includes(':markets:')).length, 0);
+    assert.deepEqual(fixture, original);
   });
 
   it('cap: user key with 50 calls today → 51st rejected 429 -32029, counter back at 50', async () => {
@@ -245,22 +307,47 @@ describe('api/mcp — user API keys on /mcp (#4859) + pre-check hardening (#4860
     assert.equal(userKeyCalls, 0, 'env-key hit must short-circuit before the Convex-backed resolver');
   });
 
-  it('_execute downstream fetch carries the user key header, never internal-HMAC headers', async () => {
-    const { deps } = makeUserKeyDeps();
+  it('_execute downstream fetch is HMAC-signed and never forwards the dashboard key', async () => {
+    const { deps, pipe } = makeUserKeyDeps();
     const captured = [];
     globalThis.fetch = async (url, init) => {
       captured.push(new Request(url, init));
       return new Response(JSON.stringify({ ok: 1 }), { status: 200, headers: { 'Content-Type': 'application/json' } });
     };
-    await mcpHandler(userKeyReq(callBody('get_country_risk', { country_code: 'US' })), deps);
+    const res = await mcpHandler(userKeyReq(callBody('get_country_risk', { country_code: 'US' })), deps);
+    assert.equal(res.status, 200);
+    assert.equal(pipe.count, 1, 'dedicated MCP counter still charges one slot at the edge');
     // Filter to the sibling REST fetch: an earlier test in this file may have
     // instantiated the module-memoized Upstash rate limiter, whose Redis POST
-    // is also captured here and legitimately carries no key header.
+    // is also captured here and legitimately carries no auth header.
     const apiFetches = captured.filter((r) => new URL(r.url).pathname.startsWith('/api/'));
     assert.ok(apiFetches.length > 0, 'RPC tool must fetch the downstream REST endpoint');
+    const { verifyInternalMcpRequest } = await import(`../server/_shared/mcp-internal-hmac.ts?t=${Date.now()}`);
     for (const dsReq of apiFetches) {
-      assert.equal(dsReq.headers.get('x-worldmonitor-key'), USER_KEY, 'downstream must authenticate as the key owner');
-      assert.equal(dsReq.headers.get('x-wm-mcp-internal'), null, 'internal HMAC headers are pro-context only');
+      assert.equal(dsReq.headers.get('x-worldmonitor-key'), null, 'raw dashboard key must not reach the gateway meter');
+      assert.ok(dsReq.headers.get('x-wm-mcp-internal'), 'user_key downstream must use the internal HMAC path');
+      assert.equal(dsReq.headers.get('x-wm-mcp-user-id'), USER_KEY_USER_ID);
+      assert.ok(
+        await verifyInternalMcpRequest(dsReq, HMAC_SECRET),
+        'signed user_key fetch must verify so the gateway skips the API-key daily meter',
+      );
     }
+  });
+
+  it('MCP_INTERNAL_HMAC_SECRET unset on user_key path → 503 Retry-After before dispatch', async () => {
+    delete process.env.MCP_INTERNAL_HMAC_SECRET;
+    const { deps, pipe } = makeUserKeyDeps();
+    let downstreamCalls = 0;
+    globalThis.fetch = async () => {
+      downstreamCalls += 1;
+      return new Response(JSON.stringify({ ok: 1 }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+    };
+    const res = await mcpHandler(userKeyReq(callBody('get_country_risk', { country_code: 'US' })), deps);
+    assert.equal(res.status, 503, 'preflight must surface as 503');
+    assert.equal(res.headers.get('Retry-After'), '5');
+    const body = await res.json();
+    assert.equal(body.error?.code, -32603);
+    assert.equal(pipe.count, 0, 'no quota reservation on HMAC-secret preflight rejection');
+    assert.equal(downstreamCalls, 0, 'must not dispatch a credentialed downstream without a signing secret');
   });
 });

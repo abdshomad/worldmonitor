@@ -16,7 +16,7 @@
     "predictionMarkets": "أسواق التنبؤ",
     "loadingMarkets": "جارٍ تحميل أسواق التنبؤ...",
     "infrastructure": "التعرض البنيوي",
-    "briefUnavailable": "الموجز الذكي غير متاح — قم بتهيئة GROQ_API_KEY في الإعدادات.",
+    "briefUnavailable": "الموجز الذكي غير متاح — قم بتهيئة OPENROUTER_API_KEY في الإعدادات.",
     "cached": "مخزّن مؤقتاً",
     "fresh": "محدّث",
     "noMarkets": "لم يتم العثور على أسواق تنبؤ",
@@ -86,6 +86,7 @@
       "suppliers": "Arms suppliers ({{start}}–{{end}})",
       "source": "Sources: World Bank and SIPRI Arms Transfers Database. TIV measures transfer volume, not financial value.",
       "sourceWorldBank": "Source: World Bank.",
+      "snapshotAssembled": "تم تجميع لقطة {{source}} في {{time}}",
       "unavailable": "Not available",
       "coverage": "Mapped coverage",
       "supplierRetained": "Supplier data retained from the last successful importer refresh."
@@ -125,11 +126,13 @@
       "doNotTravel": "لا تسافر",
       "reconsiderTravel": "أعد النظر في السفر",
       "exerciseCaution": "توخَّ الحذر",
+      "normalPrecautions": "احتياطات عادية",
       "advisory": "تحذير",
       "activeSirens": "صفارات إنذار نشطة",
       "sirens24h": "صفارات / 24 ساعة",
       "aviationDisruptions": "اضطرابات الطيران",
-      "gpsJammingZones": "مناطق تشويش GPS"
+      "gpsJammingZones": "مناطق تشويش GPS",
+      "temporalUnavailable": "الملاحظات الزمنية غير متاحة"
     },
     "countryFacts": "حقائق عن البلد",
     "loadingFacts": "جارٍ تحميل حقائق البلد...",
@@ -200,7 +203,7 @@
       "decisionSignalsUnavailable": "لقطة إشارات قرار الصين غير متاحة حالياً."
     },
     "foodStocks": "Food stocks",
-    "foodStocksHelp": "USDA PSD commodity stocks-to-use by marketing year, with the world ratio alongside for context. FAOSTAT fills production only where PSD has no country coverage.",
+    "foodStocksHelp": "USDA PSD commodity stocks-to-use by marketing year, with the world ratio alongside for context. FAOSTAT Food Balances supplies production and domestic supply when PSD has no complete country balance.",
     "loadingFoodStocks": "Loading food stocks…",
     "foodStocksUnavailable": "Food stocks unavailable.",
     "foodStocksProLocked": "Upgrade to PRO for commodity stocks-to-use",
@@ -240,6 +243,71 @@
       "manufacturingShare": "Manufacturing employment",
       "source": "Sources: {{sources}}.",
       "retained": "{{stage}} data retained from the last successful refresh."
+    },
+    "fiveFactorScorecard": {
+      "title": "بطاقة تقييم الصمود بخمسة عوامل",
+      "help": "نتائج الأدلة الثابتة v1 للغذاء والطاقة والديموغرافيا والتكنولوجيا والدفاع. قم بتوسيع صفًا لفحص المدخلات، مصدر البيانات، وأسباب نقص البيانات.",
+      "loading": "جارٍ تحميل بطاقة التقييم بخمسة عوامل…",
+      "unavailable": "بطاقة التقييم بخمسة عوامل غير متوفرة.",
+      "proLocked": "قم بالترقية إلى PRO للحصول على بطاقة التقييم بخمسة عوامل",
+      "insufficient": "بيانات غير كافية",
+      "notAvailable": "غير متوفر",
+      "noEvidence": "لا توجد أدلة متاحة لهذا الركيزة.",
+      "score": "{{score}}/5",
+      "coverage": "تغطية {{coverage}}%",
+      "methodologyVersion": "منهجية v{{version}}",
+      "methodologyLink": "عرض المنهجية",
+      "pillars": {
+        "food": "الطعام",
+        "energy": "الطاقة",
+        "demographics": "الديموغرافيا",
+        "technology": "التكنولوجيا",
+        "defense": "الدفاع"
+      },
+      "reasons": {
+        "source-unavailable": "المصدر غير متوفر",
+        "country-unavailable": "البلد غير متاح",
+        "invalid-value": "قيمة المصدر غير صالحة",
+        "stale": "الأدلة قديمة",
+        "coverage-below-floor": "التغطية أقل من الحد الأدنى للتصنيف",
+        "required-group-missing": "مجموعة الأدلة المطلوبة مفقودة",
+        "missing-population": "السكان غير متاحين",
+        "redistribution-blocked": "إعادة توزيع المصدر غير مسموح به",
+        "pillar-unavailable": "العمود غير متاح"
+      },
+      "inputs": {
+        "population": "السكان",
+        "food_productionBalance": "توازن الإنتاج",
+        "food_stocksToUse": "المخزونات للاستخدام",
+        "food_waterSecurity": "أمن المياه",
+        "food_importDiversity": "تنوع الاستيراد",
+        "energy_productionBalance": "توازن الإنتاج",
+        "energy_lowCarbonShare": "حصة الطاقة منخفضة الكربون",
+        "energy_gridEfficiency": "كفاءة الشبكة",
+        "demographics_totalDependency": "الاعتماد الكلي",
+        "demographics_oldAgeDependency": "اعتماد الشيخوخة",
+        "demographics_workingAgeProjection": "تقدير عدد العاملين في سن العمل",
+        "demographics_tertiaryEnrollment": "الالتحاق بالتعليم العالي",
+        "demographics_researchersPerMillion": "عدد الباحثين لكل مليون نسمة",
+        "demographics_stemGraduateShare": "نسبة خريجي STEM",
+        "demographics_trainedIndustrialShare": "نسبة القوى العاملة الصناعية المدربة",
+        "demographics_manufacturingEmploymentShare": "نسبة العمالة في التصنيع",
+        "technology_internetUse": "استخدام الإنترنت",
+        "technology_mobileSubscriptions": "اشتراكات الهاتف المحمول",
+        "technology_fixedBroadband": "الإنترنت الثابت",
+        "technology_rdSpend": "إنفاق البحث والتطوير",
+        "technology_researchersPerMillion": "عدد الباحثين لكل مليون نسمة",
+        "technology_stemGraduateShare": "نسبة خريجي STEM",
+        "technology_electricityAccess": "الوصول إلى الكهرباء",
+        "defense_expenditureUsd": "الإنفاق العسكري",
+        "defense_expenditurePctGdp": "عبء الإنفاق العسكري على الناتج المحلي الإجمالي",
+        "defense_personnel": "عدد أفراد القوات المسلحة",
+        "defense_industrialBalance": "توازن الصناعة الدفاعية",
+        "defense_supplierDiversity": "تنوع موردي الأسلحة"
+      }
+    },
+    "defenseIndustrialBase": {
+      "proLocked": "قم بالترقية إلى PRO لعرض تبعية الموردين العسكريين والقدرات العسكرية"
     }
   },
   "header": {
@@ -744,7 +812,7 @@
       "fresh": "محدّث",
       "noMarkets": "لم يتم العثور على أسواق تنبؤ",
       "predictionMarkets": "أسواق التنبؤ",
-      "unavailable": "الموجز الذكي غير متاح — قم بتهيئة GROQ_API_KEY في الإعدادات."
+      "unavailable": "الموجز الذكي غير متاح — قم بتهيئة OPENROUTER_API_KEY في الإعدادات."
     },
     "countryBrief": {
       "identifying": "جارٍ تحديد الدولة...",
@@ -760,7 +828,7 @@
       "predictionMarkets": "أسواق التنبؤ",
       "loadingMarkets": "جارٍ تحميل أسواق التنبؤ...",
       "infrastructure": "التعرض البنيوي",
-      "briefUnavailable": "الموجز الذكي غير متاح — قم بتهيئة GROQ_API_KEY في الإعدادات.",
+      "briefUnavailable": "الموجز الذكي غير متاح — قم بتهيئة OPENROUTER_API_KEY في الإعدادات.",
       "cached": "مخزّن مؤقتاً",
       "fresh": "محدّث",
       "noMarkets": "لم يتم العثور على أسواق تنبؤ",
@@ -810,9 +878,12 @@
         "space": "الفضاء"
       },
       "paused": "كاميرات الويب متوقفة",
-      "pausedIdle": "كاميرات الويب متوقفة — حرّك الماوس للاستئناف",
       "play": "تشغيل",
-      "previewStatus": "معاينة مباشرة"
+      "previewStatus": "جاهز للتشغيل",
+      "connecting": "جاري الاتصال…",
+      "unverified": "لا يمكن تأكيد أن البث مباشر",
+      "offline": "{{city}} غير متصل الآن",
+      "noFeeds": "لا توجد كاميرات ويب مباشرة في هذه المنطقة الآن"
     },
     "monitor": {
       "placeholder": "كلمات مفتاحية (مفصولة بفواصل)",
@@ -975,10 +1046,18 @@
       "skipToEnd": "Skip to end"
     },
     "pizzint": {
+      "indexSource": "المؤشر: World Monitor · بيانات المطاعم:",
+      "statusNormal": "طبيعي",
+      "statusNoData": "لا توجد بيانات",
+      "statusNoBaseline": "لا يوجد خط أساس",
+      "vsUsual": "مقارنة بالمعتاد",
       "title": "مؤشر بيتزا البنتاغون",
       "defcon": "DEFCON {{level}}",
       "updated": "تم التحديث {{timeAgo}}",
       "tensionsTitle": "التوترات الجيوسياسية",
+      "tensionsSource": "التوترات: World Monitor استنادًا إلى أحداث GDELT",
+      "insufficientData": "بيانات غير كافية",
+      "pizzaUnavailable": "نشاط مطاعم البيتزا غير متاح",
       "source": "المصدر:",
       "statusClosed": "مغلق",
       "statusSpike": "ارتفاع حاد",
@@ -990,11 +1069,11 @@
       "minutesAgo": "{{m}}د مضت",
       "hoursAgo": "{{h}}س مضت",
       "defconLabels": {
-        "1": "مسدس مُعدّ - أقصى جاهزية",
-        "2": "وتيرة سريعة - القوات المسلحة جاهزة",
-        "3": "بيت دائري - زيادة جاهزية القوات",
-        "4": "نظرة مزدوجة - تعزيز المراقبة الاستخباراتية",
-        "5": "تلاشي - أدنى مستوى جاهزية"
+        "1": "النشاط الأقصى",
+        "2": "نشاط مرتفع",
+        "3": "نشاط متزايد",
+        "4": "فوق المعدل الطبيعي",
+        "5": "النشاط الطبيعي"
       }
     },
     "strategicPosture": {
@@ -1075,9 +1154,6 @@
       "datacenter": "مركز بيانات",
       "base": "قاعدة",
       "nuclear": "نووي"
-    },
-    "community": {
-      "joinDiscussion": "Help Shape What's Next"
     },
     "threatLabels": {
       "critical": "حرج",
@@ -1313,7 +1389,7 @@
     },
     "insights": {
       "noStories": "لا توجد قصص عاجلة أو متعددة المصادر بعد",
-      "infoTooltip": "<strong>تحليل مدعوم بالذكاء الاصطناعي</strong><br>• <strong>موجز عالمي</strong>: ملخص AI (Groq/OpenRouter)<br>• <strong>المشاعر</strong>: تحليل نبرة الأخبار<br>• <strong>السرعة</strong>: قصص سريعة التطور<br>• <strong>النقاط المحورية</strong>: تربط كيانات الأخبار بإشارات الخريطة (عسكرية، احتجاجات، انقطاعات)<br><em>سطح المكتب فقط • مدعوم بـ Llama 3.3 + كشف النقاط المحورية</em>",
+      "infoTooltip": "<strong>تحليل مدعوم بالذكاء الاصطناعي</strong><br>• <strong>موجز عالمي</strong>: ملخص AI (OpenRouter)<br>• <strong>المشاعر</strong>: تحليل نبرة الأخبار<br>• <strong>السرعة</strong>: قصص سريعة التطور<br>• <strong>النقاط المحورية</strong>: تربط كيانات الأخبار بإشارات الخريطة (عسكرية، احتجاجات، انقطاعات)<br><em>سطح المكتب فقط • مدعوم بـ Llama 3.3 + كشف النقاط المحورية</em>",
       "step": "Step {{step}}/{{total}}",
       "waitingForData": "Waiting for news data...",
       "rankingStories": "Ranking important stories...",
@@ -1321,7 +1397,7 @@
       "generatingBrief": "Generating world brief...",
       "mapFlashLabel": "Live Event Pulse",
       "mapFlashDesc": "Flash locations on the map when breaking news arrives",
-      "aiFlowCloudLabel": "Cloud AI (Groq & OpenRouter)",
+      "aiFlowCloudLabel": "Cloud AI (OpenRouter)",
       "aiFlowCloudDesc": "إرسال العناوين إلى السحابة لتلخيص الذكاء الاصطناعي (موصى به)",
       "aiFlowBrowserLabel": "نموذج محلي في المتصفح",
       "aiFlowBrowserDesc": "تشغيل الذكاء الاصطناعي محلياً في متصفحك",
@@ -1392,7 +1468,10 @@
       "provenanceTitle": "أصل التغطية: عدد القصص المأخوذة والمصادر المميزة التي تم اختيار هذا الملخص منها",
       "compiledFrom": "مجمّع من {{stories}} قصة عبر {{sources}} مصادر",
       "briefFreshness": "تم الإنشاء منذ {{minutes}}د · أحدث مصدر عمره {{hours}}س",
-      "briefStoryDetails": "Story details ({{count}})"
+      "briefStoryDetails": "تفاصيل القصة ({{count}})",
+      "streamIdleStopLabel": "إيقاف الفيديو المباشر عند عدم النشاط",
+      "streamIdleStopDesc": "يوقف الأخبار المباشرة وكاميرات الويب المباشرة بعد هذه المدة بدون نشاط ويعرض إشعارًا في اللوحة.",
+      "streamIdleStopNever": "أبدًا"
     },
     "cascade": {
       "filters": {
@@ -1626,6 +1705,16 @@
       "loading": "جارٍ الاتصال بمرحّل Telegram...",
       "empty": "لا توجد رسائل متاحة",
       "disabled": "مرحّل Telegram غير نشط",
+      "watchlistPlaceholder": "أضف قناة عامة باستخدام @username",
+      "resolving": "جارٍ التحقق من القناة...",
+      "invalidUsername": "استخدم @username عامًا على Telegram",
+      "resolveFailed": "تعذر العثور على القناة",
+      "watchlistLimit": "يمكنك متابعة ما يصل إلى {{count}} قناة مخصصة",
+      "previewMembers": "{{count}} عضو",
+      "addChannel": "إضافة قناة",
+      "added": "تمت الإضافة",
+      "remove": "إزالة",
+      "custom": "مخصصة",
       "filterAll": "الكل",
       "filterBreaking": "عاجل",
       "filterConflict": "نزاعات",
@@ -1698,6 +1787,7 @@
       "etfs": "ETFs",
       "netInflow": "صافي تدفق داخل",
       "netOutflow": "صافي تدفق خارج",
+      "netNeutral": "صافي محايد",
       "table": {
         "ticker": "الرمز",
         "issuer": "الجهة المصدرة",
@@ -1781,13 +1871,10 @@
     },
     "liveNews": {
       "notLive": "{{name}} is not currently live",
-      "cannotEmbed": "لا يمكن تشغيل {{name}} هنا — قد يكون مقيدًا في منطقتك (خطأ {{code}})",
       "openOnYouTube": "Open on YouTube",
       "manage": "إدارة القنوات",
       "addChannel": "إضافة قناة",
       "remove": "إزالة",
-      "youtubeHandle": "معرّف YouTube (مثال: @Channel)",
-      "youtubeHandleOrUrl": "رابط أو معرّف يوتيوب",
       "displayName": "اسم العرض (اختياري)",
       "channelSettings": "إعدادات القناة",
       "save": "حفظ",
@@ -1802,15 +1889,26 @@
       "regionMiddleEast": "الشرق الأوسط",
       "regionAfrica": "أفريقيا",
       "regionOceania": "أوقيانوسيا",
-      "botCheck": "يطلب YouTube تسجيل الدخول لتشغيل {{name}}",
-      "invalidHandle": "أدخل معرّف YouTube صالح (مثال: @ChannelName)",
       "signInToYouTube": "تسجيل الدخول إلى YouTube",
       "verifying": "جارٍ التحقق…",
       "noResults": "لم يُعثر على قنوات تطابق \"{{term}}\"",
       "hlsUrl": "رابط بث HLS (اختياري)",
       "invalidHlsUrl": "أدخل رابط بث HLS صالحًا (.m3u8)",
       "playLiveFeed": "تشغيل البث المباشر",
-      "readyStatus": "جاهز عندما تكون مستعدا"
+      "readyStatus": "جاهز عندما تكون مستعدا",
+      "embedBlocked": "YouTube لا يشغّل {{name}} داخل مواقع أخرى في الوقت الحالي",
+      "unavailable": "لا يمكن تشغيل {{name}} الآن",
+      "noStream": "لم يتم إعداد بث مباشر لـ {{name}} بعد",
+      "needsChannelUrl": "أضف {{name}} مجددًا مع عنوان قناته (youtube.com/channel/UC…) أو عنوان فيديو مباشر",
+      "connecting": "جاري الاتصال بـ {{name}}…",
+      "recording": "جاري التسجيل",
+      "unverified": "لا يمكن تأكيد أن هذا البث مباشر",
+      "playNextChannel": "تشغيل القناة التالية",
+      "channelOrVideoUrl": "قناة YouTube أو عنوان فيديو",
+      "channelUrlHint": "الصق عنوان قناة (youtube.com/channel/UC…) أو عنوان فيديو مباشر",
+      "youtubeChannel": "قناة YouTube",
+      "insecureStream": "{{name}} يستخدم بث غير آمن (http)، والمتصفحات تحظره. أضفه مجددًا ببث آمن (https)",
+      "httpsStreamHint": "المتصفحات تحظر البث غير الآمن (http). الصق عنوان بث آمن (https)"
     },
     "securityAdvisories": {
       "loading": "جاري جلب التحذيرات الأمنية...",
@@ -1932,7 +2030,8 @@
       "refineryStage": "Refine",
       "stageUnavailable": "No published figures for this stage",
       "withheldNote": "W withheld",
-      "productionCaption": "Country shares of actual production. The map deposits layer shows where resources sit; this table shows who mines or refines them."
+      "productionCaption": "Country shares of actual production. The map deposits layer shows where resources sit; this table shows who mines or refines them.",
+      "productionProLocked": "قم بالترقية إلى PRO لعرض حصص الدول من المناجم والمصافي مع مؤشر التركيز (HHI) حسب المرحلة"
     },
     "positiveNewsFeed": {
       "noStories": "لا توجد قصص في هذه الفئة بعد"
@@ -1980,6 +2079,22 @@
       "metals": {
         "gold": "Gold",
         "silver": "Silver"
+      },
+      "divergence": {
+        "compositeValue": "مؤشر الإجهاد المادي: {{value}} / 100",
+        "fiveDayTrend": "اتجاه العلاوة لخمسة أيام تداول",
+        "regimes": {
+          "normal": "طبيعي",
+          "elevated": "مرتفع",
+          "stressed": "مضغوط",
+          "extreme": "قصوى"
+        },
+        "states": {
+          "insufficientHistory": "الإحماء: {{count}} / {{required}} نقطة تداول",
+          "staleInput": "معيار الأداء المادي قديم",
+          "missingInput": "إشارة التباعد غير متوفرة"
+        },
+        "twentyDayTrend": "اتجاه العلاوة لمدة عشرين يوم تداول"
       }
     },
     "crypto": {
@@ -2116,7 +2231,7 @@
       "infoTooltip": "<strong>التقويم الاقتصادي</strong> إصدارات الاقتصاد الكلي المجدولة: CPI وNFP وGDP وPMI وقرارات البنوك المركزية. يعرض التوقعات مقابل الفعلي مقابل السابق. الأحداث عالية التأثير مميزة. المصدر: مزودو البيانات الاقتصادية."
     },
     "fsi": {
-      "infoTooltip": "<strong>مؤشر الضغوط المالية</strong> مؤشر الضغوط المالية لبنك كانساس سيتي الفيدرالي (KCFSI): يقيس الضغوط في الأسواق المالية الأمريكية باستخدام 11 مؤشراً تشمل فروق العوائد والتقلبات والارتباطات المتبادلة. القيم الموجبة تشير إلى ضغوط أعلى من المتوسط. المصدر: بنك الاحتياطي الفيدرالي في كانساس سيتي.",
+      "infoTooltip": "<strong>مؤشر الإجهاد المالي</strong> نسبة WorldMonitor للائتمان عالي العائد إلى سندات الخزانة طويلة الأجل، معدلة لتقلبات الأسهم وفارق العائد المرتفع: (HYG / TLT) / (VIX × HY spread / 100). هذا ليس مؤشر الإجهاد المالي لبنك الاحتياطي الفيدرالي في كانساس سيتي. قراءة 1.5 أو أعلى تعني إجهادًا منخفضًا؛ وأقل من 0.3 تعني إجهادًا مرتفعًا.",
       "title": "مؤشر الضغط المالي",
       "usFsiValue": "قيمة مؤشر الضغط المالي الأمريكي",
       "cissTitle": "مؤشر الضغط النظامي في منطقة اليورو",
@@ -2156,6 +2271,26 @@
         "failedToLoad": "فشل التحميل"
       },
       "cissStale": "لم تنشر البنك المركزي الأوروبي قيمة أحدث — قد تكون هذه القراءة قديمة."
+    },
+    "supplyVulnerability": {
+      "title": "هشاشة السلع",
+      "help": "تعرض الدولة حسب السلعة استنادًا إلى تركز الموردين، والعبور البحري، والمخزونات الاستراتيجية المتاحة.",
+      "loading": "جارٍ تحميل هشاشة السلع…",
+      "unavailable": "بيانات هشاشة السلع غير متاحة",
+      "noCoverage": "الأدلة غير كافية لهذه الدولة",
+      "unknown": "غير معروف",
+      "concentration": "التركز",
+      "transit": "العبور",
+      "buffer": "المخزون الوقائي",
+      "sources": "المصادر",
+      "methodology": "المنهجية",
+      "hormuzTitle": "اعتماد السلع",
+      "dependentCountries": "الدول المعتمدة",
+      "dependentCommodities": "السلع المعتمدة",
+      "stateOk": "حالي",
+      "stateStale": "مدخلات قديمة",
+      "stateInsufficient": "بيانات غير كافية",
+      "proLocked": "قم بالترقية إلى PRO لعرض درجات الضعف في السلع الأساسية"
     },
     "hormuzTracker": {
       "infoTooltip": "<strong>متتبع تجارة هرمز</strong> تتبع مباشر لسفن AIS عبر مضيق هرمز، أهم نقطة اختناق نفطية في العالم. يراقب أعداد الناقلات وأحداث التعطيل والتغيرات الأسبوعية في التدفقات. حوالي 20% من إمدادات النفط العالمية تعبر هنا يومياً.",
@@ -2237,7 +2372,7 @@
       }
     },
     "marketImplications": {
-      "infoTooltip": "<strong>آثار السوق بالذكاء الاصطناعي</strong> إشارات تداول يولدها النموذج اللغوي الكبير مشتقة من الحالة الجيوسياسية والسلع والاقتصادية الحية بعد كل دورة توقع.<ul><li><strong>الاتجاه</strong>: شراء / بيع / تحوط مع درجة ثقة</li><li><strong>الأفق الزمني</strong>: أسبوع أو أسبوعان أو شهر أو 3 أشهر</li><li><strong>المحرك</strong>: العامل الرئيسي وراء الإشارة</li><li><strong>المخاطرة</strong>: تحذير أو شرط إلغاء</li></ul><em>لأغراض إعلامية فقط. ليست نصيحة استثمارية.</em>",
+      "infoTooltip": "<strong>آثار السوق بالذكاء الاصطناعي</strong> إشارات تداول يولدها النموذج اللغوي الكبير مشتقة من الحالة الجيوسياسية والسلع والاقتصادية الحية بعد كل دورة توقع.<ul><li><strong>الاتجاه</strong>: شراء / بيع / تحوط</li><li><strong>الأفق الزمني</strong>: أسبوع أو أسبوعان أو شهر أو 3 أشهر</li><li><strong>المحرك</strong>: العامل الرئيسي وراء الإشارة</li><li><strong>المخاطرة</strong>: تحذير أو شرط إلغاء</li></ul><em>لأغراض إعلامية فقط. ليست نصيحة استثمارية.</em>",
       "title": "تداعيات سوق الذكاء الاصطناعي",
       "directions": {
         "long": "LONG",
@@ -2254,10 +2389,64 @@
       "signals_zero": "{{count}} إشارات",
       "signals_two": "{{count}} إشارتان",
       "signals_few": "{{count}} إشارات",
-      "signals_many": "{{count}} إشارة"
+      "signals_many": "{{count}} إشارة",
+      "unscored": "سيناريوهات سردية، غير مقيّمة من حيث الدقة."
     },
     "forecast": {
-      "infoTooltip": "<strong>التنبؤات بالذكاء الاصطناعي</strong> تقديرات احتمالية تم إنشاؤها بواسطة الذكاء الاصطناعي للأحداث الجيوسياسية والاقتصادية:<ul><li>تغطية متعددة المجالات: النزاع والأسواق وسلسلة التوريد والأمن السيبراني والسياسة</li><li>يعرض كل تنبؤ الاحتمال المقدر ومستوى الثقة والأفق الزمني</li><li>مُعايرة مقابل خطوط أساس أسواق التنبؤ حيث تتوفر</li></ul>تتحدث التنبؤات مع وصول إشارات استخبارية جديدة. قم بالتصفية حسب المجال باستخدام علامات التبويب أعلاه."
+      "infoTooltip": "<strong>التنبؤات بالذكاء الاصطناعي</strong> تقديرات احتمالية تم إنشاؤها بواسطة الذكاء الاصطناعي للأحداث الجيوسياسية والاقتصادية:<ul><li>تغطية متعددة المجالات: النزاع والأسواق وسلسلة التوريد والأمن السيبراني والسياسة</li><li>يعرض كل تنبؤ الاحتمال المقدر ومستوى الثقة والأفق الزمني</li><li>مُعايرة مقابل خطوط أساس أسواق التنبؤ حيث تتوفر</li></ul>تتحدث التنبؤات مع وصول إشارات استخبارية جديدة. قم بالتصفية حسب المجال باستخدام علامات التبويب أعلاه.",
+      "record": {
+        "label": "سجل الأداء",
+        "labelHint": "كيف سجلت التوقعات المنشورة بعد حسمها، خلال آخر {{days}} يومًا. مرّر المؤشر فوق أي رقم لمعرفة معناه.",
+        "unavailable": "غير متاح حاليًا",
+        "insufficient": "لا توجد توقعات مُقيَّمة كافية بعد",
+        "brier": "درجة براير {{score}} (n={{n}})",
+        "brierHint": "درجة براير على {{n}} توقعًا مُقيَّمًا: متوسط مربع الفرق بين احتمال التوقع وما حدث فعلًا. 0 مثالي، و0.25 يعادل رمي عملة، والأقل أفضل.",
+        "baseRate": "المعدل الأساسي {{score}} (n={{n}})",
+        "baseRateHint": "ما كان سيحققه من يجيب دائمًا بمعدل «نعم» الملاحظ على نفس التوقعات الـ{{n}} ({{pct}}% حُسمت بـ«نعم»). التفوق عليه يعني أن التوقعات تضيف معلومات.",
+        "void": "لاغية {{pct}}% ({{count}} من {{resolved}})",
+        "voidHint": "توقعات حُسمت لكن تعذر تقييمها، من أصل {{resolved}} حُسمت خلال الفترة.",
+        "stale": "غير محدّث",
+        "staleHint": "آخر تقييم في {{date}}. لم يعمل المقيِّم منذ ذلك الحين، لذا هذه الأرقام أقدم مما ينبغي.",
+        "fullRecord": "السجل الكامل"
+      },
+      "reliability": {
+        "measured": "{{domain}} n={{n}} · Brier {{score}} مقابل معدل القاعدة {{base}}",
+        "measuredHint": "كيف أداء توقعات {{domain}} المنشورة على {{n}} توقع مصنّف في آخر {{days}} يوم. معدل الأساس هو ما كان سيحققه الإجابة دائماً بمعدل النعم المرصود للمجال. الأقل أفضل. هذا هو سجل المجال، وليس هذا التوقع.",
+        "unmeasured": "لم يتم قياسها بعد",
+        "unmeasuredHint": "لدى {{domain}} {{n}} نتائج مقيّمة خلال آخر {{days}} يوم. يحتاج المجال إلى {{min}} نتيجة قبل عرض دقته."
+      },
+      "resolution": {
+        "last": "الأخير: {{outcome}}",
+        "lastSr": "انقضت النافذة السابقة لهذا التنبؤ بنتيجة {{outcome}}.",
+        "history": "النوافذ الأخيرة، الأحدث أولاً: {{list}}",
+        "outcome": {
+          "yes": "نعم",
+          "no": "لا",
+          "void": "ملغى"
+        },
+        "void": {
+          "no_establishable_metric": "لم تكن هناك قراءة في المصدر لهذا السؤال",
+          "value_source_never_settled": "لم ينشر المصدر قيمة نهائية مستقرة",
+          "count_source_window_not_retained": "لم يحتفظ المصدر بنافذة السؤال",
+          "unsupported_window": "لا يمكن التحقق من السؤال مقابل مصدره",
+          "unsupported_metric_key": "لا يمكن التحقق من السؤال مقابل مصدره",
+          "not_hard_spec": "لا يمكن التحقق من السؤال مقابل مصدره",
+          "missing_threshold": "كان السؤال يفتقد عتبةً",
+          "missing_deadline": "كان السؤال يفتقد موعدًا نهائيًا",
+          "missing_generated_at": "كان التنبؤ يفتقد تاريخ بدايته",
+          "beyond_archive_horizon": "لم تعد أرشيفات الأخبار تغطي نافذة السؤال",
+          "no_archive_evidence": "لم تكن هناك معلومات في أرشيفات الأخبار حول الموضوع",
+          "all_judges_void": "وجد كلا الحكمين أن الأدلة غير كافية",
+          "judge_disagreement": "اختلف الحكمان",
+          "judge_retry_exhausted": "لم يصدر الحكمان حكماً",
+          "withheld_unpublished": "لم يعد هذا النوع من التنبؤات يُنشر",
+          "other": "لم يكن من الممكن الحسم"
+        }
+      },
+      "horizons": {
+        "label": "يُسجّل أيضًا عند: {{list}}",
+        "hint": "يتم تقدير احتمال العنوان الرئيسي عند أفق التنبؤ الخاص به. كما يتم تقدير الإسقاط عند كل من هذه الآفاق مقابل مصدر تغذيته، باستخدام القيمة المنشورة أولاً لهذا التنبؤ. لا تُعرض قيم الإسقاط لأن القيمة الحالية قد تختلف عن القيمة المقدَّرة."
+      }
     },
     "escalationCorrelation": {
       "infoTooltip": "<strong>مراقب التصعيد</strong> يكتشف الإشارات الجيوسياسية المتقاربة:<ul><li>يربط بين الحركات العسكرية وأحداث النزاع وارتفاعات الأخبار</li><li>يسجل مناطق التقارب حسب الشدة (حرجة/عالية/متوسطة/منخفضة)</li><li>يتتبع اتجاهات التصعيد أو تخفيف التصعيد بمرور الوقت</li></ul>انقر على بطاقة للتكبير على المنطقة على الخريطة."
@@ -2571,7 +2760,14 @@
       "signals_zero": "{{count}} إشارات",
       "signals_two": "{{count}} إشارتان",
       "signals_few": "{{count}} إشارات",
-      "signals_many": "{{count}} إشارة"
+      "signals_many": "{{count}} إشارة",
+      "waiting": "في انتظار التحديث التالي للبيانات. يتم تحديث هذه اللوحة تلقائيًا.",
+      "offline": "في انتظار الاتصال. يتم تحديث هذه اللوحة تلقائيًا عند عودة الاتصال بالإنترنت.",
+      "updated": "تم التحديث {{time}}",
+      "saved": "آخر تحديث معروف {{time}} · جارٍ البحث عن تحديثات",
+      "savedOffline": "آخر تحديث معروف {{time}} · غير متصل",
+      "localSignals": "استنادًا إلى الإشارات المحمّلة في لوحة المعلومات",
+      "emptySaved": "لم يظهر تقارب في آخر تحديث معروف."
     },
     "thermalEscalation": {
       "title": "التصعيد الحراري",
@@ -2741,6 +2937,72 @@
       "rubBase": "بنك روسيا — روبل لكل وحدة واحدة",
       "rubPerUnit": "روبل لكل وحدة",
       "sourceCbr": "المصدر: بنك روسيا"
+    },
+    "passkeyOffer": {
+      "title": "حفظ مفتاح المرور؟",
+      "body": "قم بتسجيل الدخول في المرة القادمة باستخدام بصمتك أو وجهك أو رمز جهازك — بدون كلمة مرور لتتذكرها.",
+      "accept": "حفظ مفتاح المرور",
+      "dismiss": "ليس الآن",
+      "close": "إغلاق",
+      "announce": "احفظ مفتاح مرور لتسجيل الدخول بشكل أسرع في المرة القادمة.",
+      "busy": "جاري انتظار جهازك…",
+      "succeeded": "تم حفظ مفتاح المرور. يمكنك استخدامه في المرة القادمة التي تسجل فيها الدخول.",
+      "retryable": "لم ينته الإجراء. يمكنك المحاولة مرة أخرى.",
+      "failed": "لم نتمكن من حفظ مفتاح مرور على هذا الجهاز."
+    },
+    "decisionBrief": {
+      "commodityTitle": "موجز قرار السلع",
+      "commodity": "السلعة / المنتج",
+      "blockedChokepoint": "المضيق المفترض إغلاقه",
+      "commodityCapture": "تسجيل مقارنة السلع",
+      "title": "موجز القرار",
+      "fuel": "الوقود",
+      "chokepoint": "نقطة اختناق",
+      "baseline": "التعطل الأساسي",
+      "comparison": "التعطل المقارن",
+      "capture": "التقاط / تحديث كليهما",
+      "downloadHtml": "تنزيل الموجز بصيغة HTML",
+      "downloadJson": "تنزيل الموجز بصيغة JSON",
+      "back": "← العودة إلى موجز البلد",
+      "select": "اختر تعطلًا في إمدادات الطاقة، ثم التقط كلا السيناريوهين.",
+      "changed": "تغير الاختيار. التقط كلا السيناريوهين قبل التصدير.",
+      "loading": "جارٍ التقاط كلا السيناريوهين…",
+      "captured": "تم الالتقاط. راجع تواريخ الرصد والقيود قبل التنزيل.",
+      "failed": "تعذر التقاط السيناريوهين. تحقق من صلاحية الوصول وحاول مجددًا. لا توجد نتيجة متاحة للتصدير.",
+      "locked": "موجز القرار متاح مع Pro."
+    },
+    "liveMedia": {
+      "idleStatus": "متوقف مؤقتًا بسبب عدم النشاط",
+      "idleBody": "توقف الفيديو المباشر بعد {{duration}} بدون نشاط الفأرة أو لوحة المفاتيح أو اللمس.",
+      "idleResume": "استئناف",
+      "idleKeepPlaying": "الاستمرار في التشغيل عند عدم النشاط",
+      "idleSettingsHint": "غيّر هذا في أي وقت في الإعدادات › الوسائط.",
+      "idleKeepPlayingToast": "سيستمر الفيديو المباشر في التشغيل عند عدم النشاط. غيّر هذا في الإعدادات › الوسائط."
+    },
+    "corroboration": {
+      "singlePublisher": "ناشر واحد",
+      "singlePublisherHint": "ناشر واحد فقط يغطي هذا حتى الآن. هذا يصف نطاق التغطية، وليس الدقة.",
+      "tier4Only": "مصادر منخفضة المستوى فقط",
+      "tier4OnlyHint": "كل منفذ ينشر هذا هو مصدر من المستوى 4 (المجمّعات والمدونات). هذا يصف نطاق التغطية، وليس الدقة.",
+      "rosterListed": "({{listed}} مدرجة)",
+      "rosterFeeds": "الخلاصات التي شوهدت: {{labels}}",
+      "rosterLegend": "المستويات ترتّب المصادر؛ ولا تحكم على هذا الادعاء.",
+      "tierDocsLink": "كيفية تعيين المستويات",
+      "tierChip": "T{{tier}}",
+      "tierChipUndeclared": "T؟",
+      "tierTitle1": "المستوى 1: وكالات الأنباء والهيئات الرسمية",
+      "tierTitle2": "المستوى 2: المنافذ الإعلامية الرئيسية",
+      "tierTitle3": "المستوى 3: مصادر متخصصة وإقليمية ومراكز بحثية",
+      "tierTitle4": "المستوى 4: المجمّعات والمدونات",
+      "tierTitleUndeclared": "المستوى غير محدد: لم تتم مراجعته بعد",
+      "rosterSummary": "نقلها {{publishers}}",
+      "rosterSummaryTier1": "نقلها {{publishers}}، بينهم {{tier1}} من المستوى 1",
+      "rosterPublishers_zero": "{{count}} ناشر",
+      "rosterPublishers_one": "{{count}} ناشر",
+      "rosterPublishers_two": "{{count}} ناشران",
+      "rosterPublishers_few": "{{count}} ناشرين",
+      "rosterPublishers_many": "{{count}} ناشراً",
+      "rosterPublishers_other": "{{count}} ناشر"
     }
   },
   "popups": {
@@ -2779,14 +3041,18 @@
     "protest": {
       "acledVerified": "ACLED (موثّق)",
       "gdelt": "GDELT",
+      "records": "سجلات",
+      "mediaSignal": "إشارة إعلامية غير مؤكدة",
+      "relatedArticle": "مقال ذو صلة",
+      "mediaSignalDetail": "ورد ذكر هذا الموقع في مقالات عن اضطرابات. لم يتم التحقق من وقوع حدث محلي.",
       "riots": "أعمال شغب",
       "highSeverity": "شدة عالية"
     },
     "gpsJamming": {
       "title": "تداخل GPS/GNSS",
-      "navPerformance": "Nav Performance",
-      "samples": "ADS-B Samples",
-      "aircraft": "Aircraft",
+      "navPerformance": "الطائرات المتأثرة",
+      "samples": "عدد الطائرات المتأثرة",
+      "aircraft": "الطائرات المرصودة",
       "h3Hex": "H3 Hex"
     },
     "flight": {
@@ -3224,8 +3490,8 @@
   "signals": {
     "context": {
       "prediction_leads_news": {
-        "whyItMatters": "أسواق التنبؤ غالباً ما تسعّر المعلومات قبل أن تصبح أخباراً — قد يمتلك المتداولون وصولاً مبكراً للتطورات.",
-        "actionableInsight": "راقب الأخبار العاجلة خلال 1-6 ساعات القادمة التي قد تفسر حركة السوق.",
+        "whyItMatters": "تحرك سوق التنبؤات بينما ظلت التغطية الإخبارية للموضوع منخفضة—قد يكون السوق يتفاعل مع معلومات لم يتم الإبلاغ عنها بعد.",
+        "actionableInsight": "راقب الأخبار العاجلة التي قد تفسر حركة السوق.",
         "confidenceNote": "ثقة أعلى إذا تحركت عدة أسواق تنبؤ في نفس الاتجاه."
       },
       "news_leads_markets": {
@@ -3522,7 +3788,8 @@
   "auth": {
     "signIn": "سجل الدخول",
     "createAccount": "إنشاء حساب",
-    "settings": "الإعدادات"
+    "settings": "الإعدادات",
+    "passkeyOffer": {}
   },
   "mcp": {
     "connectPanel": "الاتصال بـ MCP",

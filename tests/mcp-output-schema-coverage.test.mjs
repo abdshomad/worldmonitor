@@ -20,15 +20,54 @@ import { strict as assert } from 'node:assert';
 import { readdirSync, readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
+import Ajv2020 from 'ajv/dist/2020.js';
 
 import { validate } from './helpers/json-schema-mini.mjs';
-import { buildProducerBackedMarketFixture } from './helpers/mcp-producer-fixtures.mjs';
+import {
+  buildProducerBackedMarketFixture,
+  buildProducerBackedPhysicalComparisonFixture,
+} from './helpers/mcp-producer-fixtures.mjs';
+import {
+  extractPhysicalPremiumRegimeTransition,
+  extractRegulatoryAction,
+} from '../scripts/seed-cross-source-signals.mjs';
+import { PHYSICAL_DIVERGENCE_CONTRACT } from '../shared/physical-divergence-contract.js';
+import { jsonResponse } from '../api/_json-response.js';
+import { documentedOutputSchema } from './helpers/mcp-output-schema.mjs';
 
 const VALID_KEY = 'wm_test_key_output_schema';
 const originalEnv = { ...process.env };
 
 async function freshMod() {
   return import(`../api/mcp.ts?t=${Date.now()}-${Math.random()}`);
+}
+
+function collectInvalidToolSchemas(tools) {
+  const ajv = new Ajv2020({
+    allErrors: true,
+    allowUnionTypes: true,
+    strict: true,
+    strictRequired: false,
+    validateFormats: false,
+  });
+  const failures = [];
+
+  for (const tool of tools) {
+    for (const field of ['inputSchema', 'outputSchema']) {
+      const schema = tool[field];
+      if (!schema || typeof schema !== 'object') {
+        failures.push(`${tool.name}.${field}: missing or non-object schema`);
+      } else {
+        try {
+          ajv.compile(schema);
+        } catch (error) {
+          failures.push(`${tool.name}.${field}: ${error instanceof Error ? error.message : String(error)}`);
+        }
+      }
+    }
+  }
+
+  return failures;
 }
 
 describe('api/mcp.ts — per-tool outputSchema coverage (v1.7.0)', () => {
@@ -91,6 +130,28 @@ describe('api/mcp.ts — per-tool outputSchema coverage (v1.7.0)', () => {
     assert.deepEqual(failures, [], `tools missing outputSchema:\n  ${failures.join('\n  ')}`);
   });
 
+  it('get_food_stocks publishes the FAOSTAT domestic-supply contract on MCP and REST', () => {
+    const tool = mod.__testing__.TOOL_REGISTRY.find((entry) => entry.name === 'get_food_stocks');
+    assert.ok(tool, 'get_food_stocks tool not found in registry');
+    const mcpRecord = tool.outputSchema.properties.records.items.properties;
+    assert.match(mcpRecord.totalUseTmt.description, /FAOSTAT.*domestic-supply/is);
+    assert.match(mcpRecord.consumptionTmt.description, /FAOSTAT.*domestic-supply/is);
+    assert.match(mcpRecord.source.description, /FAOSTAT\s+Food\s+Balances.*production.*domestic-supply/is);
+
+    const specPath = path.join(
+      path.dirname(fileURLToPath(import.meta.url)),
+      '..',
+      'docs',
+      'api',
+      'ResilienceService.openapi.json',
+    );
+    const openApi = JSON.parse(readFileSync(specPath, 'utf8'));
+    const restRecord = openApi.components.schemas.FoodStockRecord.properties;
+    assert.match(restRecord.totalUseTmt.description, /FAOSTAT.*domestic-supply/is);
+    assert.match(restRecord.consumptionTmt.description, /FAOSTAT.*domestic-supply/is);
+    assert.match(restRecord.source.description, /FAOSTAT\s+Food\s+Balances.*production.*domestic-supply/is);
+  });
+
   // --------------------------------------------------------------------
   // Test 2 — every captured fixture validates against its tool's schema
   // --------------------------------------------------------------------
@@ -125,6 +186,75 @@ describe('api/mcp.ts — per-tool outputSchema coverage (v1.7.0)', () => {
     assert.deepEqual(errors, [], `producer-backed market fixture fails schema:\n  ${errors.join('\n  ')}`);
   });
 
+  it('get_market_data schema validates every producer-backed divergence state', () => {
+    const fixtureDir = path.dirname(fileURLToPath(import.meta.url));
+    const captured = JSON.parse(readFileSync(
+      path.join(fixtureDir, 'fixtures', 'jmespath-samples', 'fat-get-market-data.response.json'),
+      'utf8',
+    ));
+    const tool = mod.__testing__.TOOL_REGISTRY.find(t => t.name === 'get_market_data');
+    assert.ok(tool, 'tool get_market_data not found in registry');
+    for (const state of ['ok', 'insufficient_history', 'stale_input', 'missing_input']) {
+      const fixture = buildProducerBackedMarketFixture(captured);
+      const comparison = buildProducerBackedPhysicalComparisonFixture(state);
+      fixture.data['physical-premium'] = comparison.premium;
+      fixture.data['physical-divergence'] = comparison.divergence;
+      const errors = validate(tool.outputSchema, fixture);
+      assert.deepEqual(errors, [], `${state} producer fixture fails schema:\n  ${errors.join('\n  ')}`);
+    }
+  });
+
+  it('get_news_intelligence schema validates every newly documented transition type', () => {
+    const now = Date.now();
+    const physicalAsOf = new Date(now).toISOString().slice(0, 10);
+    const paperAsOf = new Date(now).toISOString();
+    const physical = extractPhysicalPremiumRegimeTransition({
+      'market:physical-divergence:v1': {
+        readings: ['gold', 'silver'].map((metal) => ({
+          metal,
+          state: 'ok',
+          physicalAsOf,
+          paperAsOf,
+          provenance: { fxAsOf: paperAsOf },
+        })),
+        transitions: [{
+          id: `physical-premium:gold:normal-elevated:${now}`,
+          metal: 'gold',
+          fromRegime: 'normal',
+          toRegime: 'elevated',
+          detectedAt: now,
+          methodologyVersion: 'physical-divergence-v2',
+        }],
+      },
+    });
+    const regulatory = extractRegulatoryAction({
+      'regulatory:actions:v1': {
+        actions: [{
+          id: 'regulatory-test',
+          tier: 'high',
+          agency: 'Test authority',
+          title: 'Test action',
+          publishedAt: paperAsOf,
+        }],
+      },
+    });
+    const tool = mod.__testing__.TOOL_REGISTRY.find(t => t.name === 'get_news_intelligence');
+    assert.ok(tool, 'tool get_news_intelligence not found in registry');
+    const fixture = {
+      cached_at: paperAsOf,
+      stale: false,
+      data: {
+        'cross-source-signals': {
+          signals: [...physical, ...regulatory],
+          evaluatedAt: now,
+          compositeCount: 0,
+        },
+      },
+    };
+    const errors = validate(tool.outputSchema, fixture);
+    assert.deepEqual(errors, [], `producer-backed news fixture fails schema:\n  ${errors.join('\n  ')}`);
+  });
+
   it('interactive cache-tool schemas declare the authoritative fields consumed by their apps', () => {
     const dataProperties = (toolName) => {
       const tool = mod.__testing__.TOOL_REGISTRY.find(t => t.name === toolName);
@@ -132,12 +262,41 @@ describe('api/mcp.ts — per-tool outputSchema coverage (v1.7.0)', () => {
       return tool.outputSchema.properties.data.properties;
     };
 
-    const newsStory = dataProperties('get_news_intelligence').insights.properties.topStories.items.properties;
+    const newsData = dataProperties('get_news_intelligence');
+    const newsTool = mod.__testing__.TOOL_REGISTRY.find(t => t.name === 'get_news_intelligence');
+    const newsStory = newsData.insights.properties.topStories.items.properties;
+    const crossSourceSignal = newsData['cross-source-signals'].properties.signals.items.properties;
+    assert.match(newsTool.description, /physical-premium regime transitions/);
+    assert.ok(crossSourceSignal.type.enum.includes(
+      'CROSS_SOURCE_SIGNAL_TYPE_PHYSICAL_PREMIUM_REGIME_TRANSITION',
+    ));
+    assert.ok(crossSourceSignal.type.enum.includes('CROSS_SOURCE_SIGNAL_TYPE_REGULATORY_ACTION'));
+    const divergenceSchema = dataProperties('get_market_data')['physical-divergence'].properties;
+    assert.equal(divergenceSchema.readings.items.properties.historyKey.type, 'string');
+    assert.deepEqual(
+      divergenceSchema.readings.items.properties.reason.enum,
+      PHYSICAL_DIVERGENCE_CONTRACT.readingReasonValues,
+    );
+    assert.deepEqual(
+      divergenceSchema.composite.properties.reason.enum,
+      PHYSICAL_DIVERGENCE_CONTRACT.compositeReasonValues,
+    );
+    assert.deepEqual(divergenceSchema.composite.properties.weights.items.properties.metal.enum, ['gold', 'silver']);
+    assert.equal(
+      divergenceSchema.composite.properties.weights.items.properties.methodologyVersion.type,
+      'string',
+    );
+    for (const field of [
+      'id', 'type', 'theater', 'summary', 'severity', 'severityScore', 'detectedAt',
+      'contributingTypes', 'signalCount',
+    ]) {
+      assert.ok(crossSourceSignal[field], `cross-source signal schema must declare ${field}`);
+    }
     assert.ok(newsStory.primaryTitle, 'news schema must declare primaryTitle');
     assert.ok(newsStory.primarySource, 'news schema must declare primarySource');
     assert.ok(newsStory.threatLevel, 'news schema must declare threatLevel');
     assert.deepEqual(newsStory.sourceProvenance.required, [
-      'risk', 'type', 'riskDeclared', 'typeDeclared', 'riskReviewed', 'typeReviewed',
+      'risk', 'type', 'riskDeclared', 'typeDeclared', 'riskReviewed', 'typeReviewed', 'knownBiases', 'summary',
     ]);
     assert.deepEqual(newsStory.sourceProvenance.properties.risk.enum, [
       'low', 'medium', 'high', 'unknown',
@@ -146,6 +305,9 @@ describe('api/mcp.ts — per-tool outputSchema coverage (v1.7.0)', () => {
       'wire', 'gov', 'intel', 'mainstream', 'market', 'tech', 'other', 'unknown',
     ]);
     assert.ok(newsStory.sourceProvenance.properties.stateAffiliated);
+    assert.deepEqual(newsStory.sourceProvenance.properties.knownBiases.items, { type: 'string' });
+    assert.match(newsStory.sourceProvenance.properties.knownBiases.description, /not assessed, not neutral/);
+    assert.equal(newsStory.sourceProvenance.properties.summary.type, 'string');
     assert.deepEqual(newsStory.countryCode.type, ['string', 'null']);
     assert.equal(newsStory.title, undefined, 'news schema must not advertise the drifted title field');
     assert.equal(newsStory.summary, undefined, 'news schema must not advertise the drifted summary field');
@@ -356,15 +518,69 @@ describe('api/mcp.ts — per-tool outputSchema coverage (v1.7.0)', () => {
     assert.equal(res.status, 200);
     const body = await res.json();
     const tools = body.result?.tools ?? [];
+    assert.deepEqual(tools, mod.TOOL_LIST_RESPONSE, 'tools/list must preserve the registry wire value exactly');
     assert.deepEqual(
       tools.map((tool) => tool.name).sort(),
       mod.__testing__.TOOL_REGISTRY.map((tool) => tool.name).sort(),
       'tools/list names must match TOOL_REGISTRY exactly',
     );
     const missing = tools.filter(t => !t.outputSchema || typeof t.outputSchema !== 'object'
-      || !t.outputSchema.properties || Object.keys(t.outputSchema.properties).length === 0)
+      || !documentedOutputSchema(t).properties || Object.keys(documentedOutputSchema(t).properties).length === 0)
       .map(t => t.name);
     assert.deepEqual(missing, [], `tools on the wire missing outputSchema:\n  ${missing.join('\n  ')}`);
+  });
+
+  it('tools/list emits valid inputSchema and outputSchema values for every tool', async () => {
+    const res = await mod.default(new Request('https://worldmonitor.app/mcp', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'tools/list', params: {} }),
+    }));
+    assert.equal(res.status, 200);
+
+    const body = await res.json();
+    const tools = body.result?.tools;
+    assert.ok(Array.isArray(tools) && tools.length > 0, 'tools/list must emit a non-empty tools array');
+    const failures = collectInvalidToolSchemas(tools);
+
+    assert.deepEqual(failures, [], `tools/list emitted invalid JSON Schemas:\n  ${failures.join('\n  ')}`);
+  });
+
+  it('jsonResponse preserves scalar-array schema types at the MCP tools/list depth limit', async () => {
+    let outputSchema = { type: ['string', 'null'] };
+    for (let depth = 0; depth < 16; depth += 1) {
+      outputSchema = { type: 'array', items: outputSchema };
+    }
+
+    const res = jsonResponse({
+      jsonrpc: '2.0',
+      id: 1,
+      result: {
+        tools: [{
+          name: 'nested_scalar_array',
+          inputSchema: { type: 'object' },
+          outputSchema,
+        }],
+      },
+    }, 200);
+    const body = await res.json();
+    const failures = collectInvalidToolSchemas(body.result.tools);
+    let nestedSchema = body.result.tools[0].outputSchema;
+    for (let depth = 0; depth < 16; depth += 1) {
+      nestedSchema = nestedSchema.items;
+    }
+
+    assert.deepEqual(failures, [], `tools/list emitted invalid JSON Schemas:\n  ${failures.join('\n  ')}`);
+    assert.deepEqual(nestedSchema.type, ['string', 'null']);
+  });
+
+  it('jsonResponse preserves nested values beyond the former depth limit', async () => {
+    let value = [{ nested: true }];
+    for (let depth = 0; depth < 21; depth += 1) {
+      value = { nested: value };
+    }
+
+    assert.deepEqual(await jsonResponse(value, 200).json(), value);
   });
 
   // --------------------------------------------------------------------
@@ -410,14 +626,20 @@ describe('api/mcp.ts — per-tool outputSchema coverage (v1.7.0)', () => {
   // `generate_forecasts` is verbatim too but declares `_apiPaths: []`, so it
   // has no OpenAPI operation to check against and cannot be listed here.
   const VERBATIM_PASSTHROUGH_TOOLS = [
+    'analyze_news_headlines',
     'analyze_situation',
+    'get_chokepoint_dependencies',
+    'get_country_coverage',
     'get_country_risk',
     'get_defense_industrial_base',
     'get_demographics_capability',
     'get_food_stocks',
     'get_intel_timeline',
     'get_mineral_production',
+    'get_resilience_indicators',
     'get_similar_events',
+    'list_five_factor_scorecards',
+    'get_supply_vulnerabilities',
     'search_flight_prices_by_date',
     'search_flights',
     'search_intel_history',
@@ -681,10 +903,11 @@ describe('api/mcp.ts — per-tool outputSchema coverage (v1.7.0)', () => {
   // `provider` the response never had). Guarding only the literal-return form
   // would leave the second half of that fix unprotected.
   //
-  // `adds` lists the keys `_execute` layers on top; they are legitimately
+  // `adds` lists the keys `_execute` or MCP dispatch layers on top; they are legitimately
   // absent from the wire, so they are subtracted before comparing.
   const SPREAD_PASSTHROUGH_TOOLS = new Map([
-    ['get_country_brief', { adds: ['digestCoverage', 'groundingStories'] }],
+    ['open_news_dashboard', { adds: ['requestedView', 'panelRequest'] }],
+    ['get_country_brief', { adds: ['digestCoverage', 'groundingStories', 'sources[].sourceProvenance'] }],
   ]);
 
   for (const [toolName, { adds }] of SPREAD_PASSTHROUGH_TOOLS) {

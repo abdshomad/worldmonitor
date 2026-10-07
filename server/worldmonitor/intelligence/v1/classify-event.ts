@@ -22,6 +22,14 @@ const VALID_CATEGORIES = [
   'crime', 'infrastructure', 'tech', 'general',
 ];
 
+// Same model as the relay's classify seed (scripts/ais-relay.cjs), which writes the
+// same `classify:sebuf:v6` rows. Against 413 blind-judged headlines, this prompt on
+// the shared Flash default raised 93 false critical/high labels for 43 real ones;
+// v4.1 with the "Do not under-rate high" block below raised 20 for 43. Pinned by
+// tests/classify-alert-label-precision.test.mjs.
+const CLASSIFY_OPENROUTER_MODEL = 'deepseek/deepseek-v4.1-flash';
+const CLASSIFY_MODEL_OVERRIDES = { openrouter: CLASSIFY_OPENROUTER_MODEL } as const;
+
 // ========================================================================
 // Helpers
 // ========================================================================
@@ -67,6 +75,15 @@ Key distinction: "critical" requires GEOPOLITICAL scope — events that destabil
 - "Man killed his estranged wife" → domestic crime → info
 - "How to Crack the SAM Database" → tutorial → info
 
+Do not under-rate "high". The EVENT itself is high even when nobody is hurt and even when the headline reports a vote, an approval or an announcement:
+- a sanctions package or sanctions bill passed, signed or imposed
+- a major arms sale or weapons transfer approved between states
+- a military deployment or force movement ahead of an operation
+- an armed attack, raid or clash with deaths, including one that was repelled
+- many deaths in state custody or by state action
+- a natural disaster that floods, destroys or displaces on a regional scale
+Use medium for analysis of or reaction to such an event, not for the event itself.
+
 Focus: geopolitical events, conflicts, disasters, diplomacy.
 Classify by real-world event severity, not headline sentiment.
 
@@ -86,19 +103,21 @@ Return: {"level":"...","category":"..."}`;
             { role: 'user', content: title },
           ],
           temperature: 0,
+          modelOverrides: CLASSIFY_MODEL_OVERRIDES,
           // Sized for the REASONING fallback, not the primary. DeepSeek answers
           // this two-field JSON in ~10 tokens (4,264 successful calls over the
           // 7 days to 2026-08-29: p50=10, p95=11, max=12), so the old ceiling of
           // 50 was never close to binding for it — and a ceiling costs nothing
           // when it is not reached.
           //
-          // The Groq fallback is `openai/gpt-oss-*`, a reasoning model. Even at
-          // `reasoning_effort: 'low'` (#7289) it spends part of the budget on
-          // hidden reasoning before emitting content, so at 50 the JSON was cut
-          // mid-key — the literal returned content was `{"level":"` — and the
-          // validator below rejected it. Measured against the live API on eight
-          // headlines, driven through THIS file's own systemPrompt and
-          // VALID_LEVELS/VALID_CATEGORIES rather than a paraphrase of them:
+          // A reasoning fallback spends part of the budget on hidden reasoning
+          // before emitting content. The former Groq `openai/gpt-oss-*` fallback
+          // (removed in #8885), even at `reasoning_effort: 'low'` (#7289), cut
+          // the JSON mid-key at 50 — the literal returned content was
+          // `{"level":"` — and the validator below rejected it. Measured against
+          // that model on eight headlines, driven through THIS file's own
+          // systemPrompt and VALID_LEVELS/VALID_CATEGORIES rather than a
+          // paraphrase of them:
           //
           //   max_tokens=50   no effort   0/8 valid   8 truncated  (pre-#7289)
           //   max_tokens=50   low         5/8 valid   3 truncated  (#7289 alone)

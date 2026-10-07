@@ -7,6 +7,8 @@ import {
 import {
   CANCELLATION_REQUIRED_WEBMCP_TOOLS,
   WEBMCP_TOOL_CANCELLATION_POLICY,
+  buildWebMcpTools,
+  createWebMcpBindingsGate,
   registerWebMcpTools,
 } from '../src/services/webmcp.ts';
 import { waitForWebMcpUiReady } from '../src/app/webmcp-dashboard.ts';
@@ -23,8 +25,12 @@ const settlePromises = async () => {
 
 function deferred() {
   let resolve;
-  const promise = new Promise((onResolve) => { resolve = onResolve; });
-  return { promise, resolve };
+  let reject;
+  const promise = new Promise((onResolve, onReject) => {
+    resolve = onResolve;
+    reject = onReject;
+  });
+  return { promise, resolve, reject };
 }
 
 function createBindings(overrides = {}) {
@@ -43,6 +49,86 @@ function createBindings(overrides = {}) {
       },
       panels: { mounted: ['map'], enabled: ['map'] },
     }),
+    listMapLayerCatalog: async () => ({
+      variant: 'full',
+      rendererKind: 'deck',
+      enabledLayers: [],
+      liveLayerKeys: ['conflicts', 'weather', 'hotspots'],
+      hasPremium: false,
+      deckGlActive: true,
+    }),
+    listDashboardPanels: async () => ({
+      variant: 'full',
+      total: 1,
+      hasMore: false,
+      nextCursor: null,
+      panels: [{
+        id: 'map',
+        label: 'Map',
+        category: 'core',
+        variants: ['full'],
+        enabled: true,
+        mounted: true,
+        entitled: true,
+        available: true,
+      }],
+    }),
+    switchMonitor: async (monitor) => ({
+      ok: true,
+      status: 'applied',
+      destination: monitor,
+      navigation: 'none',
+      message: 'Already on that monitor.',
+      context: {
+        variant: monitor,
+        map: {
+          view: 'global',
+          center: { lat: 0, lon: 0 },
+          zoom: 2,
+          timeRange: '7d',
+          enabledLayers: [],
+        },
+        panels: { mounted: ['map'], enabled: ['map'] },
+      },
+    }),
+    openSettings: async () => ({
+      ok: true,
+      status: 'applied',
+      destination: 'settings',
+      overlay: 'open',
+      tab: 'settings',
+      message: 'Opened settings.',
+      context: {
+        variant: 'full',
+        map: {
+          view: 'global',
+          center: { lat: 0, lon: 0 },
+          zoom: 2,
+          timeRange: '7d',
+          enabledLayers: [],
+        },
+        panels: { mounted: ['map'], enabled: ['map'] },
+      },
+    }),
+    openAlerts: async () => ({
+      ok: true,
+      status: 'applied',
+      destination: 'alerts',
+      overlay: 'open',
+      tab: 'notifications',
+      message: 'Opened alerts.',
+      context: {
+        variant: 'full',
+        map: {
+          view: 'global',
+          center: { lat: 0, lon: 0 },
+          zoom: 2,
+          timeRange: '7d',
+          enabledLayers: [],
+        },
+        panels: { mounted: ['map'], enabled: ['map'] },
+      },
+    }),
     applyDashboardAction: async (action) => ({
       ok: true,
       status: 'applied',
@@ -57,6 +143,157 @@ function createBindings(overrides = {}) {
       truncated: false,
     }),
     openSearchResult: async () => ({ ok: true, status: 'opened' }),
+    setPanelEnabled: async () => ({
+      ok: true,
+      status: 'applied',
+      panelId: 'giving',
+      requestedEnabled: true,
+      effectiveEnabled: true,
+      changed: true,
+      message: 'Panel enabled.',
+    }),
+    listMissionPresets: async () => ({
+      ok: true,
+      variant: 'full',
+      activePresetId: null,
+      presets: [],
+      count: 0,
+    }),
+    applyMissionPreset: async () => ({
+      ok: true,
+      status: 'applied',
+      presetId: 'supply-chain-risk',
+      label: 'Supply-Chain Risk',
+      changed: true,
+      monitor: 'full',
+      map: {
+        view: 'global',
+        zoom: 2.3,
+        timeRange: '7d',
+        enabledLayers: [],
+      },
+      panels: { enabled: [] },
+      message: 'Applied.',
+    }),
+    openMissionPicker: async () => ({
+      ok: true,
+      status: 'applied',
+      destination: 'mission_picker',
+      overlay: 'open',
+      message: 'Opened mission presets.',
+      context: {
+        variant: 'full',
+        map: {
+          view: 'global',
+          center: { lat: 0, lon: 0 },
+          zoom: 2,
+          timeRange: '7d',
+          enabledLayers: [],
+        },
+        panels: { mounted: ['map'], enabled: ['map'] },
+      },
+    }),
+    listFollowedCountries: async () => ({
+      ok: true,
+      enabled: true,
+      countries: ['DE'],
+      count: 1,
+      access: 'free',
+      limit: 3,
+    }),
+    setCountryFollowed: async (iso2, followed) => ({
+      ok: true,
+      status: 'accepted',
+      iso2,
+      followed,
+      message: 'Followed-country state accepted.',
+    }),
+    applyDashboardTabAction: async (action) => (
+      action.type === 'list'
+        ? {
+            activeTabId: 'tab-main01-abc123',
+            tabs: [{ id: 'tab-main01-abc123', name: 'Main', active: true, canDelete: false }],
+            tabCount: 1,
+            tabsTruncated: false,
+            canCreate: true,
+            cap: null,
+          }
+        : {
+            ok: true,
+            status: 'applied',
+            actionType: action.type,
+            message: 'Applied dashboard tab action.',
+            tabId: typeof action.tabId === 'string' ? action.tabId : 'tab-main01-abc123',
+            name: typeof action.name === 'string' ? action.name : 'Main',
+            activeTabId: typeof action.tabId === 'string' ? action.tabId : 'tab-main01-abc123',
+          }
+    ),
+
+    getPanelLayout: async () => ({
+      regions: {
+        sidebar: { available: true, panelCount: 1 },
+        bottom: { available: false, panelCount: 0 },
+      },
+      panels: [{
+        id: 'giving',
+        region: 'sidebar',
+        index: 0,
+        collapsed: false,
+        fullscreen: false,
+        collapsible: false,
+        fullscreenCapable: false,
+        fixed: false,
+      }],
+      panelCount: 1,
+    }),
+    setPanelCollapsed: async () => ({
+      ok: true,
+      status: 'applied',
+      actionType: 'set_collapsed',
+      panelId: 'live-news',
+      requestedCollapsed: true,
+      effectiveCollapsed: true,
+      changed: true,
+      message: 'Panel collapsed.',
+      persisted: true,
+    }),
+    movePanel: async () => ({
+      ok: true,
+      status: 'applied',
+      actionType: 'move',
+      panelId: 'giving',
+      region: 'sidebar',
+      index: 0,
+      changed: true,
+      message: 'Moved panel.',
+      persisted: true,
+    }),
+    setPanelFullscreen: async () => ({
+      ok: true,
+      status: 'applied',
+      actionType: 'set_fullscreen',
+      panelId: 'live-news',
+      requestedFullscreen: true,
+      effectiveFullscreen: true,
+      changed: true,
+      message: 'Panel entered fullscreen.',
+    }),
+    getAccessContext: async () => ({
+      accountState: 'signed_out',
+      clerk: 'unavailable',
+      productTier: 'anonymous',
+      capabilities: {
+        premiumAccess: false,
+        apiAccess: false,
+        mcpAccess: false,
+        dataExport: false,
+      },
+      limits: {
+        enabledPanels: { used: 1, cap: 40 },
+        dashboardTabs: { used: 1, cap: 3, canCreate: true },
+      },
+    }),
+    openSignIn: async () => ({ ok: false, status: 'denied', reason: 'clerk_unavailable' }),
     ...overrides,
   };
 }
@@ -77,6 +314,157 @@ async function executeRegistered(provider, name, inputJson = '{}', options = {})
 }
 
 describe('WebMCP registry behavioral contract', () => {
+  it('does not accumulate subscriptions to a stalled load after cancellation or timeout', async (t) => {
+    t.mock.timers.enable({ apis: ['setTimeout'] });
+    const pending = deferred();
+    const originalThen = pending.promise.then.bind(pending.promise);
+    let subscriptions = 0;
+    t.mock.method(pending.promise, 'then', (...args) => { subscriptions += 1; return originalThen(...args); });
+    let opened = 0;
+    const tool = buildWebMcpTools(pending.promise, () => {}).find(({ name }) => name === 'openSearch');
+    for (let i = 0; i < 20; i += 1) {
+      const controller = new AbortController();
+      const invocation = tool.execute({}, { signal: controller.signal });
+      const rejected = assert.rejects(invocation, i % 2 ? /World Monitor could not open search/ : { name: 'AbortError' });
+      if (i % 2) t.mock.timers.tick(30_000);
+      else controller.abort();
+      await rejected;
+    }
+    assert.equal(subscriptions, 1, 'Only the registry may subscribe to the unresolved load.');
+    pending.resolve(createBindings({ openSearch: () => { opened += 1; return true; } }));
+    await settlePromises();
+    assert.equal(opened, 0, 'Detached calls must not resume after the load resolves.');
+    assert.equal(await tool.execute({}, { signal: new AbortController().signal }), 'Opened search palette.');
+    assert.equal(opened, 1);
+  });
+
+  it('detaches each canceled or timed-out waiter and clears its timer while the load stalls', async (t) => {
+    t.mock.timers.enable({ apis: ['setTimeout'] });
+    const scheduled = t.mock.method(globalThis, 'setTimeout');
+    const cleared = t.mock.method(globalThis, 'clearTimeout');
+    const gate = createWebMcpBindingsGate(deferred().promise);
+    for (let i = 0; i < 20; i += 1) {
+      const caller = new AbortController();
+      const detached = assert.rejects(
+        gate.wait(caller.signal),
+        i % 2 ? /did not load/ : { name: 'AbortError' },
+      );
+      assert.equal(gate.pendingWaiters, 1);
+      if (i % 2) t.mock.timers.tick(30_000);
+      else caller.abort();
+      await detached;
+      assert.equal(gate.pendingWaiters, 0, 'A detached call must not stay subscribed to the stalled load.');
+    }
+    const timers = scheduled.mock.calls.map((call) => call.result);
+    assert.equal(timers.length, 20);
+    assert.deepEqual(
+      cleared.mock.calls.map((call) => call.arguments[0]),
+      timers,
+      'Every per-call timer must be cleared when its call detaches.',
+    );
+  });
+
+  it('publishes the complete inventory while App bindings are still loading', async () => {
+    const pending = deferred();
+    const provider = new FakeWebMcpModelContext({ supportsTargetExecutionSignal: true });
+    const harness = trackedRuntime(provider);
+    const controller = registerWebMcpTools(pending.promise, harness.runtime);
+    assert.equal(provider.registrationCalls.length, WEBMCP_SPA_TOOL_NAMES.length);
+    let opened = false;
+    const invocation = executeRegistered(provider, 'openSearch');
+    await settlePromises();
+    assert.equal(opened, false);
+    pending.resolve(createBindings({ openSearch: () => { opened = true; return true; } }));
+    assert.equal(await invocation, 'Opened search palette.');
+    assert.equal(opened, true);
+    controller.abort();
+  });
+
+  it('cancels pending binding waits on target cancellation and registration teardown', async () => {
+    for (const cancelRegistration of [false, true]) {
+      const pending = deferred();
+      let deliverTargetAbort;
+      const provider = new FakeWebMcpModelContext({
+        supportsTargetExecutionSignal: true,
+        scheduleTargetExecutionAbort: (deliver) => { deliverTargetAbort = deliver; },
+      });
+      const harness = trackedRuntime(provider);
+      const controller = registerWebMcpTools(pending.promise, harness.runtime);
+      const caller = new AbortController();
+      let opened = false;
+      const invocation = executeRegistered(provider, 'openSearch', '{}', { signal: caller.signal });
+      // Caller cancellation stays AbortError. Registration teardown means the
+      // App will not serve the call, which is reported as app_destroyed.
+      const rejected = assert.rejects(invocation, (error) => (
+        cancelRegistration
+          ? error.name === 'WebMcpToolError' && /Reason: app_destroyed\.$/.test(error.message)
+          : error.name === 'AbortError'
+      ));
+      await settlePromises();
+      (cancelRegistration ? controller : caller).abort();
+      await rejected;
+      deliverTargetAbort?.();
+      pending.resolve(createBindings({ openSearch: () => { opened = true; return true; } }));
+      await settlePromises();
+      assert.equal(opened, false);
+      controller.abort();
+      assert.deepEqual(await provider.getTools(), []);
+    }
+  });
+
+  it('keeps an App load failure within the safe tool error boundary', async () => {
+    const provider = new FakeWebMcpModelContext({ supportsTargetExecutionSignal: true });
+    const harness = trackedRuntime(provider);
+    const controller = registerWebMcpTools(Promise.reject(new Error('private startup detail')), harness.runtime);
+    await settlePromises();
+    await assert.rejects(executeRegistered(provider, 'openSearch'), {
+      name: 'WebMcpToolError',
+      message: 'Dashboard unavailable: Dashboard application did not load. Reason: app_destroyed.',
+    });
+    controller.abort();
+  });
+
+  it('reports an App load failure torn down with its registration as app_destroyed, not cancellation', async () => {
+    const pending = deferred();
+    const provider = new FakeWebMcpModelContext({ supportsTargetExecutionSignal: true });
+    const harness = trackedRuntime(provider);
+    const controller = registerWebMcpTools(pending.promise, harness.runtime);
+    const invocation = executeRegistered(provider, 'openSearch');
+    const rejected = assert.rejects(invocation, (error) => {
+      assert.equal(error.name, 'WebMcpToolError');
+      assert.match(error.message, /Reason: app_destroyed\.$/);
+      assert.doesNotMatch(error.message, /private startup detail/);
+      return true;
+    });
+    await settlePromises();
+    // src/main.ts rejects the load and tears down registration in the same tick.
+    pending.reject(new Error('private startup detail'));
+    controller.abort();
+    await rejected;
+    assert.deepEqual(
+      harness.events
+        .filter(({ event }) => event === 'webmcp-tool-invoked')
+        .map(({ data }) => data.reason),
+      ['unavailable'],
+    );
+  });
+
+  it('times out a stalled App without preventing a later invocation', async (t) => {
+    t.mock.timers.enable({ apis: ['setTimeout'] });
+    const pending = deferred();
+    const provider = new FakeWebMcpModelContext({ supportsTargetExecutionSignal: true });
+    const harness = trackedRuntime(provider);
+    const controller = registerWebMcpTools(pending.promise, harness.runtime);
+    const invocation = executeRegistered(provider, 'openSearch');
+    const rejected = assert.rejects(invocation, /World Monitor could not open search/);
+    await settlePromises();
+    t.mock.timers.tick(30_000);
+    await rejected;
+    pending.resolve(createBindings());
+    assert.equal(await executeRegistered(provider, 'openSearch'), 'Opened search palette.');
+    controller.abort();
+  });
+
   it('keeps unsupported and obsolete providers silent', async () => {
     for (const provider of [undefined, { provideContext() {} }]) {
       const harness = trackedRuntime(provider);
@@ -131,7 +519,7 @@ describe('WebMCP registry behavioral contract', () => {
     assert.deepEqual(harness.events, [
       {
         event: 'webmcp-registered',
-        data: { toolCount: 8, pageSurface: 'dashboard', api: 'document-current' },
+        data: { toolCount: WEBMCP_SPA_TOOL_NAMES.length, pageSurface: 'dashboard', api: 'document-current' },
       },
       {
         event: 'webmcp-tool-invoked',
@@ -266,24 +654,87 @@ describe('WebMCP registry behavioral contract', () => {
     );
     assert.deepEqual(
       Object.values(WEBMCP_TOOL_CANCELLATION_POLICY)
-        .filter((policy) => !['read-only', 'view-state', 'cancellation-required'].includes(policy)),
+        .filter((policy) => !['read-only', 'view-state', 'cancellation-required', 'result-dependent'].includes(policy)),
       [],
-      'policy values are limited to the three documented classifications',
+      'policy values are limited to the documented classifications',
     );
   });
 
+  it('preserves regional panel index 0 in get_panel_layout', async () => {
+    // Bottom-region index 0 is a valid ordinal. Coercing with `||` would replace
+    // it with the flatten fallback (1 when a sidebar panel precedes it).
+    const provider = new FakeWebMcpModelContext();
+    const harness = trackedRuntime(provider);
+    registerWebMcpTools(createBindings({
+      getPanelLayout: async () => ({
+        regions: {
+          sidebar: { available: true, panelCount: 1 },
+          bottom: { available: true, panelCount: 1 },
+        },
+        panels: [
+          {
+            id: 'giving',
+            region: 'sidebar',
+            index: 0,
+            collapsed: false,
+            fullscreen: false,
+            collapsible: false,
+            fullscreenCapable: false,
+            fixed: false,
+          },
+          {
+            id: 'live-news',
+            region: 'bottom',
+            index: 0,
+            collapsed: false,
+            fullscreen: false,
+            collapsible: true,
+            fullscreenCapable: true,
+            fixed: false,
+          },
+        ],
+        panelCount: 2,
+      }),
+    }), harness.runtime);
+    await settlePromises();
+
+    const layout = await executeRegistered(provider, 'get_panel_layout');
+    assert.equal(layout.regions.bottom.panelCount, 1);
+    assert.equal(layout.panels[1].id, 'live-news');
+    assert.equal(layout.panels[1].index, 0, 'bottom panel must keep regional index 0');
+  });
+
   it('denies tools whose effects can outlive cancellation when the host omits the target signal', async () => {
-    // set_map_layers writes STORAGE_KEYS.mapLayers (and can open the AIS
-    // stream); open_search_result reaches the same write through a layer
-    // command. An uncancellable invocation of either outlives the session, so
-    // both stay fail-closed while the browser cannot deliver a signal.
+    // Layer, panel, map-mode, tab, and monitor changes can persist or leave
+    // the current origin. An uncancellable invocation can outlive the session,
+    // so these tools stay fail-closed while the browser cannot deliver a signal.
+    // open_search_result is result-dependent and must reach its binding so the
+    // issued effect class can decide.
     assert.deepEqual(
       [...CANCELLATION_REQUIRED_WEBMCP_TOOLS].sort(),
-      ['openCountryBrief', 'open_search_result', 'set_map_layers'],
-      'the gated set includes persistent effects and metered country generation',
+      [
+        'apply_mission_preset',
+        'create_dashboard_tab',
+        'delete_dashboard_tab',
+        'move_panel',
+        'openCountryBrief',
+        'rename_dashboard_tab',
+        'select_dashboard_tab',
+        'set_country_followed',
+        'set_map_layers',
+        'set_map_mode',
+        'set_panel_collapsed',
+        'set_panel_enabled',
+        'switch_monitor',
+      ],
+      'the gated set includes navigation, persistent writes, and metered country generation',
     );
     let mutationCalls = 0;
     let openCalls = 0;
+    let tabCalls = 0;
+    let panelCalls = 0;
+    let missionCalls = 0;
+    let followedCountryCalls = 0;
     const provider = new FakeWebMcpModelContext();
     const harness = trackedRuntime(provider);
     registerWebMcpTools(createBindings({
@@ -294,6 +745,59 @@ describe('WebMCP registry behavioral contract', () => {
       openSearchResult: async () => {
         openCalls += 1;
         return { ok: true, status: 'opened' };
+      },
+      applyDashboardTabAction: async () => {
+        tabCalls += 1;
+        return {
+          ok: true,
+          status: 'applied',
+          actionType: 'create',
+          message: 'Applied dashboard tab action.',
+          tabId: 'tab-main01-abc123',
+          name: 'Main',
+          activeTabId: 'tab-main01-abc123',
+        };
+      },
+      setPanelEnabled: async () => {
+        panelCalls += 1;
+        return {
+          ok: true,
+          status: 'applied',
+          panelId: 'giving',
+          requestedEnabled: true,
+          effectiveEnabled: true,
+          changed: true,
+          message: 'Panel enabled.',
+        };
+      },
+      applyMissionPreset: async () => {
+        missionCalls += 1;
+        return {
+          ok: true,
+          status: 'applied',
+          presetId: 'supply-chain-risk',
+          label: 'Supply-Chain Risk',
+          changed: true,
+          monitor: 'full',
+          map: {
+            view: 'global',
+            zoom: 2.3,
+            timeRange: '7d',
+            enabledLayers: [],
+          },
+          panels: { enabled: [] },
+          message: 'Applied.',
+        };
+      },
+      setCountryFollowed: async () => {
+        followedCountryCalls += 1;
+        return {
+          ok: true,
+          status: 'accepted',
+          iso2: 'DE',
+          followed: true,
+          message: 'Followed-country state accepted.',
+        };
       },
     }), harness.runtime);
     await settlePromises();
@@ -315,15 +819,75 @@ describe('WebMCP registry behavioral contract', () => {
       denial,
     );
     assert.deepEqual(
+      await executeRegistered(provider, 'set_map_mode', JSON.stringify({ mode: '3d' })),
+      denial,
+    );
+    assert.deepEqual(
+      await executeRegistered(
+        provider,
+        'set_panel_enabled',
+        JSON.stringify({ panelId: 'giving', enabled: true }),
+      ),
+      denial,
+    );
+    assert.deepEqual(
+      await executeRegistered(
+        provider,
+        'apply_mission_preset',
+        JSON.stringify({ presetId: 'supply-chain-risk' }),
+      ),
+      denial,
+    );
+    assert.deepEqual(
+      await executeRegistered(
+        provider,
+        'set_country_followed',
+        JSON.stringify({ iso2: 'DE', followed: true }),
+      ),
+      denial,
+    );
+    assert.deepEqual(
+      await executeRegistered(
+        provider,
+        'set_panel_collapsed',
+        JSON.stringify({ panelId: 'live-news', collapsed: true }),
+      ),
+      denial,
+    );
+    assert.deepEqual(
+      await executeRegistered(
+        provider,
+        'move_panel',
+        JSON.stringify({ panelId: 'giving', region: 'sidebar', index: 0 }),
+      ),
+      denial,
+    );
+    for (const [tool, input] of [
+      ['select_dashboard_tab', { tabId: 'tab-main01-abc123' }],
+      ['create_dashboard_tab', { name: 'Markets' }],
+      ['rename_dashboard_tab', { tabId: 'tab-main01-abc123', name: 'Workspace' }],
+      ['delete_dashboard_tab', { tabId: 'tab-main01-abc123', confirm: true }],
+    ]) {
+      assert.deepEqual(await executeRegistered(provider, tool, JSON.stringify(input)), denial);
+    }
+    assert.deepEqual(
+      await executeRegistered(provider, 'switch_monitor', JSON.stringify({ monitor: 'tech' })),
+      denial,
+    );
+    assert.deepEqual(
       await executeRegistered(
         provider,
         'open_search_result',
         JSON.stringify({ resultKey: `sr_${'a'.repeat(32)}` }),
       ),
-      denial,
+      { ok: true, status: 'opened' },
     );
     assert.equal(mutationCalls, 0, 'a gated tool must not reach its binding');
-    assert.equal(openCalls, 0, 'a gated tool must not reach its binding');
+    assert.equal(openCalls, 1, 'result-dependent open_search_result must reach its binding');
+    assert.equal(tabCalls, 0, 'persistent dashboard tab tools must not reach their binding');
+    assert.equal(panelCalls, 0, 'persistent panel changes must not reach their binding');
+    assert.equal(missionCalls, 0, 'persistent mission preset changes must not reach their binding');
+    assert.equal(followedCountryCalls, 0, 'persistent followed-country changes must not reach their binding');
   });
 
   it('runs a dashboard-changing tool when the host omits the target execution signal', async () => {
@@ -355,7 +919,7 @@ describe('WebMCP registry behavioral contract', () => {
 
     // Chrome through 151 passes no target-side signal. These tools only move
     // visible, reversible dashboard view state, so they run anyway rather than
-    // costing 6 of 8 tools on every browser that exists.
+    // costing 7 of 10 tools on every browser that exists.
     assert.deepEqual(
       await executeRegistered(provider, 'set_map_view', JSON.stringify({ view: 'eu' })),
       {
@@ -374,6 +938,52 @@ describe('WebMCP registry behavioral contract', () => {
       event: 'webmcp-tool-invoked',
       data: { tool: 'set_map_view', outcome: 'success', reason: 'completed' },
     });
+  });
+
+  it('runs time-range and country-focus tools without a target execution signal', async () => {
+    const actions = [];
+    const provider = new FakeWebMcpModelContext();
+    const harness = trackedRuntime(provider);
+    registerWebMcpTools(createBindings({
+      applyDashboardAction: async (action) => {
+        actions.push(action.type);
+        return {
+          ok: true,
+          status: 'applied',
+          actionType: action.type,
+          message: 'Applied dashboard action.',
+          targets: [],
+        };
+      },
+    }), harness.runtime);
+    await settlePromises();
+
+    assert.deepEqual(
+      await executeRegistered(provider, 'set_time_range', JSON.stringify({ timeRange: '6h' })),
+      {
+        ok: true,
+        status: 'applied',
+        actionType: 'set_time_range',
+        message: 'Applied dashboard action.',
+        targets: [],
+        targetCount: 0,
+        targetsTruncated: false,
+      },
+    );
+    assert.deepEqual(
+      await executeRegistered(provider, 'focus_country', JSON.stringify({ iso2: 'DE' })),
+      {
+        ok: true,
+        status: 'applied',
+        actionType: 'focus_country',
+        message: 'Applied dashboard action.',
+        targets: [],
+        targetCount: 0,
+        targetsTruncated: false,
+      },
+    );
+    assert.deepEqual(actions, ['set_time_range', 'focus_country']);
+    assert.equal(provider.executionCalls.at(-1).targetSignal, undefined);
   });
 
   it('rejects the caller before the default target cancellation hop is delivered', async () => {
@@ -428,11 +1038,59 @@ describe('WebMCP registry behavioral contract', () => {
     ]);
     assert.deepEqual(harness.events.at(-1), {
       event: 'webmcp-registered',
-      data: { toolCount: 3, pageSurface: 'dashboard', api: 'document-current' },
+      data: { toolCount: WEBMCP_SPA_TOOL_NAMES.length - failures.size, pageSurface: 'dashboard', api: 'document-current' },
     });
     assert.equal(JSON.stringify(harness.events).includes('detail'), false);
   });
 
+  it('passes catalog layer IDs into set_map_layers', async () => {
+    const applied = [];
+    const provider = new FakeWebMcpModelContext({ supportsTargetExecutionSignal: true });
+    const harness = trackedRuntime(provider);
+    registerWebMcpTools(createBindings({
+      listMapLayerCatalog: async () => ({
+        variant: 'full',
+        rendererKind: 'deck',
+        enabledLayers: [],
+        liveLayerKeys: ['conflicts', 'weather', 'hotspots'],
+        hasPremium: true,
+        deckGlActive: true,
+      }),
+      applyDashboardAction: async (action) => {
+        applied.push(action);
+        return {
+          ok: true,
+          status: 'applied',
+          actionType: action.type,
+          message: 'Applied dashboard action.',
+          targets: Object.keys(action.layers ?? {}).map((id) => ({
+            id,
+            status: 'applied',
+          })),
+        };
+      },
+    }), harness.runtime);
+    await settlePromises();
+
+    const listed = await executeRegistered(provider, 'list_map_layers', '{}');
+    assert.equal(listed.ok, true);
+    const layerId = listed.layers.find((layer) => layer.available)?.id
+      ?? listed.layers[0].id;
+    assert.equal(typeof layerId, 'string');
+
+    const controller = new AbortController();
+    const result = await executeRegistered(
+      provider,
+      'set_map_layers',
+      JSON.stringify({ layers: { [layerId]: true } }),
+      { signal: controller.signal },
+    );
+    assert.equal(result.ok, true);
+    assert.deepEqual(applied, [{
+      type: 'set_layers',
+      layers: { [layerId]: true },
+    }]);
+  });
   it('aborts before a late provider can register', async () => {
     const harness = trackedRuntime(undefined);
     const controller = registerWebMcpTools(createBindings(), harness.runtime);

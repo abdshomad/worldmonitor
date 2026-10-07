@@ -37,6 +37,7 @@
 
 import { spawnSync } from 'node:child_process';
 import { appendFileSync } from 'node:fs';
+import { corroborateRunListings, supersedesRun as supersedes } from './lib/gh-run-listing.mjs';
 
 import { isMainModule } from './lib/main-module.mjs';
 import { REPOSITORY, readArgument } from './railway-cli.mjs';
@@ -51,9 +52,45 @@ export const MONITORED_WORKFLOWS = Object.freeze([
     // The job id IS the check-run name here: convex-deploy.yml writes
     // `deploy:` with no `name:` override, and the jobs API publishes the id.
     deployJobName: 'deploy',
-    // What a legitimate skip of the deploy job means for this workflow: the
-    // run must not have changed anything under convex/.
-    skipProofPath: 'convex/',
+    // What a legitimate skip of the deploy job means for this workflow:
+    // production must already have every change on main under EVERY path the
+    // Convex bundle is built from. Proven against the deployed baseline below,
+    // NOT against the run's own push diff — the per-push question is what let
+    // #7359 strand a merge behind green badges.
+    //
+    // `convex/` alone is NOT the bundle. Deployed modules import runtime values
+    // from outside it (e.g. convex/payments/subscriptionHelpers.ts pulls
+    // normalizeCheckoutAttributionSource from shared/mcp-attribution), so
+    // `convex deploy` bundles those files too. A change to one of them alters
+    // what production runs while touching nothing under convex/ — the same
+    // silent-staleness class as #7359, through a different door. Pinned by
+    // 'the convex skip proof covers every path the bundle is built from', which
+    // derives the real list from the source rather than trusting this copy.
+    // Listed file-by-file rather than as whole directories on purpose: `shared/`
+    // holds plenty the bundle never sees (manifests, frontend-only helpers), and
+    // a directory filter would deploy production on every unrelated touch —
+    // adding deploy churn to the very monitor this exists to keep quiet. The
+    // derived test is what makes that precision safe: a NEW cross-boundary
+    // import fails CI until it is added here, which is exactly the moment to
+    // think about it.
+    skipProofPaths: Object.freeze([
+      'convex/',
+      'shared/checkout-errors.ts',
+      'shared/cloud-preferences-contract.ts',
+      'shared/pinned-webcams.ts',
+      'shared/mcp-attribution.ts',
+      'shared/company-monitoring-contract.ts',
+      'shared/company-monitoring-evidence.ts',
+      'shared/embed-access.ts',
+      'shared/legal.ts',
+      'scripts/lib/company-monitoring-classification.mjs',
+      'src/utils/country-codes.ts',
+    ]),
+    // The git tag convex-deploy.yml moves after each successful deploy. Reading
+    // the workflow's own marker keeps ONE source of truth for "what is live";
+    // re-deriving it from the Actions API drifts from the tag whenever a
+    // post-deploy seed step fails (#7359 review).
+    deployedTagRef: 'convex-deployed',
     // Convex Deploy fires on EVERY push to main (no path filter; the changes
     // job decides whether to deploy). So "no run in the window"
     // means "no merge to main in the window". The observed max gap across the
@@ -67,12 +104,10 @@ export const MONITORED_WORKFLOWS = Object.freeze([
     // The YAML key is `deploy` but the job carries `name: Wrangler deploy`,
     // which is what the jobs API returns.
     deployJobName: 'Wrangler deploy',
-    // The workflow's own path filter covers workers/railway-reconcile-control/**
-    // plus its own file and test. A push touching ONLY those paths must
-    // deploy; a deploy job skipped there is an unexpected skip, which alarms.
-    skipProofPath: null,
+    skipProofPaths: null,
     triggerPaths: Object.freeze([
       'workers/railway-reconcile-control/**',
+      'scripts/railway-reconcile-control-client.mjs',
       '.github/workflows/deploy-railway-reconcile-control.yml',
       'tests/deploy-railway-reconcile-control-workflow.test.mjs',
     ]),
@@ -89,7 +124,7 @@ export const MONITORED_WORKFLOWS = Object.freeze([
     // Same shape: path-filtered push-to-main, no gate anywhere. A missing
     // CLOUDFLARE_API_TOKEN fails it silently like the reconcile Worker's
     // missing secrets did.
-    skipProofPath: null,
+    skipProofPaths: null,
     // MUST mirror the workflow's own `on.push.paths` exactly — this list is what
     // decides whether a deploy was DUE, so anything the workflow deploys on but
     // this list omits is a deploy the monitor cannot see fail. Pinned by
@@ -97,6 +132,7 @@ export const MONITORED_WORKFLOWS = Object.freeze([
     triggerPaths: Object.freeze([
       'workers/api-cors-preflight/**',
       'api/_bootstrap-public-tier.js',
+      'api/_bootstrap-tier-keys.js',
       'tests/cors-preflight-live.test.mjs',
       'tests/helpers/public-bootstrap-contract.mjs',
       '.github/workflows/deploy-worker.yml',
@@ -123,9 +159,59 @@ const INDETERMINATE_RUN_CONCLUSIONS = new Set([
 
 const GH_CALL_TIMEOUT_MS = 30_000;
 
+// Independent samples of a workflow's run listing per tick. See readNewestRun
+// for the stale-index-snapshot failure this defends against, and for why the
+// defence is `total_count` comparison plus a quorum rather than three votes:
+// production's own rate (21 alarms in 120 ticks, ~17%) is 5x the rate the
+// tight CI loop showed, so outvoting alone would still leave roughly one false
+// alarm a day. Three samples is what makes the discard-and-quorum rule work
+// while staying inside the budgets below.
+export const RUN_LISTING_SAMPLES = 3;
+
+// Non-stale samples that must agree before this monitor will say a workflow
+// stopped deploying. Below it, the tick is UNKNOWN (a warning on a green job),
+// never an alarm — a missing deploy persists, so the next tick still catches a
+// real one, while a stale shard's lie does not survive to it.
+export const RUN_LISTING_ALARM_QUORUM = 2;
+
+// Wall-clock one workflow's sampling may spend before it settles for the
+// samples already in hand. A slow but ANSWERING 5xx is the retryable path, so
+// the samples that cost the most are the ones returning nothing. This caps how
+// many of them one workflow pays for; it does NOT cap a read already in
+// flight, which is what MONITOR_WALL_BUDGET_MS below exists for. The single
+// source of the arithmetic is there — do not restate it here, so the two
+// cannot drift apart.
+export const RUN_LISTING_SAMPLE_BUDGET_MS = 90_000;
+
 // Retries AFTER the first attempt, so the worst case is 3 calls. Sized against
 // the workflow's `timeout-minutes: 10`: a transport failure returns in about a
-// second, so 3 workflows x 2 reads x 3 attempts costs seconds, not minutes.
+// second, so 3 workflows x 4 reads x 3 attempts costs seconds, not minutes,
+// and RUN_LISTING_SAMPLE_BUDGET_MS bounds the slow-5xx tail. The deployed-
+// baseline read adds nothing here: it is a local `git rev-parse` of the tag
+// the deploy workflow writes, not a GitHub call.
+// The whole walk's wall-clock ceiling, against the workflow's
+// `timeout-minutes: 10` (600s). Per-read budgets cannot bound this on their
+// own, and the arithmetic is worth writing down once because every factor is a
+// constant in this file:
+//
+//   one attempt          <= GH_CALL_TIMEOUT_MS                        30.0s
+//   one read             1 + GH_READ_RETRY_ATTEMPTS attempts + backoff
+//                        3 x 30s + (500ms + 1000ms)                   91.5s
+//   one workflow         2 listing samples (the 2nd starts under
+//                        RUN_LISTING_SAMPLE_BUDGET_MS and overshoots
+//                        it, since the budget is checked BETWEEN
+//                        samples) + 1 unbudgeted readRunJobs
+//                        3 x 91.5s                                   274.5s
+//   three workflows      3 x 274.5s                                  823.5s
+//
+// 823.5s against a 600s timeout: the runner kills the job —
+// which reports as a RED monitor with no verdict for any workflow, the exact
+// false alarm this file exists to remove. The deadline is checked before every
+// gh ATTEMPT (it wraps the callee of createRetryingGh, not its caller), so the
+// overshoot is one in-flight call rather than a whole retry ladder, and every
+// workflow after it is reached still gets its own UNKNOWN rather than nothing.
+export const MONITOR_WALL_BUDGET_MS = 8 * 60 * 1000;
+
 export const GH_READ_RETRY_ATTEMPTS = 2;
 export const GH_READ_RETRY_BASE_MS = 500;
 export const GH_READ_RETRY_MAX_MS = 4_000;
@@ -195,6 +281,10 @@ export function isGithubRecordUnreadability(error) {
   if (error.code === 'ENOENT') return false;
   const message = error.message;
   if (error.timedOut === true) return true;
+  // "I could not corroborate this" is a statement about the READ, not a
+  // GitHub answer about the deploy, so it warns like any other unreadability
+  // rather than claiming a production deploy stopped happening.
+  if (error.githubRecordUncorroborated === true) return true;
   const status = message.match(/\(HTTP (\d{3})\)/);
   if (status) {
     const code = Number(status[1]);
@@ -227,6 +317,28 @@ export function createRetryingGh({ gh, sleep = sleepSync, attempts = GH_READ_RET
   };
 }
 
+/**
+ * Refuse a gh read once the monitor's wall-clock budget is spent.
+ *
+ * Marked `timedOut` on purpose rather than with a bespoke flag: running out of
+ * time IS a timeout, and the two behaviours that classification already buys
+ * are exactly the ones wanted here — never retried (retrying is what spent the
+ * budget) and classified as unreadability, so the job warns rather than
+ * claiming a deploy failed.
+ */
+export function createDeadlineGh({ gh, deadlineAt, clock = () => Date.now() }) {
+  return (args) => {
+    if (clock() >= deadlineAt) {
+      const error = markGithubReadFailure(new Error(
+        `the monitor's ${MONITOR_WALL_BUDGET_MS / 1000}s wall-clock budget was spent before this read could run`,
+      ));
+      error.timedOut = true;
+      throw error;
+    }
+    return gh(args);
+  };
+}
+
 function runGh(args) {
   const result = spawnSync('gh', args, {
     encoding: 'utf8',
@@ -252,12 +364,21 @@ function parseTimestamp(value) {
 }
 
 /**
- * Resolve the newest run of one workflow on main, including queued or active
- * work, or a structured verdict when there is none.
+ * Read the run listing for one workflow on main once.
  *
- * `gh` is injected rather than imported so the I/O path is testable.
+ * Returns `{ runs, totalCount }` — runs newest-first, and the listing's own
+ * `total_count`. `totalCount` is not decoration: a stale index snapshot
+ * under-reports it (1366 against a true 3168 in the incident that motivated
+ * the sampling below), which makes it the one field that tells a stale answer
+ * from a fresh one by comparison rather than by guessing. `null` when the
+ * payload omits it or it is not an integer, which the caller treats as
+ * "cannot judge this sample" rather than as zero.
+ *
+ * Throws (never returns a partial answer) when the payload or any timestamp in
+ * it is unreadable, so a malformed listing is a read failure rather than a
+ * quietly shorter history.
  */
-export function readNewestRun({ gh, repository, workflowFile, now, noRunWindowMs = DEFAULT_NO_RUN_WINDOW_MS }) {
+function readRunListingOnce({ gh, repository, workflowFile }) {
   const query = [
     'branch=main',
     'per_page=100',
@@ -280,15 +401,86 @@ export function readNewestRun({ gh, repository, workflowFile, now, noRunWindowMs
   // the newest run cannot depend on an undocumented ordering. The validation
   // above makes any unreadable timestamp a read failure instead of hiding it.
   const ordered = [...runs].sort((left, right) => {
-    const leftMs = parseTimestamp(left?.created_at);
-    const rightMs = parseTimestamp(right?.created_at);
-    if (leftMs === null && rightMs === null) return 0;
-    if (leftMs === null) return 1;
-    if (rightMs === null) return -1;
-    return rightMs - leftMs;
+    if (supersedes(left, right)) return -1;
+    if (supersedes(right, left)) return 1;
+    return 0;
+  });
+  return {
+    runs: ordered,
+    totalCount: Number.isInteger(payload?.total_count) ? payload.total_count : null,
+  };
+}
+
+/**
+ * Resolve the newest run of one workflow on main, including queued or active
+ * work, or a structured verdict when there is none.
+ *
+ * `gh` is injected rather than imported so the I/O path is testable.
+ *
+ * WHY THIS READS THE LISTING MORE THAN ONCE
+ *
+ * GitHub intermittently answers this URL with a STALE INDEX SNAPSHOT — HTTP
+ * 200, a smaller `total_count`, and a newest run from weeks ago — interleaved
+ * with correct answers to the identical request. Measured from a runner on
+ * 2026-09-24, 1 read in 30 of convex-deploy.yml came back pinned at run
+ * 34136482776 (2026-09-07, total_count 1366 against a true 3168); that is what
+ * made this monitor report NO_RUN_IN_WINDOW on a workflow that had deployed
+ * minutes earlier, on 21 of 120 consecutive ticks. `createRetryingGh` cannot
+ * help: it classifies by whether GitHub answered, and a stale snapshot IS an
+ * answer — a successful one.
+ *
+ * The defence is comparison, in two layers, because outvoting alone is weaker
+ * than it looks. The per-tick failure rate observed in production (21 of 120)
+ * is ~17%, not the ~3% the tight CI loop showed, so three purely statistical
+ * samples would still leave roughly one false alarm a day. Hence:
+ *
+ *   1. PROVEN stale samples are DISCARDED, not outvoted. `total_count` is
+ *      monotonic for a workflow whose runs are not being deleted, so a sample
+ *      reporting fewer total runs than another sample of the same listing is
+ *      demonstrably an older view. That turns the common case from a vote into
+ *      a decision. A sample that omits `total_count` is kept (fail open — the
+ *      reduction below still protects it).
+ *   2. Whatever survives is reduced with `supersedes`, a total order. Taking
+ *      the later record is safe in the direction that matters: a stale sample
+ *      is an older snapshot of the same history, never a run that does not
+ *      exist, so the winner can only ever be a real run.
+ *
+ * An alarm additionally needs RUN_LISTING_ALARM_QUORUM non-stale samples to
+ * agree. The two verdicts a stale or truncated listing can manufacture —
+ * "no runs at all" and "the newest run predates the window" — are exactly the
+ * two this monitor shouts about, so neither may rest on a single read. Failing
+ * that quorum is UNKNOWN (a warning on a green job), never a claim that a
+ * deploy failed: the same direction-of-failure rule this file opens with.
+ *
+ * Pinned by 'outvotes a stale run-listing snapshot instead of alarming on it',
+ * 'discards a sample that total_count proves stale', 'keeps a sample that
+ * answered when a sibling sample throws', and 'prefers the later attempt of a
+ * re-run when two samples share a created_at'.
+ */
+export function readNewestRun({
+  gh,
+  repository,
+  workflowFile,
+  now,
+  noRunWindowMs = DEFAULT_NO_RUN_WINDOW_MS,
+  samples = RUN_LISTING_SAMPLES,
+  alarmQuorum = RUN_LISTING_ALARM_QUORUM,
+  sampleBudgetMs = RUN_LISTING_SAMPLE_BUDGET_MS,
+  clock = () => Date.now(),
+}) {
+  const corroborating = corroborateRunListings({
+    read: () => readRunListingOnce({ gh, repository, workflowFile }),
+    samples, alarmQuorum, sampleBudgetMs, clock, workflowFile,
   });
 
-  const newest = ordered[0];
+  // Layer 2: reduce the survivors on the total order.
+  let newest = null;
+  for (const sample of corroborating) {
+    const candidate = sample.runs[0];
+    if (!candidate) continue;
+    if (newest === null || supersedes(candidate, newest)) newest = candidate;
+  }
+
   if (!newest) {
     return {
       found: false,
@@ -359,18 +551,6 @@ export function readRunJobs({ gh, repository, runId, runAttempt }) {
 }
 
 /**
- * Did the diff between `parent` and `head` touch `pathPrefix`?
- *
- * Returns a boolean, never a maybe, but the caller must treat a read failure
- * (a checkout too shallow to reach the parent, a missing object) as ALARM —
- * a skipped deploy whose skip reason cannot be verified must not resolve to
- * healthy. `git` is injected for testability.
- */
-export function diffTouchesPath({ git, parentSha, headSha, pathPrefix }) {
-  return diffTouchesPaths({ git, baseSha: parentSha, headSha, paths: [pathPrefix] });
-}
-
-/**
  * Did any of `paths` change between a deployed baseline and the current tree?
  *
  * Path-filtered workflows can be dormant indefinitely. Their age alone says
@@ -386,6 +566,44 @@ export function diffTouchesPaths({ git, baseSha, headSha, paths }) {
   }
   const result = git(['diff', '--name-only', `${baseSha}`, `${headSha}`, '--', ...paths]);
   return result.trim().length > 0;
+}
+
+/**
+ * The commit the deploy workflow last recorded as live in production. (#7359)
+ *
+ * This reads the SAME marker `convex-deploy.yml` writes — its `convex-deployed`
+ * tag, moved immediately after `npx convex deploy` returns. Deriving the answer
+ * independently from the Actions API instead was a second source of truth that
+ * drifted from the first: the tag moves BEFORE the post-deploy seed steps (so a
+ * seed failure still reds the run without forcing a redundant redeploy), which
+ * means a run whose deploy JOB concluded `failure` can still have put that code
+ * in production. An API walk keyed on job conclusion rejects exactly that run as
+ * a baseline and then reports "production is behind" about code that IS live —
+ * every tick, until some later change deploys fully green. A chronically red
+ * monitor is a blind spot, which would defeat the point of #7359.
+ *
+ * Reading the tag also removes the walk's ~30 GitHub reads from the tick
+ * entirely, so the monitor's read budget stays as its header describes.
+ *
+ * Throws on an unreadable tag. A MISSING tag is distinguished via
+ * `deployedBaselineUnset` so the caller can report UNKNOWN rather than claim a
+ * failed deploy: before the first deploy after this landed there is legitimately
+ * nothing to compare against, and that state clears itself on the next deploy.
+ */
+export function readDeployedBaselineSha({ git, tagRef }) {
+  if (typeof tagRef !== 'string' || tagRef.length === 0) {
+    throw new Error('the deployed-baseline tag ref is missing');
+  }
+  // `^{commit}` dereferences, so an annotated tag resolves to its commit.
+  const sha = git(['rev-parse', '--verify', '--quiet', `refs/tags/${tagRef}^{commit}`]).trim();
+  if (sha.length === 0) {
+    const error = new Error(
+      `the ${tagRef} tag does not exist locally — production's deployed commit is not yet recorded`,
+    );
+    error.deployedBaselineUnset = true;
+    throw error;
+  }
+  return sha;
 }
 
 /**
@@ -507,6 +725,58 @@ export function judgeWorkflow({ workflow, run, jobs, skipProof, deploymentRequir
   // keeping the `deploy` id as the YAML key. The jobs API returns the display
   // name, so each workflow declares the deploy job name the API actually
   // publishes via `deployJobName`.
+  // Is production behind main? Evaluated for EVERY convex result, not only a
+  // skipped deploy (#7359 review finding 2). "The newest run deployed" does not
+  // mean production has current main: if a later watched-path commit produces no
+  // run at all (Actions degraded, a broken trigger, a workflow edit), the newest
+  // run stays a green DEPLOYED and the monitor was blind to the drift until the
+  // 7-day no-run backstop. The tag-vs-main comparison is the real question and
+  // does not depend on what any particular run did, so it is asked first.
+  if (workflow.skipProofPaths && typeof skipProof === 'function') {
+    let upToDate = null;
+    try {
+      upToDate = skipProof();
+    } catch (error) {
+      // Swallowing every throw was correct while the proof was local-git only:
+      // "Local proof failures (git, missing gh) ... are ALARM" (see the file
+      // header). The baseline read is still local, but re-throw anything the
+      // classifier calls transport unreadability so the outer handler reports
+      // UNKNOWN — a blip must never page on-call claiming production is behind.
+      if (isGithubRecordUnreadability(error)) throw error;
+      // No baseline recorded yet (the tag is written by the first deploy after
+      // this landed). Nothing to compare against, and it clears itself on the
+      // next deploy — a visible UNKNOWN, not a claim that production is behind.
+      if (error?.deployedBaselineUnset === true) {
+        return {
+          state: 'UNKNOWN',
+          verdict: 'DEPLOY_BASELINE_UNSET',
+          runId: run.runId,
+          detail: `run ${run.runId}: ${error.message}`,
+        };
+      }
+      upToDate = null;
+    }
+    // Proven drift and an unreadable baseline are different alarms: the first
+    // says a deploy is owed, the second says the monitor is blind. Conflating
+    // them sends on-call after the wrong thing.
+    if (upToDate === false) {
+      return {
+        state: 'ALARM',
+        verdict: 'DEPLOY_BEHIND_BASELINE',
+        runId: run.runId,
+        detail: `${workflow.skipProofPaths.join(', ')} changed between the last successful deploy and current main — production is behind`,
+      };
+    }
+    if (upToDate !== true) {
+      return {
+        state: 'ALARM',
+        verdict: 'DEPLOY_BASELINE_UNPROVEN',
+        runId: run.runId,
+        detail: `run ${run.runId}: the deployed baseline could not be read`,
+      };
+    }
+  }
+
   const deployName = workflow.deployJobName ?? 'deploy';
   const deployJobs = [...(jobs?.entries() ?? [])].filter(([name]) => name === deployName);
   if (deployJobs.length === 0) {
@@ -524,28 +794,21 @@ export function judgeWorkflow({ workflow, run, jobs, skipProof, deploymentRequir
   if (deploy.conclusion === 'skipped') {
     // A legitimate skip exists only for Convex Deploy: the convex=false path
     // diff. Any other workflow's deploy job must never be skipped, and even
-    // for Convex the skip must be proven against the actual diff — a workflow
-    // edit that widens or narrows the filter would otherwise skip silently.
-    if (workflow.skipProofPath && typeof skipProof === 'function') {
-      let skipLegitimate = null;
-      try {
-        skipLegitimate = skipProof(run.headSha);
-      } catch (error) {
-        skipLegitimate = null;
-      }
-      if (skipLegitimate === true) {
-        return {
-          state: 'OK',
-          verdict: 'DEPLOY_SKIPPED_LEGIT',
-          runId: run.runId,
-          detail: `run ${run.runId} skipped the deploy because nothing under ${workflow.skipProofPath} changed`,
-        };
-      }
+    // for Convex the skip must be proven — a workflow edit that widens or
+    // narrows the filter would otherwise skip silently.
+    //
+    // The proof compares the DEPLOYED baseline to current main, not this
+    // push's own diff (#7359). A skip is only legitimate if production already
+    // has everything main has; "this particular push touched nothing" was true
+    // of every push that followed a stranded merge.
+    // Drift was already proven false above, so a skip here is legitimate by
+    // construction: production has every bundled change on main.
+    if (workflow.skipProofPaths) {
       return {
-        state: 'ALARM',
-        verdict: 'DEPLOY_SKIPPED_UNPROVEN',
+        state: 'OK',
+        verdict: 'DEPLOY_SKIPPED_LEGIT',
         runId: run.runId,
-        detail: `run ${run.runId} skipped the deploy and the skip reason (nothing under ${workflow.skipProofPath} changed) could not be proven against the head diff`,
+        detail: `run ${run.runId} skipped the deploy and production already has every bundled change on main`,
       };
     }
     return {
@@ -596,14 +859,22 @@ export function checkPostmergeDeploys({ repository, gh, git, now = Date.now() })
           runAttempt: run.runAttempt,
         });
       }
-      const skipProof = workflow.skipProofPath
-        ? (headSha) => {
-          // The parent of the head on main. The checkout has full history with
-          // no blobs (see the workflow), so `git diff --name-only` needs only
-          // trees. A missing parent is a read failure: throw, and the caller
-          // resolves the skip to ALARM.
-          const parent = git(['rev-parse', '--verify', `${headSha}^`]).trim();
-          return !diffTouchesPath({ git, parentSha: parent, headSha, pathPrefix: workflow.skipProofPath });
+      const skipProof = workflow.skipProofPaths
+        ? () => {
+          // "Is production behind main?", not "did this push touch the path?"
+          // (#7359). The baseline is the commit the deploy workflow recorded as
+          // live, so a stranded change stays visible no matter how many later
+          // pushes legitimately skip. The checkout has full history with no
+          // blobs (see the workflow), so `git diff --name-only` needs only
+          // trees. An unreadable baseline throws, and the caller resolves the
+          // skip to ALARM rather than healthy.
+          const baseSha = readDeployedBaselineSha({ git, tagRef: workflow.deployedTagRef });
+          return !diffTouchesPaths({
+            git,
+            baseSha,
+            headSha: 'origin/main',
+            paths: workflow.skipProofPaths,
+          });
         }
         : null;
       results.push({
@@ -711,7 +982,11 @@ async function main() {
   const results = checkPostmergeDeploys({
     repository,
     // Reads retry; a transient TLS or DNS failure must not become a verdict.
-    gh: createRetryingGh({ gh: runGh }),
+    // The deadline sits INSIDE the retry wrapper so it is consulted before
+    // every attempt, not once per read.
+    gh: createRetryingGh({
+      gh: createDeadlineGh({ gh: runGh, deadlineAt: Date.now() + MONITOR_WALL_BUDGET_MS }),
+    }),
     git: (args) => {
       const result = spawnSync('git', args, {
         encoding: 'utf8',

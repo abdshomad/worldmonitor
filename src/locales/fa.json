@@ -87,7 +87,7 @@
     "predictionMarkets": "Prediction Markets",
     "loadingMarkets": "Loading prediction markets...",
     "infrastructure": "Infrastructure Exposure",
-    "briefUnavailable": "AI brief unavailable — configure GROQ_API_KEY in Settings.",
+    "briefUnavailable": "AI brief unavailable — configure OPENROUTER_API_KEY in Settings.",
     "cached": "Cached",
     "fresh": "Fresh",
     "noMarkets": "No active markets for this country.",
@@ -147,6 +147,7 @@
       "suppliers": "Arms suppliers ({{start}}–{{end}})",
       "source": "Sources: World Bank and SIPRI Arms Transfers Database. TIV measures transfer volume, not financial value.",
       "sourceWorldBank": "Source: World Bank.",
+      "snapshotAssembled": "تصویر داده‌های {{source}} در {{time}} گردآوری شد",
       "unavailable": "Not available",
       "coverage": "Mapped coverage",
       "supplierRetained": "Supplier data retained from the last successful importer refresh."
@@ -186,11 +187,13 @@
       "doNotTravel": "Do Not Travel",
       "reconsiderTravel": "Reconsider Travel",
       "exerciseCaution": "Exercise Caution",
+      "normalPrecautions": "اقدامات احتیاطی معمول",
       "advisory": "Advisory",
       "activeSirens": "Active Sirens",
       "sirens24h": "Sirens / 24h",
       "aviationDisruptions": "Aviation Disruptions",
-      "gpsJammingZones": "GPS Jamming Zones"
+      "gpsJammingZones": "GPS Jamming Zones",
+      "temporalUnavailable": "مشاهدات زمانی در دسترس نیست"
     },
     "fallback": {
       "instabilityIndex": "**Instability Index: {{score}}/100** ({{level}}, {{trend}})",
@@ -261,7 +264,7 @@
       "decisionSignalsUnavailable": "عکس‌فوری از سیگنال‌های تصمیم‌گیری چین در حال حاضر در دسترس نیست."
     },
     "foodStocks": "Food stocks",
-    "foodStocksHelp": "USDA PSD commodity stocks-to-use by marketing year, with the world ratio alongside for context. FAOSTAT fills production only where PSD has no country coverage.",
+    "foodStocksHelp": "USDA PSD commodity stocks-to-use by marketing year, with the world ratio alongside for context. FAOSTAT Food Balances supplies production and domestic supply when PSD has no complete country balance.",
     "loadingFoodStocks": "Loading food stocks…",
     "foodStocksUnavailable": "Food stocks unavailable.",
     "foodStocksProLocked": "Upgrade to PRO for commodity stocks-to-use",
@@ -301,6 +304,71 @@
       "manufacturingShare": "Manufacturing employment",
       "source": "Sources: {{sources}}.",
       "retained": "{{stage}} data retained from the last successful refresh."
+    },
+    "fiveFactorScorecard": {
+      "title": "کارت امتیازدهی تاب‌آوری پنج‌عاملی",
+      "help": "امتیازهای ثابت نسخه ۱ شواهد برای غذا، انرژی، جمعیت‌شناسی، فناوری و دفاع. برای بررسی ورودی‌ها، مبدأ منابع و دلایل داده‌های گمشده، یک ردیف را باز کنید.",
+      "loading": "در حال بارگذاری کارت امتیازدهی پنج‌عاملی…",
+      "unavailable": "کارت امتیازدهی پنج‌عاملی در دسترس نیست.",
+      "proLocked": "برای دسترسی به کارت امتیازدهی تاب‌آوری پنج‌عاملی به نسخه PRO ارتقا دهید",
+      "insufficient": "داده‌های ناکافی",
+      "notAvailable": "در دسترس نیست",
+      "noEvidence": "شواهدی برای این ستون در دسترس نیست.",
+      "score": "{{score}}/5",
+      "coverage": "پوشش {{coverage}}٪",
+      "methodologyVersion": "روش‌شناسی نسخه {{version}}",
+      "methodologyLink": "مشاهده روش‌شناسی",
+      "pillars": {
+        "food": "غذا",
+        "energy": "انرژی",
+        "demographics": "جمعیت‌شناسی",
+        "technology": "فناوری",
+        "defense": "دفاع"
+      },
+      "reasons": {
+        "source-unavailable": "منبع در دسترس نیست",
+        "country-unavailable": "کشور در دسترس نیست",
+        "invalid-value": "مقدار منبع نامعتبر است",
+        "stale": "شواهد منقضی شده‌اند",
+        "coverage-below-floor": "پوشش زیر حد نصاب امتیازدهی",
+        "required-group-missing": "گروه شواهد الزامی یافت نشد",
+        "missing-population": "جمعیت در دسترس نیست",
+        "redistribution-blocked": "توزیع مجدد منبع مجاز نیست",
+        "pillar-unavailable": "ستون در دسترس نیست"
+      },
+      "inputs": {
+        "population": "جمعیت",
+        "food_productionBalance": "توازن تولید",
+        "food_stocksToUse": "موجودی‌های قابل استفاده",
+        "food_waterSecurity": "امنیت آب",
+        "food_importDiversity": "تنوع واردات",
+        "energy_productionBalance": "توازن تولید",
+        "energy_lowCarbonShare": "سهم انرژی کم‌کربن",
+        "energy_gridEfficiency": "بهره‌وری شبکه",
+        "demographics_totalDependency": "وابستگی کل",
+        "demographics_oldAgeDependency": "وابستگی سالمندی",
+        "demographics_workingAgeProjection": "پیش‌بینی جمعیت در سن کار",
+        "demographics_tertiaryEnrollment": "نرخ ثبت‌نام در آموزش عالی",
+        "demographics_researchersPerMillion": "پژوهشگران به ازای هر میلیون نفر",
+        "demographics_stemGraduateShare": "سهم فارغ‌التحصیلان علوم، فناوری، مهندسی و ریاضیات",
+        "demographics_trainedIndustrialShare": "سهم نیروی کار صنعتی آموزش‌دیده",
+        "demographics_manufacturingEmploymentShare": "سهم اشتغال در صنعت",
+        "technology_internetUse": "استفاده از اینترنت",
+        "technology_mobileSubscriptions": "اشتراک‌های موبایل",
+        "technology_fixedBroadband": "باند پهن ثابت",
+        "technology_rdSpend": "مصرف تحقیق و توسعه",
+        "technology_researchersPerMillion": "پژوهشگران به ازای هر میلیون نفر",
+        "technology_stemGraduateShare": "سهم فارغ‌التحصیلان علوم، فناوری، مهندسی و ریاضیات",
+        "technology_electricityAccess": "دسترسی به برق",
+        "defense_expenditureUsd": "مصرف نظامی",
+        "defense_expenditurePctGdp": "بار نظامی",
+        "defense_personnel": "نیروهای مسلح",
+        "defense_industrialBalance": "تراز صنعت دفاعی",
+        "defense_supplierDiversity": "تنوع تأمین‌کنندگان تسلیحات"
+      }
+    },
+    "defenseIndustrialBase": {
+      "proLocked": "برای دسترسی به وابستگی تامین‌کننده تسلیحات و ظرفیت نظامی به PRO ارتقا دهید."
     }
   },
   "header": {
@@ -801,7 +869,7 @@
       "fresh": "Fresh",
       "noMarkets": "No prediction markets found",
       "predictionMarkets": "Prediction Markets",
-      "unavailable": "AI brief unavailable — configure GROQ_API_KEY in Settings."
+      "unavailable": "AI brief unavailable — configure OPENROUTER_API_KEY in Settings."
     },
     "countryBrief": {
       "identifying": "Identifying country...",
@@ -817,7 +885,7 @@
       "predictionMarkets": "Prediction Markets",
       "loadingMarkets": "Loading prediction markets...",
       "infrastructure": "Infrastructure Exposure",
-      "briefUnavailable": "AI brief unavailable — configure GROQ_API_KEY in Settings.",
+      "briefUnavailable": "AI brief unavailable — configure OPENROUTER_API_KEY in Settings.",
       "cached": "Cached",
       "fresh": "Fresh",
       "noMarkets": "No prediction markets found",
@@ -859,9 +927,8 @@
   "components": {
     "webcams": {
       "paused": "Webcams paused",
-      "pausedIdle": "Webcams paused — move mouse to resume",
       "play": "Play",
-      "previewStatus": "Live preview",
+      "previewStatus": "آماده برای پخش",
       "regions": {
         "all": "ALL",
         "mideast": "MIDEAST",
@@ -869,7 +936,11 @@
         "americas": "AMERICAS",
         "asia": "ASIA",
         "space": "SPACE"
-      }
+      },
+      "connecting": "در حال اتصال…",
+      "unverified": "نمی‌توان تأیید کرد که این پخش زنده است",
+      "offline": "{{city}} در حال حاضر آفلاین است",
+      "noFeeds": "هیچ وب‌کمی زنده در این منطقه وجود ندارد"
     },
     "pinnedWebcams": {
       "pinFromMap": "Pin a webcam from the map"
@@ -1018,7 +1089,8 @@
       "refineryStage": "Refine",
       "stageUnavailable": "No published figures for this stage",
       "withheldNote": "W withheld",
-      "productionCaption": "Country shares of actual production. The map deposits layer shows where resources sit; this table shows who mines or refines them."
+      "productionCaption": "Country shares of actual production. The map deposits layer shows where resources sit; this table shows who mines or refines them.",
+      "productionProLocked": "برای دسترسی به سهم کشورهای معدن و پالایشگاه با غلظت (HHI) براساس مرحله به PRO ارتقا دهید."
     },
     "tradePolicy": {
       "overview": "Overview",
@@ -1123,7 +1195,7 @@
       "infoTooltip": "<strong>Stablecoins</strong> Peg health, market cap, and 24h volume for major USD-pegged tokens (USDT, USDC, DAI, BUSD). A broken peg signals systemic risk."
     },
     "marketImplications": {
-      "infoTooltip": "<strong>AI Market Implications</strong> LLM-generated trade signals derived from live geopolitical, commodity, and macro state after each forecast cycle.<ul><li><strong>Direction</strong>: LONG / SHORT / HEDGE with confidence rating</li><li><strong>Timeframe</strong>: 1W, 2W, 1M, or 3M horizon</li><li><strong>Driver</strong>: Key catalyst behind the signal</li><li><strong>Risk</strong>: Caveat or invalidation condition</li></ul><em>For informational purposes only. Not investment advice.</em>",
+      "infoTooltip": "<strong>پیامدهای بازار تولید شده با هوش مصنوعی</strong> سیگنال‌های معاملاتی تولید شده توسط مدل زبانی بزرگ از وضعیت ژئوپلیتیکی، کالایی و کلان‌اقتصادی زندهٔ بعد از هر چرخهٔ پیش‌بینی.<ul><li><strong>جهت</strong>: LONG / SHORT / HEDGE</li><li><strong>بازه زمانی</strong>: افق 1W، 2W، 1M یا 3M</li><li><strong>راهبر</strong>: کاتالیزور کلیدی پشت سیگنال</li><li><strong>خطر</strong>: هشدار یا شرط نقض‌کنندگی</li></ul><em>فقط برای اطلاع. توصیه سرمایه‌گذاری نیست.</em>",
       "title": "AI Market Implications",
       "directions": {
         "long": "LONG",
@@ -1136,7 +1208,8 @@
       "signals_one": "{{count}} signal",
       "signals_other": "{{count}} signals",
       "disclaimer": "AI-generated trade signals for informational purposes only. Not investment advice. Always do your own research.",
-      "unavailable": "AI market implications are generated after each forecast run. Check back shortly."
+      "unavailable": "AI market implications are generated after each forecast run. Check back shortly.",
+      "unscored": "سناریوهای روایی، بدون ارزیابی دقت."
     },
     "status": {
       "updatedAt": "Updated {{time}}"
@@ -1152,10 +1225,18 @@
       "skipToEnd": "Skip to end"
     },
     "pizzint": {
+      "indexSource": "شاخص: World Monitor · داده‌های مکان‌ها:",
+      "statusNormal": "عادی",
+      "statusNoData": "بدون داده",
+      "statusNoBaseline": "بدون مبنا",
+      "vsUsual": "نسبت به معمول",
       "title": "Pentagon Pizza Index",
       "defcon": "DEFCON {{level}}",
       "updated": "Updated {{timeAgo}}",
       "tensionsTitle": "Geopolitical Tensions",
+      "tensionsSource": "تنش‌ها: World Monitor بر اساس رویدادهای GDELT",
+      "insufficientData": "داده‌های ناکافی",
+      "pizzaUnavailable": "اطلاعات فعالیت پیتزافروشی‌ها در دسترس نیست",
       "source": "Source:",
       "statusClosed": "CLOSED",
       "statusSpike": "SPIKE",
@@ -1167,11 +1248,11 @@
       "minutesAgo": "{{m}}m ago",
       "hoursAgo": "{{h}}h ago",
       "defconLabels": {
-        "1": "COCKED PISTOL - MAXIMUM READINESS",
-        "2": "FAST PACE - ARMED FORCES READY",
-        "3": "ROUND HOUSE - INCREASE FORCE READINESS",
-        "4": "DOUBLE TAKE - INCREASED INTELLIGENCE WATCH",
-        "5": "FADE OUT - LOWEST READINESS"
+        "1": "حداکثر فعالیت",
+        "2": "فعالیت زیاد",
+        "3": "فعالیت افزایش‌یافته",
+        "4": "بالاتر از حالت عادی",
+        "5": "فعالیت عادی"
       }
     },
     "strategicPosture": {
@@ -1252,9 +1333,6 @@
       "datacenter": "Datacenter",
       "base": "Base",
       "nuclear": "Nuclear"
-    },
-    "community": {
-      "joinDiscussion": "Help Shape What's Next"
     },
     "threatLabels": {
       "critical": "CRIT",
@@ -1495,7 +1573,7 @@
       "rankingStories": "Ranking important stories...",
       "analyzingSentiment": "Analyzing sentiment...",
       "generatingBrief": "Generating world brief...",
-      "infoTooltip": "<strong>AI-Powered Analysis</strong><br>• <strong>World Brief</strong>: AI summary (Groq/OpenRouter)<br>• <strong>Sentiment</strong>: News tone analysis<br>• <strong>Velocity</strong>: Fast-moving stories<br>• <strong>Focal Points</strong>: Correlates news entities with map signals (military, protests, outages)<br><em>Desktop only • Powered by Llama 3.3 + Focal Point Detection</em>",
+      "infoTooltip": "<strong>AI-Powered Analysis</strong><br>• <strong>World Brief</strong>: AI summary (OpenRouter)<br>• <strong>Sentiment</strong>: News tone analysis<br>• <strong>Velocity</strong>: Fast-moving stories<br>• <strong>Focal Points</strong>: Correlates news entities with map signals (military, protests, outages)<br><em>Desktop only • Powered by Llama 3.3 + Focal Point Detection</em>",
       "streamQualityLabel": "Video Quality",
       "streamQualityDesc": "Set quality for all live streams (lower saves bandwidth)",
       "globeRenderScaleOptions": {
@@ -1507,7 +1585,7 @@
       },
       "mapFlashLabel": "Live Event Pulse",
       "mapFlashDesc": "Flash locations on the map when breaking news arrives",
-      "aiFlowCloudLabel": "Cloud AI (Groq & OpenRouter)",
+      "aiFlowCloudLabel": "Cloud AI (OpenRouter)",
       "aiFlowCloudDesc": "Send headlines to cloud for AI summarization (recommended)",
       "aiFlowBrowserLabel": "Browser Local Model",
       "aiFlowBrowserDesc": "Run AI locally in your browser",
@@ -1565,7 +1643,10 @@
       "compiledFrom": "گردآوری‌شده از {{stories}} خبر از {{sources}} منبع",
       "provenanceTitle": "شفافیت پوشش: این گزیده از چه تعداد خبر دریافتی و چند منبع مجزا انتخاب شده است",
       "briefFreshness": "تولید شده {{minutes}}m پیش · جدیدترین منبع {{hours}}h قدیمی",
-      "briefStoryDetails": "Story details ({{count}})"
+      "briefStoryDetails": "جزئیات خبر ({{count}})",
+      "streamIdleStopLabel": "توقف ویدیوی زنده هنگام عدم فعالیت",
+      "streamIdleStopDesc": "پخش Live News و Live Webcams را پس از این مدت بدون فعالیت متوقف می‌کند و یک پیام را در پنل نمایش می‌دهد.",
+      "streamIdleStopNever": "هرگز"
     },
     "settings": {
       "exportSettings": "Export Settings",
@@ -1897,6 +1978,16 @@
       "loading": "Connecting to Telegram relay...",
       "empty": "No messages available",
       "disabled": "Telegram relay not active",
+      "watchlistPlaceholder": "افزودن کانال عمومی با @username",
+      "resolving": "در حال بررسی کانال...",
+      "invalidUsername": "از یک @username عمومی تلگرام استفاده کنید",
+      "resolveFailed": "کانال پیدا نشد",
+      "watchlistLimit": "می‌توانید حداکثر {{count}} کانال سفارشی را دنبال کنید",
+      "previewMembers": "{{count}} عضو",
+      "addChannel": "افزودن کانال",
+      "added": "افزوده شد",
+      "remove": "حذف",
+      "custom": "سفارشی",
       "filterAll": "All",
       "filterBreaking": "Breaking",
       "filterConflict": "Conflict",
@@ -1970,6 +2061,7 @@
       "etfs": "ETFs",
       "netInflow": "NET INFLOW",
       "netOutflow": "NET OUTFLOW",
+      "netNeutral": "خالص خنثی",
       "table": {
         "ticker": "Ticker",
         "issuer": "Issuer",
@@ -1998,7 +2090,60 @@
       "infoTooltip": "<strong>BTC Regime</strong> Composite signal dashboard for Bitcoin positioning and risk appetite:<ul><li><strong>Liquidity</strong>: Net Fed liquidity proxy</li><li><strong>Flow</strong>: BTC vs QQQ 5-day returns</li><li><strong>Regime</strong>: QQQ vs XLP rotation (risk-on/off)</li><li><strong>BTC Trend</strong>: Price vs SMA50/200, Mayer Multiple</li><li><strong>Hash Rate</strong>: 30-day network hash change</li><li><strong>Fear & Greed</strong>: Market sentiment index</li></ul>This panel is for regime and positioning, not broad macro data."
     },
     "forecast": {
-      "infoTooltip": "<strong>AI Forecasts</strong> AI-generated probability estimates for geopolitical and economic events:<ul><li>Cross-domain coverage: conflict, markets, supply chain, cyber, political</li><li>Each forecast shows estimated probability, confidence level, and time horizon</li><li>Calibrated against prediction market baselines where available</li></ul>Forecasts update as new intelligence signals arrive. Filter by domain using the tabs above."
+      "infoTooltip": "<strong>AI Forecasts</strong> AI-generated probability estimates for geopolitical and economic events:<ul><li>Cross-domain coverage: conflict, markets, supply chain, cyber, political</li><li>Each forecast shows estimated probability, confidence level, and time horizon</li><li>Calibrated against prediction market baselines where available</li></ul>Forecasts update as new intelligence signals arrive. Filter by domain using the tabs above.",
+      "record": {
+        "label": "کارنامه",
+        "labelHint": "پیش‌بینی‌های منتشرشده پس از مشخص‌شدن نتیجه، در {{days}} روز گذشته چه امتیازی گرفتند. برای دیدن معنی هر عدد، نشانگر را روی آن نگه دارید.",
+        "unavailable": "در حال حاضر در دسترس نیست",
+        "insufficient": "هنوز پیش‌بینی ارزیابی‌شده کافی وجود ندارد",
+        "brier": "امتیاز برایر {{score}} (n={{n}})",
+        "brierHint": "امتیاز برایر برای {{n}} پیش‌بینی ارزیابی‌شده: میانگین مربع اختلاف میان احتمال پیش‌بینی‌شده و آنچه رخ داد. ۰ کامل است، ۰٫۲۵ معادل شیر یا خط است و کمتر بهتر است.",
+        "baseRate": "نرخ پایه {{score}} (n={{n}})",
+        "baseRateHint": "امتیازی که کسی با همیشه پاسخ‌دادن به نرخ «بله» مشاهده‌شده روی همین {{n}} پیش‌بینی می‌گرفت ({{pct}}٪ با «بله» مشخص شدند). پیشی‌گرفتن از آن یعنی پیش‌بینی‌ها اطلاعات افزوده دارند.",
+        "void": "باطل {{pct}}٪ ({{count}} از {{resolved}})",
+        "voidHint": "پیش‌بینی‌هایی که نتیجه‌شان مشخص شد اما قابل ارزیابی نبودند، از {{resolved}} مورد مشخص‌شده در این بازه.",
+        "stale": "قدیمی",
+        "staleHint": "آخرین ارزیابی در {{date}}. ارزیاب از آن زمان اجرا نشده است، بنابراین این اعداد قدیمی‌تر از حد لازم هستند.",
+        "fullRecord": "کارنامه کامل"
+      },
+      "reliability": {
+        "measured": "{{domain}} n={{n}} · Brier {{score}} در برابر نرخ پایه {{base}}",
+        "measuredHint": "نحوه عملکرد پیش‌بینی‌های منتشرشده {{domain}} در {{n}} پیش‌بینی تصحیح‌شده در {{days}} روز اخیر. نرخ پایه همان امتیازی است که پاسخ دائمی با نرخ مشاهده‌شده حوزه می‌دهد. کم‌تر بهتر است. این رکورد حوزه است، نه این پیش‌بینی.",
+        "unmeasured": "هنوز اندازه‌گیری نشده",
+        "unmeasuredHint": "پیش‌بینی‌های {{domain}} {{n}} نتیجه تصحیح‌شده در {{days}} روز گذشته داشته‌اند. یک دامنه نیاز به {{min}} نتیجه دارد تا دقت آن نمایش داده شود."
+      },
+      "resolution": {
+        "last": "آخرین: {{outcome}}",
+        "lastSr": "پنجره قبلی این پیش‌بینی با {{outcome}} حل شد.",
+        "history": "پنجره‌های اخیر، جدیدترین ابتدا: {{list}}",
+        "outcome": {
+          "yes": "بلی",
+          "no": "خیر",
+          "void": "باطل"
+        },
+        "void": {
+          "no_establishable_metric": "فید هیچ داده‌ای برای این پرسش نداشت",
+          "value_source_never_settled": "فید هرگز مقدار حتمی را منتشر نکرد",
+          "count_source_window_not_retained": "فید دیگر پنجره پرسش را نگه‌داری نمی‌کند",
+          "unsupported_window": "پرسش را نمی‌شد در برابر فید آن بررسی کرد",
+          "unsupported_metric_key": "پرسش را نمی‌شد در برابر فید آن بررسی کرد",
+          "not_hard_spec": "پرسش را نمی‌شد در برابر فید آن بررسی کرد",
+          "missing_threshold": "پرسش دارای حد آستانه نبود",
+          "missing_deadline": "پرسش مهلت زمانی نداشت",
+          "missing_generated_at": "پیش‌بینی تاریخ شروع خود را نداشت",
+          "beyond_archive_horizon": "بایگانی اخبار دیگر پنجره پرسش را پوشش نمی‌داد",
+          "no_archive_evidence": "بایگانی اخبار موردی درباره موضوع نداشت",
+          "all_judges_void": "هر دو داور شواهد را ناکافی یافتند",
+          "judge_disagreement": "داوران با هم توافق نداشتند",
+          "judge_retry_exhausted": "داوران حکمی صادر نکردند",
+          "withheld_unpublished": "این نوع پیش‌بینی دیگر منتشر نمی‌شود",
+          "other": "نتیجه‌ای تعیین نشد"
+        }
+      },
+      "horizons": {
+        "label": "همچنین در این افق‌ها نمره‌گذاری شده: {{list}}",
+        "hint": "احتمال عنوان در افق زمانی پیش‌بینی خود نمره‌گذاری می‌شود. پیش‌بینی در هر یک از این افق‌ها نیز مقابل خوراک منبع خود نمره‌گذاری می‌شود، با استفاده از مقدار اول منتشرشده برای این پیش‌بینی. مقادیر پیش‌بینی نمایش داده نمی‌شوند زیرا مقدار فعلی می‌تواند با مقدار نمره‌گذاری‌شده متفاوت باشد."
+      }
     },
     "escalationCorrelation": {
       "infoTooltip": "<strong>Escalation Monitor</strong> Detects converging geopolitical signals:<ul><li>Correlates military movements, conflict events, and news spikes</li><li>Scores convergence zones by severity (critical/high/medium/low)</li><li>Tracks escalation or de-escalation trends over time</li></ul>Click a card to zoom to the region on the map."
@@ -2044,6 +2189,22 @@
       "metals": {
         "gold": "Gold",
         "silver": "Silver"
+      },
+      "divergence": {
+        "compositeValue": "شاخص تنش فیزیکی: {{value}} / 100",
+        "fiveDayTrend": "روند حق‌الاضافه پنج روز معاملاتی",
+        "regimes": {
+          "normal": "عادی",
+          "elevated": "افزایش‌یافته",
+          "stressed": "تحت فشار",
+          "extreme": "شدید"
+        },
+        "states": {
+          "insufficientHistory": "گرم‌شدن: {{count}} / {{required}} نقطه معاملاتی",
+          "staleInput": "معیار فیزیکی منسوخ است",
+          "missingInput": "سیگنال واگرایی در دسترس نیست"
+        },
+        "twentyDayTrend": "روند حق بیمه بیست روز معاملاتی"
       }
     },
     "crypto": {
@@ -2161,8 +2322,6 @@
     },
     "liveNews": {
       "notLive": "{{name}} is not currently live",
-      "cannotEmbed": "{{name}} can't be played here — it may be restricted in your region (error {{code}})",
-      "botCheck": "YouTube is requesting sign-in to play {{name}}",
       "signInToYouTube": "Sign in to YouTube",
       "openOnYouTube": "Open on YouTube",
       "playLiveFeed": "Play live feed",
@@ -2170,8 +2329,6 @@
       "manage": "Manage channels",
       "addChannel": "Add channel",
       "remove": "Remove",
-      "youtubeHandle": "YouTube handle (e.g. @Channel)",
-      "youtubeHandleOrUrl": "YouTube handle or URL",
       "displayName": "Display name (optional)",
       "channelSettings": "Channel Settings",
       "save": "Save",
@@ -2187,10 +2344,22 @@
       "regionMiddleEast": "Middle East",
       "regionAfrica": "Africa",
       "regionOceania": "Oceania",
-      "invalidHandle": "Enter a valid YouTube handle (e.g. @ChannelName)",
       "verifying": "Verifying…",
       "hlsUrl": "HLS Stream URL (optional)",
-      "invalidHlsUrl": "Enter a valid HLS stream URL (.m3u8)"
+      "invalidHlsUrl": "Enter a valid HLS stream URL (.m3u8)",
+      "embedBlocked": "یوتیوب در حال حاضر {{name}} را درون سایت‌های دیگر پخش نمی‌کند",
+      "unavailable": "{{name}} در حال حاضر قابل پخش نیست",
+      "noStream": "هنوز برای {{name}} جریان زندهٔ تنظیم‌شده‌ای وجود ندارد",
+      "needsChannelUrl": "{{name}} را دوباره با URL کانال آن (youtube.com/channel/UC…) یا URL ویدیوی زندهٔ آن اضافه کنید",
+      "insecureStream": "{{name}} از جریانِ نایمن (http) استفاده می‌کند که مرورگرها آن را مسدود می‌کنند. آن را دوباره با URL جریانِ ایمن (https) اضافه کنید",
+      "connecting": "درحال اتصال به {{name}}…",
+      "recording": "ضبط",
+      "unverified": "نمی‌توان تأیید کرد این جریان زندهٔ است",
+      "playNextChannel": "پخش کانال بعدی",
+      "channelOrVideoUrl": "کانال یا ویدیوی یوتیوب",
+      "channelUrlHint": "URL کانال (youtube.com/channel/UC…) یا URL ویدیوی زندهٔ را کپی کنید",
+      "youtubeChannel": "کانال یوتیوب",
+      "httpsStreamHint": "مرورگرها جریان‌های نایمن (http) را مسدود می‌کنند. یک URL جریانِ ایمن (https) را جای‌گذاری کنید"
     },
     "map": {
       "showMap": "Show Map",
@@ -2290,7 +2459,7 @@
       "infoTooltip": "<strong>Economic Calendar</strong> Scheduled macroeconomic releases: CPI, NFP, GDP, PMI, and central bank decisions. Shows forecast vs actual vs prior. High-impact events highlighted. Source: economic data providers."
     },
     "fsi": {
-      "infoTooltip": "<strong>Financial Stress Indicator</strong> Kansas City Fed Financial Stress Index (KCFSI): measures stress in US financial markets using 11 indicators including yield spreads, volatility, and cross-correlations. Positive values indicate above-average stress. Source: Federal Reserve Bank of Kansas City.",
+      "infoTooltip": "<strong>شاخص تنش مالی</strong> نسبت WorldMonitor از اعتبار پربازده به اوراق خزانه‌داری بلندمدت آمریکا، تعدیل‌شده با نوسان سهام و اختلاف بازده اوراق پربازده: (HYG / TLT) / (VIX × HY spread / 100). این شاخص تنش مالی فدرال رزرو کانزاس‌سیتی نیست. مقدار 1.5 یا بالاتر نشان‌دهنده تنش کم است؛ کمتر از 0.3 نشان‌دهنده تنش زیاد است.",
       "title": "Financial Stress Indicator",
       "usFsiValue": "US FSI VALUE",
       "cissTitle": "EU CISS (Euro Area Systemic Stress)",
@@ -2330,6 +2499,26 @@
         "unavailable": "FSI data unavailable",
         "failedToLoad": "Failed to load"
       }
+    },
+    "supplyVulnerability": {
+      "title": "آسیب‌پذیری کالاها",
+      "help": "میزان مواجهه کشور به تفکیک کالا بر پایه تمرکز تأمین‌کنندگان، ترانزیت دریایی و ذخایر راهبردی موجود.",
+      "loading": "در حال بارگیری آسیب‌پذیری کالاها…",
+      "unavailable": "داده‌های آسیب‌پذیری کالاها در دسترس نیست",
+      "noCoverage": "شواهد برای این کشور کافی نیست",
+      "unknown": "نامشخص",
+      "concentration": "تمرکز",
+      "transit": "ترانزیت",
+      "buffer": "ذخیره",
+      "sources": "منابع",
+      "methodology": "روش‌شناسی",
+      "hormuzTitle": "وابستگی‌های کالایی",
+      "dependentCountries": "کشورهای وابسته",
+      "dependentCommodities": "کالاهای وابسته",
+      "stateOk": "به‌روز",
+      "stateStale": "ورودی قدیمی",
+      "stateInsufficient": "داده ناکافی",
+      "proLocked": "برای دسترسی به امتیازدهی آسیب‌پذیری کالا به PRO ارتقا دهید."
     },
     "hormuzTracker": {
       "infoTooltip": "<strong>Hormuz Trade Tracker</strong> Live AIS vessel tracking through the Strait of Hormuz, the world's most critical oil chokepoint. Monitors tanker counts, disruption events, and weekly flow changes. Approximately 20% of global oil supply transits here daily.",
@@ -2587,7 +2776,14 @@
       "signals_one": "{{count}} signal",
       "signals_other": "{{count}} signals",
       "analyzing": "Analyzing...",
-      "viewOnMap": "View on map"
+      "viewOnMap": "View on map",
+      "waiting": "در انتظار به‌روزرسانی بعدی داده‌ها. این پنل به‌طور خودکار به‌روزرسانی می‌شود.",
+      "offline": "در انتظار اتصال. این پنل پس از اتصال دوباره به اینترنت به‌طور خودکار به‌روزرسانی می‌شود.",
+      "updated": "به‌روزرسانی‌شده {{time}}",
+      "saved": "آخرین به‌روزرسانی شناخته‌شده {{time}} · در حال بررسی به‌روزرسانی‌ها",
+      "savedOffline": "آخرین به‌روزرسانی شناخته‌شده {{time}} · آفلاین",
+      "localSignals": "بر اساس سیگنال‌های بارگذاری‌شده در داشبورد",
+      "emptySaved": "در آخرین به‌روزرسانی شناخته‌شده همگرایی وجود نداشت."
     },
     "thermalEscalation": {
       "title": "Thermal Escalation",
@@ -2734,6 +2930,68 @@
       "rubBase": "بانک مرکزی روسیه — روبل به ازای هر ۱ واحد",
       "rubPerUnit": "روبل به ازای هر واحد",
       "sourceCbr": "منبع: بانک مرکزی روسیه"
+    },
+    "passkeyOffer": {
+      "title": "ذخیره کلید دسترسی؟",
+      "body": "دفعه بعد با اثر انگشت، چهره یا کد PIN دستگاه خود وارد شوید — نیازی نیست رمز عبور را یادداشت کنید.",
+      "accept": "ذخیره کلید دسترسی",
+      "dismiss": "اکنون نه",
+      "close": "بستن",
+      "announce": "کلید دسترسی را ذخیره کنید تا دفعه بعد سریع‌تر وارد شوید.",
+      "busy": "در انتظار دستگاه شما…",
+      "succeeded": "کلید دسترسی ذخیره شد. می‌توانید آن را دفعه بعد هنگام ورود استفاده کنید.",
+      "retryable": "این کار تکمیل نشد. می‌توانید دوباره تلاش کنید.",
+      "failed": "نتوانستیم کلید دسترسی را در این دستگاه ذخیره کنیم."
+    },
+    "decisionBrief": {
+      "commodityTitle": "گزارش تصمیم‌گیری کالا",
+      "commodity": "کالا / محصول",
+      "blockedChokepoint": "گلوگاه با فرض انسداد",
+      "commodityCapture": "ثبت مقایسه کالا",
+      "title": "خلاصه تصمیم",
+      "fuel": "سوخت",
+      "chokepoint": "گلوگاه",
+      "baseline": "اختلال مبنا",
+      "comparison": "اختلال مقایسه‌ای",
+      "capture": "دریافت / تازه‌سازی هر دو",
+      "downloadHtml": "دریافت خلاصه به صورت HTML",
+      "downloadJson": "دریافت خلاصه به صورت JSON",
+      "back": "← بازگشت به خلاصه کشور",
+      "select": "یک اختلال در تأمین انرژی انتخاب کنید، سپس هر دو سناریو را دریافت کنید.",
+      "changed": "انتخاب تغییر کرد. پیش از خروجی گرفتن، هر دو سناریو را دریافت کنید.",
+      "loading": "در حال دریافت هر دو سناریو…",
+      "captured": "دریافت شد. پیش از بارگیری، تاریخ مشاهدات و محدودیت‌ها را بررسی کنید.",
+      "failed": "دریافت سناریوها ممکن نشد. دسترسی خود را بررسی کرده و دوباره تلاش کنید. نتیجه‌ای برای خروجی گرفتن موجود نیست.",
+      "locked": "خلاصه تصمیم با Pro در دسترس است."
+    },
+    "liveMedia": {
+      "idleStatus": "به دلیل عدم فعالیت متوقف شده",
+      "idleBody": "ویدیوی زنده پس از {{duration}} بدون فعالیت ماوس، صفحه‌کلید یا لمس متوقف شد.",
+      "idleResume": "ادامه",
+      "idleKeepPlaying": "ادامه پخش هنگام عدم فعالیت",
+      "idleSettingsHint": "می‌توانید این را هر زمانی در تنظیمات › رسانه تغییر دهید.",
+      "idleKeepPlayingToast": "ویدیوی زنده هنگام عدم فعالیت ادامه خواهد یافت. در تنظیمات › رسانه تغییر دهید."
+    },
+    "corroboration": {
+      "singlePublisher": "یک منتشر کننده",
+      "singlePublisherHint": "تاکنون تنها یک منتشر کننده این خبر را گزارش کرده است. این توصیف دامنه پوشش است، نه دقت.",
+      "tier4Only": "تنها منابع پایین‌رتبه",
+      "tier4OnlyHint": "هر رسانه‌ای که این خبر را گزارش می‌کند یک منبع رتبه ۴ است (تجمیع‌کنندگان و وبلاگ‌ها). این توصیف دامنه پوشش است، نه دقت.",
+      "rosterListed": "({{listed}} در فهرست)",
+      "rosterFeeds": "خوراک‌های مشاهده‌شده: {{labels}}",
+      "rosterLegend": "درجه‌بندی منابع را مشخص می‌کند؛ درستی این ادعا را قضاوت نمی‌کند.",
+      "tierDocsLink": "نحوه تخصیص درجه‌بندی",
+      "tierChip": "T{{tier}}",
+      "tierChipUndeclared": "T؟",
+      "tierTitle1": "درجه ۱: آژانس‌های خبری و نهادهای رسمی",
+      "tierTitle2": "درجه ۲: رسانه‌های بزرگ",
+      "tierTitle3": "درجه ۳: منابع تخصصی، منطقه‌ای و مراکز فکری",
+      "tierTitle4": "درجه ۴: تجمع‌کنندگان و وبلاگ‌ها",
+      "tierTitleUndeclared": "درجه اعلام‌نشده: هنوز بررسی‌نشده",
+      "rosterSummary": "گزارش‌شده توسط {{publishers}}",
+      "rosterSummaryTier1": "گزارش‌شده توسط {{publishers}}، شامل {{tier1}} ناشر درجه ۱",
+      "rosterPublishers_one": "{{count}} ناشر",
+      "rosterPublishers_other": "{{count}} ناشر"
     }
   },
   "popups": {
@@ -2772,14 +3030,18 @@
     "protest": {
       "acledVerified": "ACLED (verified)",
       "gdelt": "GDELT",
+      "records": "رکورد",
+      "mediaSignal": "نشانه رسانه‌ای تأییدنشده",
+      "relatedArticle": "مقاله مرتبط",
+      "mediaSignalDetail": "این مکان در مقالات مربوط به ناآرامی‌ها ذکر شده است. وقوع رویداد محلی تأیید نشده است.",
       "riots": "Riots",
       "highSeverity": "High Severity"
     },
     "gpsJamming": {
-      "title": "GPS/GNSS Interference",
-      "navPerformance": "Nav Performance",
-      "samples": "ADS-B Samples",
-      "aircraft": "Aircraft",
+      "title": "تداخل GPS/GNSS",
+      "navPerformance": "هواگردهای تحت تأثیر",
+      "samples": "تعداد هواگردهای تحت تأثیر",
+      "aircraft": "تعداد کل هواگردهای مشاهده‌شده",
       "h3Hex": "H3 Hex"
     },
     "flight": {
@@ -3217,8 +3479,8 @@
   "signals": {
     "context": {
       "prediction_leads_news": {
-        "whyItMatters": "Prediction markets often price in information before it becomes news—traders may have early access to developments.",
-        "actionableInsight": "Monitor for breaking news in the next 1-6 hours that could explain the market move.",
+        "whyItMatters": "بازار پیش‌بینی تغییر کرد در حالی‌که پوشش خبری موضوع در سطح پایینی باقی مانده است—بازار ممکن است به اطلاعاتی واکنش نشان دهد که هنوز گزارش نشده است.",
+        "actionableInsight": "اخبار فوری‌ای را که می‌تواند حرکت بازار را توضیح دهد زیر نظر بگیرید.",
         "confidenceNote": "Higher confidence if multiple prediction markets move in same direction."
       },
       "news_leads_markets": {
@@ -3446,7 +3708,8 @@
   "auth": {
     "signIn": "Sign In",
     "createAccount": "Create account",
-    "settings": "Settings"
+    "settings": "Settings",
+    "passkeyOffer": {}
   },
   "mcp": {
     "connectPanel": "Connect MCP",

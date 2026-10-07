@@ -8,17 +8,27 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
-import { mkdirSync, writeFileSync, unlinkSync } from 'node:fs';
+import { mkdirSync, readFileSync, writeFileSync, unlinkSync } from 'node:fs';
 import { createServer } from 'node:http';
+import { lua, lauxlib, lualib, to_luastring, to_jsstring } from 'fengari';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { GRACEFUL_FETCH_FAILURE_EXIT_CODE, PUBLISH_BLOCKED_EXIT_CODE } from '../scripts/_seed-utils.mjs';
 import { DAY, readSectionFreshness, bundleHeartbeatKey, BUNDLE_HEARTBEAT_TTL_SECONDS } from '../scripts/_bundle-runner.mjs';
+import { OWID_SOURCE_VERSION } from '../scripts/seed-owid-energy-mix.mjs';
 import {
   SUPERSEDED_KEY_TTL_SECONDS,
   atomicSwitch,
   backfillSeedMetaFromActiveVersion,
 } from '../scripts/seed-military-bases.mjs';
+import {
+  countSectionAnchors,
+  countSectionScriptKeys,
+  extractBundleSections,
+  extractRunBundleSectionSource,
+  hasNamedImportBinding,
+  stripLineComments,
+} from './helpers/bundle-section-parser.mjs';
 
 const SCRIPTS_DIR = fileURLToPath(new URL('../scripts/', import.meta.url));
 const FIXTURES_DIR = join(SCRIPTS_DIR, 'fixtures');
@@ -38,6 +48,117 @@ test('requireCanonical ignores fresh legacy meta when a new canonical envelope i
   });
   assert.equal(freshness, null);
   assert.deepEqual(reads, ['economic:china:macro:v2']);
+});
+
+test('a fresh legacy marker cannot suppress a required source-version migration', async () => {
+  const fetchedAt = Date.now();
+  const freshness = await readSectionFreshness({
+    seedMetaKey: 'economic:owid-energy-mix',
+    expectedSourceVersion: 'owid-energy-mix-v3',
+  }, async () => ({
+    fetchedAt,
+    recordCount: 214,
+    sourceVersion: 'owid-energy-mix-v1',
+  }));
+  assert.equal(freshness, null);
+});
+
+test('a matching source version preserves the normal freshness clock', async () => {
+  const fetchedAt = Date.now();
+  const freshness = await readSectionFreshness({
+    seedMetaKey: 'economic:owid-energy-mix',
+    expectedSourceVersion: 'owid-energy-mix-v3',
+  }, async () => ({
+    fetchedAt,
+    recordCount: 214,
+    sourceVersion: 'owid-energy-mix-v3',
+  }));
+  assert.deepEqual(freshness, { fetchedAt });
+});
+
+test('an error seed marker never makes a failed migration look fresh', async () => {
+  const freshness = await readSectionFreshness({
+    seedMetaKey: 'economic:owid-energy-mix',
+    expectedSourceVersion: 'owid-energy-mix-v3',
+  }, async () => ({
+    fetchedAt: Date.now(),
+    recordCount: 0,
+    sourceVersion: 'owid-energy-mix-v3',
+    status: 'error',
+  }));
+  assert.equal(freshness, null);
+});
+
+test('an error canonical envelope never makes a failed migration look fresh', async () => {
+  const fetchedAt = Date.now();
+  const freshness = await readSectionFreshness({
+    canonicalKey: 'economic:owid-energy-mix:v2',
+    expectedSourceVersion: OWID_SOURCE_VERSION,
+  }, async () => ({
+    _seed: {
+      fetchedAt,
+      sourceVersion: OWID_SOURCE_VERSION,
+      state: 'ERROR',
+    },
+    data: {},
+  }));
+  assert.equal(freshness, null);
+});
+
+test('energy-sources wires the OWID freshness gate to the producer version', () => {
+  const bundlePath = join(SCRIPTS_DIR, 'seed-bundle-energy-sources.mjs');
+  const rawSource = readFileSync(bundlePath, 'utf8');
+  const sectionSource = extractRunBundleSectionSource(rawSource, 'energy-sources');
+  assert.notEqual(
+    sectionSource,
+    null,
+    'energy-sources must pass a literal section array to one runBundle call',
+  );
+  const source = stripLineComments(sectionSource);
+  const sections = extractBundleSections(source);
+  const owidSections = sections.filter((section) => section.label === 'OWID-Energy-Mix');
+
+  assert.equal(sections.length, countSectionAnchors(source));
+  assert.equal(sections.length, countSectionScriptKeys(source));
+  assert.equal(
+    owidSections.length,
+    1,
+    'seed-bundle-energy-sources.mjs must declare exactly one OWID-Energy-Mix section',
+  );
+  const [owidSection] = owidSections;
+  assert.equal(owidSection.script, 'seed-owid-energy-mix.mjs');
+  assert.equal(
+    owidSection.expectedSourceVersionExpr,
+    'OWID_SOURCE_VERSION',
+    'OWID-Energy-Mix must reference the producer source-version constant',
+  );
+  assert.equal(
+    hasNamedImportBinding(rawSource, {
+      moduleSpecifier: './seed-owid-energy-mix.mjs',
+      importedName: 'OWID_SOURCE_VERSION',
+    }),
+    true,
+    'OWID_SOURCE_VERSION must be imported from the OWID energy-mix producer',
+  );
+});
+
+// The version gate is opt-in. A section that never asked for it must keep the
+// pre-migration clock, error marker included: Resilience-Static writes
+// `status: 'error'` with a FRESH fetchedAt precisely so its 90-day interval
+// still holds during an upstream outage. Rejecting that marker for every
+// section makes it due on every tick — the #6806 failure the docstring above
+// forbids, and a retry storm against 11 third-party datasets.
+test('an error marker still holds the clock for a section with no version gate', async () => {
+  const fetchedAt = Date.now();
+  const freshness = await readSectionFreshness({
+    seedMetaKey: 'resilience:static',
+  }, async () => ({
+    fetchedAt,
+    recordCount: 196,
+    sourceVersion: 'resilience-static-v1',
+    status: 'error',
+  }));
+  assert.deepEqual(freshness, { fetchedAt });
 });
 
 test('an explicit freshness meta key gates from source transport success', async () => {
@@ -176,7 +297,71 @@ function runBundleWith(sections, opts = {}, env = {}) {
   });
 }
 
-function runBundleWithVirtualClock(sections, opts = {}, clockOffsetsMs = [], env = {}) {
+function runBundleWithTerminalHook(sections, hookSource, opts = {}) {
+  const runPath = join(FIXTURES_DIR, `_bundle-runner-test-hook-${randomUUID()}.mjs`);
+  const fixtureSections = sections.map((section) => ({
+    ...section,
+    script: fixtureScript(section.script),
+  }));
+  writeFileSync(
+    runPath,
+    `import { runBundle } from '../_bundle-runner.mjs';\n`
+    + `await runBundle('test-hook', ${JSON.stringify(fixtureSections)}, { ...${JSON.stringify(opts)}, onTerminalComplete: ${hookSource} });\n`,
+  );
+  return new Promise((resolve) => {
+    const child = spawn(process.execPath, [runPath], {
+      stdio: ['ignore', 'pipe', 'pipe'],
+      env: {
+        ...process.env,
+        UPSTASH_REDIS_REST_URL: '',
+        UPSTASH_REDIS_REST_TOKEN: '',
+      },
+    });
+    let stdout = '';
+    let stderr = '';
+    child.stdout.on('data', (chunk) => { stdout += chunk; });
+    child.stderr.on('data', (chunk) => { stderr += chunk; });
+    child.on('close', (code) => {
+      try { unlinkSync(runPath); } catch {}
+      resolve({ code, stdout, stderr });
+    });
+  });
+}
+
+test('terminal completion hook runs before a successful bundle exits', async () => {
+  const result = await runBundleWithTerminalHook([], "async () => { console.log('terminal-hook-called'); }");
+  assert.equal(result.code, 0);
+  assert.match(result.stdout, /terminal-hook-called/);
+});
+
+test('terminal completion hook failure turns a successful bundle into a loud failure', async () => {
+  const result = await runBundleWithTerminalHook([], "async () => { throw new Error('ack failed'); }");
+  assert.equal(result.code, 1);
+  assert.match(result.stderr, /terminal completion hook failed: ack failed/);
+});
+
+test('an invalid terminal completion hook fails before bundle work starts', async () => {
+  const result = await runBundleWithTerminalHook([], '42');
+  assert.equal(result.code, 1);
+  assert.match(result.stderr, /onTerminalComplete must be a function/);
+  assert.doesNotMatch(result.stdout, /\[Bundle:test-hook\] Starting/);
+});
+
+test('a completed non-zero bundle acknowledges its turn without hiding the failure', async () => {
+  const cleanup = writeFixture('_bundle-fixture-terminal-fail.mjs', `process.exit(2);\n`);
+  try {
+    const result = await runBundleWithTerminalHook(
+      [{ label: 'FAIL', script: '_bundle-fixture-terminal-fail.mjs', intervalMs: 1, timeoutMs: 5000 }],
+      "async () => { console.log('terminal-hook-called'); }",
+    );
+    assert.equal(result.code, 1);
+    assert.match(result.stdout, /terminal-hook-called/);
+  } finally {
+    cleanup();
+  }
+});
+
+function runBundleWithVirtualClock(sections, opts = {}, clockOffsetsMs = [], env = {}, baseNow = Date.now()) {
   const runPath = join(FIXTURES_DIR, `_bundle-runner-test-run-${randomUUID()}.mjs`);
   const fixtureSections = sections.map((section) => ({
     ...section,
@@ -185,8 +370,7 @@ function runBundleWithVirtualClock(sections, opts = {}, clockOffsetsMs = [], env
   writeFileSync(
     runPath,
     `import { runBundle } from '../_bundle-runner.mjs';\n`
-    + `const realNow = Date.now;\n`
-    + `const baseNow = realNow();\n`
+    + `const baseNow = ${JSON.stringify(baseNow)};\n`
     + `const offsets = ${JSON.stringify(clockOffsetsMs)};\n`
     + `let idx = 0;\n`
     + `Date.now = () => baseNow + (offsets[Math.min(idx++, offsets.length - 1)] ?? 0);\n`
@@ -259,6 +443,10 @@ async function startFakeUpstash({
       const keyCount = Number(args[0]);
       const keys = args.slice(1, 1 + keyCount);
       const argv = args.slice(1 + keyCount);
+
+      if (script.includes('KEEPTTL')) {
+        return { result: executeRecoveryClaim(script, keys, argv, strings, ttls) };
+      }
 
       if (script.includes("return {1, ARGV[1], current or ''}")) {
         const current = strings.get(keys[0]) ?? '';
@@ -358,6 +546,182 @@ async function startFakeUpstash({
     }),
   };
 }
+
+function executeRecoveryClaim(script, keys, argv, strings, ttls) {
+  const state = lauxlib.luaL_newstate();
+  lualib.luaL_openlibs(state);
+  lua.lua_createtable(state, 0, 1);
+  lua.lua_pushjsfunction(state, L => {
+    const args = Array.from({ length: lua.lua_gettop(L) }, (_, i) => to_jsstring(lua.lua_tostring(L, i + 1)));
+    const [command, key, value, ...options] = args;
+    if (command === 'GET') {
+      const stored = strings.get(key);
+      if (stored == null) lua.lua_pushboolean(L, false);
+      else lua.lua_pushstring(L, to_luastring(stored));
+    } else if (command === 'SET') {
+      assert.deepEqual(options, ['XX', 'KEEPTTL']);
+      assert.ok(strings.has(key));
+      const ttl = ttls.get(key);
+      strings.set(key, value);
+      assert.equal(ttls.get(key), ttl);
+      lua.lua_pushstring(L, to_luastring('OK'));
+    } else throw new Error(`Unsupported recovery Redis command: ${command}`);
+    return 1;
+  });
+  lua.lua_setfield(state, -2, to_luastring('call'));
+  lua.lua_setglobal(state, to_luastring('redis'));
+  try {
+    const input = `KEYS = {${keys.map(JSON.stringify).join(',')}}\nARGV = {${argv.map(JSON.stringify).join(',')}}\n${script}`;
+    const status = lauxlib.luaL_dostring(state, to_luastring(input));
+    if (status !== lua.LUA_OK) throw new Error(to_jsstring(lua.lua_tostring(state, -1)));
+    return lua.lua_tointeger(state, -1);
+  } finally {
+    lua.lua_close(state);
+  }
+}
+
+const recoverySection = {
+  label: 'MND-Recovery',
+  seedMetaKey: 'military:cross-strait-activity:complete',
+  sourceRetryMetaKey: 'seed-meta:military:cross-strait-activity:taiwan-mnd',
+  sourceRetryDelayMs: 30 * 60_000,
+  intervalMs: 3 * 60 * 60_000,
+};
+
+function firstMndFailure(firstFailureAt) {
+  return {
+    fetchedAt: firstFailureAt - 60_000,
+    recordCount: 134,
+    sourceState: 'degraded',
+    stale: true,
+    errorCode: 'MND_SOURCE_ERROR',
+    lastSourceFailureCode: 'MND_SOURCE_ERROR',
+    consecutiveSourceFailures: 1,
+    firstSourceFailureAt: firstFailureAt,
+    lastSourceAttemptAt: firstFailureAt,
+  };
+}
+
+test('source recovery preserves the completion clock and offers only a proven first-failure retry', async () => {
+  const firstAt = Date.now() - 60_000;
+  const completion = { fetchedAt: firstAt + 1000 };
+  const first = firstMndFailure(firstAt);
+  const read = (source, completed = completion) => async key => (
+    key === recoverySection.sourceRetryMetaKey ? source : completed
+  );
+  const { retryClaim, ...freshness } = await readSectionFreshness(recoverySection, read(first));
+  assert.deepEqual(freshness, {
+    fetchedAt: completion.fetchedAt,
+    retryAt: firstAt + recoverySection.sourceRetryDelayMs,
+  });
+  assert.equal(retryClaim.key, `seed-meta:${recoverySection.seedMetaKey}`);
+  assert.deepEqual(JSON.parse(retryClaim.previousValue), completion);
+  assert.deepEqual(JSON.parse(retryClaim.nextValue), { ...completion, sourceRetryClaimedFor: firstAt });
+  for (const source of [
+    null, {},
+    { ...first, sourceState: 'ok' },
+    { ...first, stale: false },
+    { ...first, recordCount: 0 },
+    { ...first, recordCount: 1.5 },
+    { ...first, fetchedAt: 0 },
+    { ...first, fetchedAt: firstAt },
+    { ...first, firstSourceFailureAt: null },
+    { ...first, firstSourceFailureAt: String(firstAt) },
+    { ...first, lastSourceAttemptAt: firstAt + 1 },
+    { ...first, consecutiveSourceFailures: 2 },
+    { ...first, lastSourceFailureCode: 'MND_HTTP_503' },
+    { ...first, errorCode: null, lastSourceFailureCode: null },
+    { ...first, firstSourceFailureAt: Date.now() + 60_000, lastSourceAttemptAt: Date.now() + 60_000 },
+  ]) {
+    assert.deepEqual(await readSectionFreshness(recoverySection, read(source)), completion, JSON.stringify(source));
+  }
+  assert.deepEqual(await readSectionFreshness(recoverySection, read(first, { fetchedAt: firstAt - 1 })), { fetchedAt: firstAt - 1 });
+  assert.equal(await readSectionFreshness(recoverySection, read(first, null)), null);
+  const reads = [];
+  assert.deepEqual(await readSectionFreshness({ seedMetaKey: recoverySection.seedMetaKey }, async key => {
+    reads.push(key);
+    return completion;
+  }), completion);
+  assert.deepEqual(reads, [`seed-meta:${recoverySection.seedMetaKey}`]);
+  assert.deepEqual(await readSectionFreshness(recoverySection, read(first, {
+    ...completion, sourceRetryClaimedFor: firstAt,
+  })), completion, 'a claim survives a child crash before source metadata publication');
+});
+
+test('real bundle gate admits one recovery at 30 minutes without changing healthy cadence', async () => {
+  const firstAt = Date.now() - 60 * 60_000;
+  const first = firstMndFailure(firstAt);
+  const strings = new Map([
+    [`seed-meta:${recoverySection.seedMetaKey}`, JSON.stringify({ fetchedAt: firstAt + 1000 })],
+    [recoverySection.sourceRetryMetaKey, JSON.stringify(first)],
+  ]);
+  let failClaim = false;
+  const redis = await startFakeUpstash({ strings, failCommand: ({ command }) => (
+    failClaim && command[0] === 'EVAL' ? 'injected claim failure' : null
+  ) });
+  const completionKey = `seed-meta:${recoverySection.seedMetaKey}`;
+  redis.ttls.set(completionKey, 3600);
+  const fixtureName = `_bundle-fixture-mnd-recovery-${randomUUID()}.mjs`;
+  const cleanup = writeFixture(fixtureName, "console.log('mnd-recovery-ran');\n");
+  const runAt = now => runBundleWithVirtualClock([
+    { ...recoverySection, script: fixtureName, timeoutMs: 5000 },
+  ], {}, [], {
+    UPSTASH_REDIS_REST_URL: redis.url, UPSTASH_REDIS_REST_TOKEN: redis.token,
+  }, now);
+  try {
+    for (const [source, now, shouldRun] of [
+      [first, firstAt + 30 * 60_000 - 1, false],
+      [first, firstAt + 30 * 60_000, true],
+      [{ ...first, lastSourceAttemptAt: firstAt + 30 * 60_000, consecutiveSourceFailures: 2 }, firstAt + 60 * 60_000, false],
+      [{ ...first, lastSourceAttemptAt: firstAt + 30 * 60_000, errorCode: 'MND_HTTP_503', lastSourceFailureCode: 'MND_HTTP_503' }, firstAt + 60 * 60_000, false],
+      [{ ...first, sourceState: 'ok', stale: false }, firstAt + 30 * 60_000, false],
+      [{ ...first, sourceState: 'ok', stale: false }, firstAt + 1000 + 144 * 60_000, true],
+    ]) {
+      strings.set(recoverySection.sourceRetryMetaKey, JSON.stringify(source));
+      const result = await runAt(now);
+      assert.equal(result.code, 0, result.stderr);
+      assert.equal(result.stdout.includes('mnd-recovery-ran'), shouldRun, result.stdout);
+      if (shouldRun && now === firstAt + 30 * 60_000) {
+        const claimed = JSON.parse(strings.get(`seed-meta:${recoverySection.seedMetaKey}`));
+        assert.equal(claimed.fetchedAt, firstAt + 1000);
+        assert.equal(claimed.sourceRetryClaimedFor, firstAt);
+        assert.equal(redis.ttls.get(completionKey), 3600);
+        const claim = redis.commands.find(command => command[0] === 'EVAL');
+        assert.ok(claim);
+        const [, script, , key, previousValue, nextValue] = claim;
+        for (const value of [undefined, nextValue, JSON.stringify({ fetchedAt: firstAt + 2000 })]) {
+          const competing = new Map(value === undefined ? [] : [[key, value]]);
+          assert.equal(executeRecoveryClaim(script, [key], [previousValue, nextValue], competing, new Map()), 0);
+          assert.equal(competing.get(key), value, 'a lost claim cannot overwrite a newer or missing marker');
+        }
+        const repeated = await runAt(now + 5 * 60_000);
+        assert.equal(repeated.code, 0, repeated.stderr);
+        assert.doesNotMatch(repeated.stdout, /mnd-recovery-ran/);
+      }
+    }
+    failClaim = true;
+    strings.set(completionKey, JSON.stringify({ fetchedAt: firstAt + 1000 }));
+    strings.set(recoverySection.sourceRetryMetaKey, JSON.stringify(first));
+    const unclaimed = await runAt(firstAt + 30 * 60_000);
+    assert.equal(unclaimed.code, 0, unclaimed.stderr);
+    assert.doesNotMatch(unclaimed.stdout, /mnd-recovery-ran/);
+    assert.match(unclaimed.stderr, /Early recovery not claimed/);
+    failClaim = false;
+    const claimsBeforeDeferral = redis.commands.filter(command => command[0] === 'EVAL').length;
+    const deferred = await runBundleWithVirtualClock([
+      { ...recoverySection, script: fixtureName, timeoutMs: 5000 },
+    ], { maxBundleMs: 40_000 }, [0, 0, 0, 21_000], {
+      UPSTASH_REDIS_REST_URL: redis.url, UPSTASH_REDIS_REST_TOKEN: redis.token,
+    }, firstAt + 30 * 60_000);
+    assert.equal(deferred.code, 1, deferred.stderr);
+    assert.match(deferred.stdout, /Deferred, needs 20s/);
+    assert.doesNotMatch(deferred.stdout, /mnd-recovery-ran/);
+    assert.equal(redis.commands.filter(command => command[0] === 'EVAL').length, claimsBeforeDeferral);
+  } finally {
+    cleanup();
+    await redis.close();
+  }
+});
 
 async function runMilitaryGate(fakeRedis) {
   const fixtureName = `_bundle-fixture-military-bases-must-not-run-${randomUUID()}.mjs`;
@@ -622,6 +986,23 @@ test('Military-Bases backfill validates every active record', async () => {
   }
 });
 
+test('bundled CA selection applies only to the configured child and preserves NODE_OPTIONS', async () => {
+  const cleanup = writeFixture('_bundle-fixture-ca.mjs', `
+    console.log(JSON.stringify({ args: process.execArgv, options: process.env.NODE_OPTIONS }));
+  `);
+  try {
+    const { code, stdout, stderr } = await runBundleWith([
+      { label: 'BUNDLED', script: '_bundle-fixture-ca.mjs', useBundledCa: true, intervalMs: 1, timeoutMs: 5000 },
+      { label: 'DEFAULT', script: '_bundle-fixture-ca.mjs', intervalMs: 1, timeoutMs: 5000 },
+    ], {}, { NODE_OPTIONS: '--dns-result-order=ipv4first' });
+    assert.equal(code, 0, stderr);
+    assert.match(stdout, /\[BUNDLED\] \{"args":\["--use-bundled-ca"\],"options":"--dns-result-order=ipv4first"\}/);
+    assert.match(stdout, /\[DEFAULT\] \{"args":\[\],"options":"--dns-result-order=ipv4first"\}/);
+  } finally {
+    cleanup();
+  }
+});
+
 test('streams child stdout live and reports Done on success', async () => {
   const cleanup = writeFixture(
     '_bundle-fixture-fast.mjs',
@@ -699,7 +1080,7 @@ test('timeout emits terminal reason BEFORE SIGTERM/SIGKILL grace (survives conta
 test('budget check accounts for SIGKILL grace when deferring', async () => {
   const cleanupFirst = writeFixture(
     '_bundle-fixture-budget-first.mjs',
-    `await new Promise((r) => setTimeout(r, 16000));\nconsole.log('first-ran');\n`,
+    `console.log('first-ran');\n`,
   );
   const cleanupGated = writeFixture(
     '_bundle-fixture-sleep.mjs',
@@ -715,19 +1096,16 @@ test('budget check accounts for SIGKILL grace when deferring', async () => {
     // FIRST has to burn more than ADMISSION_HEADROOM_MS for GATED to defer at
     // all: any section that passes the startup check by definition fits the
     // budget with the headroom to spare, so only elapsed time beyond that
-    // headroom can squeeze it out. That is what makes this test slow, and why
-    // it cannot be tightened without also weakening what it proves.
-    //
-    // FIRST's timeout is ~2x its sleep on purpose. This file spawns real child
-    // processes and a loaded CI runner has already produced one cold-start
-    // flake here (PR #3617); a timeout close to the sleep would turn that into
-    // a section failure and change the exit code being asserted.
-    const { code, stdout } = await runBundleWith(
+    // headroom can squeeze it out. The virtual clock supplies that elapsed
+    // time; FIRST's timeout stays ~2x the simulated burn so a cold-start
+    // flake cannot turn the fixture into a section failure (PR #3617).
+    const { code, stdout } = await runBundleWithVirtualClock(
       [
         { label: 'FIRST', script: '_bundle-fixture-budget-first.mjs', intervalMs: 1, timeoutMs: 30_000 },
         { label: 'GATED', script: '_bundle-fixture-sleep.mjs', intervalMs: 1, timeoutMs: 35_000 },
       ],
       { maxBundleMs: 60_000 },
+      [0, 0, 0, 100, 16_000, 16_000],
     );
     assert.equal(code, 0, 'a deferral after real work is pressure, not a failure');
     assert.match(stdout, /\[FIRST\] first-ran/);
@@ -922,16 +1300,17 @@ test('a graceful skip that publishes nothing and defers work exits non-zero', as
   // successful work to vouch for it, whatever the reason.
   const cleanupGrace = writeFixture(
     '_bundle-fixture-slow-graceful.mjs',
-    `await new Promise((r) => setTimeout(r, 16000));\nconsole.log('=== Failed gracefully ===');\nprocess.exit(${GRACEFUL_FETCH_FAILURE_EXIT_CODE});\n`,
+    `console.log('=== Failed gracefully ===');\nprocess.exit(${GRACEFUL_FETCH_FAILURE_EXIT_CODE});\n`,
   );
   const cleanupLate = writeFixture('_bundle-fixture-late.mjs', `console.log('late-ran');\n`);
   try {
-    const { code, stdout, stderr } = await runBundleWith(
+    const { code, stdout, stderr } = await runBundleWithVirtualClock(
       [
         { label: 'GRACE', script: '_bundle-fixture-slow-graceful.mjs', intervalMs: 1, timeoutMs: 30_000 },
         { label: 'LATE', script: '_bundle-fixture-late.mjs', intervalMs: 1, timeoutMs: 35_000 },
       ],
       { maxBundleMs: 60_000 },
+      [0, 0, 0, 100, 16_000, 16_000],
     );
     assert.equal(code, 1, 'a tick that published nothing and shed due work must not report success');
     assert.match(stdout, /\[Bundle:test\] Finished .* ran:0 skipped:0 deferred:1 failed:0 graceful:1/);
@@ -1224,6 +1603,26 @@ test('injects BUNDLE_RUN_STARTED_AT_MS env into child; value is within run bound
     // child ran before `after`. So: before - tolerance <= injected <= after.
     assert.ok(injected >= before - 5000 && injected <= after,
       `injected=${injected} out of bounds [${before - 5000}, ${after}]`);
+  } finally {
+    cleanup();
+  }
+});
+
+test('injects BUNDLE_SECTION_TIMEOUT_MS env into child as the section timeoutMs (#8479)', async () => {
+  const cleanup = writeFixture(
+    '_bundle-fixture-section-timeout-env.mjs',
+    `console.log('BUNDLE_SECTION_TIMEOUT_MS=' + process.env.BUNDLE_SECTION_TIMEOUT_MS);\n`,
+  );
+  try {
+    const { code, stdout } = await runBundleWith([
+      { label: 'SECTION_TO', script: '_bundle-fixture-section-timeout-env.mjs', intervalMs: 1, timeoutMs: 12_345 },
+    ]);
+    assert.equal(code, 0);
+    assert.match(
+      stdout,
+      /BUNDLE_SECTION_TIMEOUT_MS=12345/,
+      `expected section timeout env in child stdout; got:\n${stdout}`,
+    );
   } finally {
     cleanup();
   }

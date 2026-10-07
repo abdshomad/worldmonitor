@@ -19,7 +19,20 @@ import { existsSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { PRODUCT_CATALOG, PUBLIC_PRODUCT_METADATA } from '../convex/config/productCatalog.ts';
+import { AI_DATA_CENTERS } from '../src/config/ai-datacenters.ts';
+import { CHOKEPOINT_REGISTRY } from '../src/config/chokepoint-registry.ts';
+import { UNDERSEA_CABLES } from '../src/config/geo-map.ts';
+import { getCompleteLayerCatalogKeys } from '../src/config/map-layer-definitions.ts';
+import { INTEL_HOTSPOTS } from '../shared/geo-data.ts';
+import { PIPELINES } from '../shared/pipelines-data.ts';
 import { TOOL_REGISTRY, toolAccess } from '../api/mcp/registry/index.ts';
+import { UI_RESOURCE_LIST_RESPONSE } from '../api/mcp/ui/registry.ts';
+import { publishedRankedCountries } from './build-ai-search.mjs';
+import { commandPaletteCommandCount } from './lib/command-palette-count.mjs';
+import { defaultOnLayerStats } from './lib/default-map-layer-count.mjs';
+import { lngFacilityCount } from './_storage-facility-registry.mjs';
+import { computeStats } from './docs-stats.mjs';
+import { loadManifest, scanUpstreamHosts, sourceAttributionStats } from './source-attribution.mjs';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const CHECK = process.argv.includes('--check');
@@ -132,6 +145,8 @@ const plans = publicCatalogEntries.map(([planKey, entry]) => ({
   ].join(', '),
 }));
 
+const heroProofStats = buildHeroProofStats();
+
 const facts = {
   _generated: 'scripts/generate-public-product-facts.mjs — do not edit by hand; run `npm run product:facts`',
   product: {
@@ -143,7 +158,60 @@ const facts = {
   },
   currency: PUBLIC_PRODUCT_METADATA.currency,
   plans,
+  heroProofStats,
+  depthProofStats: buildDepthProofStats(heroProofStats),
 };
+
+/**
+ * Definitional homepage proof figures, measured rather than hardcoded:
+ * mapLayers counts non-sunset layers in the full-variant catalog, feeds and
+ * providers come from the validated attribution inventory, and alertOrigins
+ * is the definitional count of independent alert-origin systems (kept literal
+ * and pinned by tests/public-product-facts.test.mjs).
+ */
+function buildHeroProofStats() {
+  const stats = sourceAttributionStats(scanUpstreamHosts(ROOT), loadManifest(ROOT));
+  return {
+    mapLayers: getCompleteLayerCatalogKeys('full').length,
+    feeds: stats.feedHosts,
+    providers: stats.providerCount,
+    alertOrigins: 5,
+  };
+}
+
+/**
+ * "Under the hood" band proof figures (#7745). The subhead promises "Every
+ * number below is live in the dashboard today — not a roadmap", so every slot
+ * is measured from the same registries that produce ai-search.md's coverage
+ * block and the hero rail, and generation fails closed on any non-numeric
+ * value — the band shipped with adjectives in 14 of 15 slots for exactly the
+ * reason this validation exists.
+ */
+function buildDepthProofStats(hero) {
+  const stats = computeStats();
+  const candidate = {
+    // The first four slots carry the same labels — and therefore the same
+    // published figures — as the hero rail.
+    ...hero,
+    chokepoints: CHOKEPOINT_REGISTRY.length,
+    instabilityCountries: stats.tier1Countries,
+    resilienceRanked: publishedRankedCountries(ROOT).ranked,
+    submarineCables: UNDERSEA_CABLES.length,
+    pipelinesLng: PIPELINES.length + lngFacilityCount(),
+    aiDatacenters: AI_DATA_CENTERS.length,
+    hotspots: INTEL_HOTSPOTS.length,
+    stockExchanges: stats.stockExchangeCount,
+    mcpTools: TOOL_REGISTRY.length,
+    commands: commandPaletteCommandCount(),
+    languages: stats.locales,
+  };
+  for (const [key, value] of Object.entries(candidate)) {
+    if (!Number.isInteger(value) || value <= 0) {
+      throw new Error(`depth proof stat ${key} must be a positive integer, got ${JSON.stringify(value)}`);
+    }
+  }
+  return candidate;
+}
 
 const catalogBundle = {
   _generated: facts._generated,
@@ -156,6 +224,18 @@ const catalogBundle = {
 
 emit('shared/product-facts.generated.json', json(facts));
 emit('scripts/shared/product-facts.generated.json', json(facts));
+// Slim homepage proof numerals. Hero.tsx imports this file — not the full
+// facts bundle — so the welcome JS payload grows by bytes, not kilobytes.
+emit('pro-test/src/generated/hero-stats.json', json(facts.heroProofStats));
+// Same rationale for the "Under the hood" band numerals that Depth.tsx renders.
+emit('pro-test/src/generated/depth-stats.json', json(facts.depthProofStats));
+// Welcome copy figures that are not band slots (the first-five tenth card).
+const proMonthlyPrice = plans.find((plan) => plan.planKey === 'pro_monthly')?.price;
+if (typeof proMonthlyPrice !== 'number' || proMonthlyPrice <= 0) throw new Error(`pro_monthly price must be a positive number, got ${proMonthlyPrice}`);
+emit('pro-test/src/generated/copy-stats.json', json({
+  ...defaultOnLayerStats(read('src/config/variants/full.ts'), getCompleteLayerCatalogKeys('full')),
+  proMonthlyPrice,
+}));
 emit('shared/product-catalog.generated.json', json(catalogBundle));
 emit('scripts/shared/product-catalog.generated.json', json(catalogBundle));
 
@@ -261,6 +341,42 @@ transform('public/.well-known/agent-card.json', (source) => {
 // so adding tools cannot leave a syntactically valid but incomplete card.
 transform('public/.well-known/mcp/server-card.json', (source) => {
   const card = JSON.parse(source);
+  const disasterTool = TOOL_REGISTRY.find((tool) => tool.name === 'get_natural_disasters');
+  if (!disasterTool) throw new Error('get_natural_disasters must exist in TOOL_REGISTRY');
+  const disasterFilename = disasterTool._uiResourceUri?.match(/^ui:\/\/worldmonitor\/(natural-disasters(?:-v\d+)?\.html)$/)?.[1];
+  if (!disasterFilename) throw new Error('get_natural_disasters must advertise a ui://worldmonitor/natural-disasters HTML resource');
+  card.metadata.mcpApps.note = card.metadata.mcpApps.note.replace(
+    /get_market_data → market-radar(?:-v\d+)?\.html/,
+    'get_market_data → market-radar-v3.html',
+  ).replace(
+    /get_country_brief → country-brief(?:-v\d+)?\.html/,
+    'get_country_brief → country-brief-v3.html',
+  ).replace(
+    /get_natural_disasters → natural-disasters(?:-v\d+)?\.html/,
+    `get_natural_disasters → ${disasterFilename}`,
+  ).replace(
+    /get_news_intelligence → news-intelligence(?:-v\d+)?\.html/,
+    'get_news_intelligence → news-intelligence-v3.html',
+  ).replace(
+    /get_conflict_events → conflict-events(?:-v\d+)?\.html/,
+    'get_conflict_events → conflict-events-v2.html',
+  ).replace(
+    /get_prediction_markets → prediction-markets(?:-v\d+)?\.html/,
+    'get_prediction_markets → prediction-markets-v3.html',
+  ).replace(
+    /get_forecast_predictions → forecasts(?:-v\d+)?\.html/,
+    'get_forecast_predictions → forecasts-v3.html',
+  ).replace(
+    /get_chokepoint_status → chokepoint-monitor(?:-v\d+)?\.html/,
+    'get_chokepoint_status → chokepoint-monitor-v2.html',
+  ).replace(
+    /get_world_brief → world-brief(?:-v\d+)?\.html/,
+    'get_world_brief → world-brief-v2.html',
+  ).replace(
+    /get_country_risk → country-risk(?:-v\d+)?\.html/,
+    'get_country_risk → country-risk-v3.html',
+  );
+  card.metadata.mcpApps.uiResources = UI_RESOURCE_LIST_RESPONSE.map(resource => resource.uri);
   card.tools = TOOL_REGISTRY.map((tool) => ({
     name: tool.name,
     description: tool.description,
@@ -283,6 +399,10 @@ for (const path of proLocalePaths) {
     delete locale.footer?.beFirstInLine;
     delete locale.form;
     delete locale.referral;
+    // The "Under the hood" band renders measured numerals (depth-stats.json),
+    // so the retired adjective value slots are lifecycle-cleaned like the
+    // waitlist copy above. Labels (sNl) stay — they remain the localized copy.
+    for (let slot = 1; slot <= 15; slot += 1) delete locale.welcome?.depth?.[`s${slot}v`];
     return json(locale);
   });
 }
@@ -368,13 +488,13 @@ function pricingSummary() {
         name: 'API',
         price_usd_monthly: byKey.api_starter.price,
         price_usd_yearly: byKey.api_starter_annual.price,
-        features: ['REST API', 'license / API key included', '1,000 requests/day starter limit', dashboardAi('api_starter'), 'webhooks', 'structured JSON', 'OpenAPI docs', 'commercial license — for your organization'],
+        features: ['REST API', 'license / API key included', '1,000 requests/day starter limit (REST + MCP combined; a live MCP call counts as 2-3)', dashboardAi('api_starter'), 'webhooks', 'structured JSON', 'OpenAPI docs', 'commercial license — for your organization'],
       },
       {
         name: 'API Business',
         price_usd_monthly: byKey.api_business.price,
         price_usd_yearly: byKey.api_business_annual.price,
-        features: ['Everything in API Starter', '300 requests/minute', '10,000 requests/day', dashboardAi('api_business'), '5 Pro licenses — invite users at any corporate email domain', 'commercial license — for your customers', 'priority support'],
+        features: ['Everything in API Starter', '300 requests/minute', '10,000 requests/day (REST + MCP combined; a live MCP call counts as 2-3)', dashboardAi('api_business'), '5 Pro licenses — invite users at any corporate email domain', 'commercial license — for your customers', 'priority support'],
       },
       {
         name: 'Enterprise',

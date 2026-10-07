@@ -9,13 +9,12 @@ import { compactForecastDashboardPayload } from './_forecast-dashboard.mjs';
 import { unwrapEnvelope } from './_seed-envelope-source.mjs';
 import { allBootstrapMarkets } from './_prediction-classify.mjs';
 import { tagRegions } from './_prediction-scoring.mjs';
-import { attachResolutionSpecs } from './_forecast-resolution.mjs';
-import { assessFunnelDiversity } from './_forecast-funnel.mjs';
+import { attachResolutionSpecs, CHOKEPOINT_MARKET_REGIONS, evaluateExtractionShadow, extractionShadowFeedKeys, HORIZON_MS, scoredHorizonKeys, summarizeExtractionShadow } from './_forecast-resolution.mjs';
+import { assessFunnelDiversity, NON_REAL_FUNNEL_ORIGINS } from './_forecast-funnel.mjs';
+import { alignPriorToPublication, applyPublishedCalibration, CALIBRATION_FORCE_RAW_ENV, decideCalibrationPublication, parseCalibrationMap, recordCalibrationPublication } from './_forecast-calibration.mjs';
 import { resolveR2StorageConfig, putR2JsonObject, getR2JsonObject } from './_r2-storage.mjs';
 import { extractFirstJsonObject, extractFirstJsonArray, cleanJsonText } from './_llm-json.mjs';
 import {
-  GROQ_DEFAULT_MODEL,
-  GROQ_REASONING_EXTRA_BODY,
   getLlmAttemptTimeoutMs,
   isDeepseekV4FlashModel,
   OPENROUTER_FREE_BACKUP_MODEL,
@@ -82,6 +81,12 @@ const TRACE_RUNS_KEY = 'forecast:trace:runs:v1';
 // silently invalidating the verification pipeline's Brier.
 const FUNNEL_HEALTH_KEY = 'forecast:funnel:health:v1';
 const FUNNEL_HEALTH_TTL_SECONDS = 6 * 60 * 60; // 6h — 6x the hourly cron, mirrors TTL_SECONDS
+// #7070 activation. The map and its gate verdict are written by
+// seed-forecast-resolutions; the seeder writes its decision record.
+const CALIBRATION_MAP_KEY = 'forecast:calibration-map:v1';
+const CALIBRATION_GATE_SCORECARD_KEY = 'forecast:scorecard:v1';
+const CALIBRATION_PUBLICATION_KEY = 'forecast:calibration-publication:v1';
+const CALIBRATION_PUBLICATION_TTL_SECONDS = 90 * 24 * 60 * 60;
 const TRACE_RUNS_MAX = 50;
 const TRACE_REDIS_TTL_SECONDS = 60 * 24 * 60 * 60;
 const WORLD_STATE_HISTORY_LIMIT = 6;
@@ -262,28 +267,6 @@ const CHOKEPOINT_COMMODITIES = {
   'Western Pacific': { commodity: 'Semiconductors', sensitivity: 0.9 },
   'South China Sea': { commodity: 'Trade goods', sensitivity: 0.6 },
   'Black Sea': { commodity: 'Grain/Energy', sensitivity: 0.7 },
-};
-
-const CHOKEPOINT_MARKET_REGIONS = {
-  'Strait of Hormuz': 'Middle East',
-  'Bab el-Mandeb': 'Red Sea',
-  'Red Sea': 'Red Sea',
-  'Suez Canal': 'Red Sea',
-  'Taiwan Strait': 'Western Pacific',
-  'South China Sea': 'Western Pacific',
-  'Strait of Malacca': 'South China Sea',
-  'Kerch Strait': 'Black Sea',
-  'Black Sea': 'Black Sea',
-  'Bosporus Strait': 'Black Sea',
-  'Persian Gulf': 'Middle East',
-  'Arabian Sea': 'Middle East',
-  'Baltic Sea': 'Northern Europe',
-  'Danish Straits': 'Northern Europe',
-  'Strait of Gibraltar': 'Mediterranean',
-  'Mediterranean Sea': 'Mediterranean',
-  'Panama Canal': 'Central America',
-  'Lombok Strait': 'Southeast Asia',
-  'Cape of Good Hope': 'Southern Africa',
 };
 
 const MARKET_INPUT_KEYS = {
@@ -1423,9 +1406,14 @@ function getStateDerivedBucketSignalTypes(domain, bucketId) {
   return [];
 }
 
+// Every bucket here has a hard-spec path in deriveStateDerivedHardMetrics
+// (_forecast-resolution.mjs). sovereign_risk, rates_inflation and fx_stress
+// have no checkable question and stay unpublished until they get one (#5234).
+// Re-enabling one also means removing it from WITHHELD_STATE_BUCKETS
+// (_forecast-scorecard.mjs), which keeps its ledger rows out of the scorecard.
 function getStateDerivedAllowedBuckets(domain) {
   if (domain === 'supply_chain') return ['freight', 'energy'];
-  if (domain === 'market') return ['energy', 'sovereign_risk', 'rates_inflation', 'fx_stress'];
+  if (domain === 'market') return ['energy'];
   return [];
 }
 
@@ -2182,6 +2170,8 @@ const MARKET_CALIBRATION_DOMAIN_CAPS = {
 const MARKET_DE_ESCALATION_OUTCOME_TERMS = [
   'ceasefire', 'truce', 'peace', 'peaceful', 'agreement', 'diplomatic solution',
   'withdrawal', 'reopen', 'reopened', 'restored', 'resolution', 'resolved',
+  'return to normal', 'returns to normal', 'back to normal',
+  'remain open', 'remains open', 'stay open', 'stays open',
 ];
 const MARKET_ADVERSE_OUTCOME_TERMS = [
   'attack', 'strike', 'war', 'conflict', 'offensive', 'unrest',
@@ -2215,6 +2205,78 @@ const MARKET_ADVERSE_CONDITION_END_PATTERNS = [
   new RegExp(String.raw`\b${MARKET_ADVERSE_CONDITION_PATTERN}\b.{0,40}\bend(?:s|ed|ing)?\b(?!\s+of\b)`),
   new RegExp(String.raw`\bend(?:s|ed|ing)?\b(?:\s+of)?.{0,40}\b${MARKET_ADVERSE_CONDITION_PATTERN}\b`),
 ];
+
+const marketEventTerms = (alternation) => new RegExp(String.raw`(?:^|[^a-z0-9])(?:${alternation})(?:[^a-z0-9]|$)`);
+const ARMED_WAR_PATTERN = String.raw`(?<!trade[ -]|tariff[ -]|price[ -]|culture[ -])wars?`;
+const ARMED_ESCALATION_EVENT_PATTERNS = [
+  marketEventTerms(String.raw`${ARMED_WAR_PATTERN}|(?:air ?)?strikes?|attack(?:s|ed)?|invade[sd]?|invasion|offensive|clash(?:es)?|bomb(?:s|ed|ing)?|military (?:action|operation|intervention|conflict)|ground (?:operation|incursion)|incursion`),
+  new RegExp(String.raw`\b(?:conflict|${ARMED_WAR_PATTERN}|fighting|hostilities)\b.{0,30}\bescalat`),
+  new RegExp(String.raw`\bescalat\w*\b.{0,30}\b(?:conflict|${ARMED_WAR_PATTERN}|fighting|hostilities)\b`),
+];
+const DE_ESCALATION_EVENT_PATTERNS = [
+  marketEventTerms(String.raw`ceasefire|cease-fire|truce|armistice|peace (?:deal|agreement|talks|treaty|accord)`),
+  ...MARKET_ADVERSE_CONDITION_END_PATTERNS,
+];
+const MARKET_PRICE_EVENT_PATTERNS = [
+  marketEventTerms(String.raw`oil|crude|brent|wti|natural gas|lng|gasoline|gold|silver|copper|wheat|prices?|inflation|cpi|recession|gdp|interest rates?|rate (?:cut|hike)s?|tariffs?|yields?|currency|(?:stock )?market (?:crash|correction|sell-?off)`),
+];
+
+// A market anchors a forecast only when it resolves on the same event class
+// (#7071). Region overlap alone let invasion, leadership, and territory markets
+// calibrate cyber and posture forecasts. A domain or title family with no entry
+// gets no anchor. Cyber has none: its forecasts resolve on a threat count, and
+// no market prices a count. `adverse` serves forecasts whose YES outcome is escalation,
+// `deescalatory` serves ceasefire-style forecasts; a missing slot means no anchor.
+const MARKET_ANCHOR_EVENT_CLASSES = {
+  conflict: { adverse: ARMED_ESCALATION_EVENT_PATTERNS, deescalatory: DE_ESCALATION_EVENT_PATTERNS },
+  military: { adverse: ARMED_ESCALATION_EVENT_PATTERNS, deescalatory: DE_ESCALATION_EVENT_PATTERNS },
+  // Leadership-identity questions ("next prime minister", "become president
+  // before 2045") are not instability outcomes, so bare office titles do not count.
+  political: {
+    adverse: [marketEventTerms(String.raw`resign(?:s|ed|ation)?|step(?:s)? down|oust(?:s|ed|er)?|removed from office|leave office|out as (?:president|prime minister|pm|leader)|impeach(?:ed|ment)?|no[- ]confidence|coup|(?:government|coalition) (?:collapse[sd]?|falls?)|snap election|early election|martial law|unrest|protests?|riots?|regime (?:change|collapse|fall)`)],
+  },
+  supply_chain: {
+    adverse: [marketEventTerms(String.raw`straits?|canal|blockade[sd]?|shipping|transits?|chokepoints?|freight|tankers?|ports? (?:closure|closed|shut(?:s|down)?)`)],
+    excludeTitles: [/^gps interference in /i],
+  },
+  infrastructure: {
+    adverse: [marketEventTerms(String.raw`outages?|blackouts?|power (?:cuts?|outages?|failures?)|grid|pipelines?|undersea cables?|cable cuts?|internet shutdowns?|sabotage[sd]?`)],
+  },
+  market: {
+    adverse: MARKET_PRICE_EVENT_PATTERNS,
+    deescalatory: MARKET_PRICE_EVENT_PATTERNS,
+    requireTitleOverlap: true,
+  },
+};
+
+// A market is the same question only if it settles near the forecast's own
+// deadline. A 7d forecast priced off a market that settles in 2027 borrows
+// risk the forecast never claims (#7071). The market may settle up to one
+// extra horizon (at least a week) past the deadline, never before emission.
+const MARKET_ANCHOR_MIN_SETTLEMENT_SLACK_MS = 7 * 24 * 60 * 60 * 1000;
+
+function resolveMarketAnchorSettlementWindow(pred) {
+  const horizonMs = HORIZON_MS[pred.timeHorizon];
+  const emittedAt = Number(pred.createdAt);
+  if (!Number.isFinite(horizonMs) || !Number.isFinite(emittedAt)) return null;
+  return {
+    earliest: emittedAt,
+    latest: emittedAt + horizonMs + Math.max(MARKET_ANCHOR_MIN_SETTLEMENT_SLACK_MS, horizonMs),
+  };
+}
+
+function marketSettlesWithinWindow(market, window) {
+  if (!window) return false;
+  const settlesAt = Date.parse(market?.endDate || '');
+  return Number.isFinite(settlesAt) && settlesAt >= window.earliest && settlesAt <= window.latest;
+}
+
+function resolveMarketAnchorEventPatterns(pred, predictionDeEscalatoryOutcome) {
+  const entry = MARKET_ANCHOR_EVENT_CLASSES[pred.domain];
+  if (!entry) return null;
+  if (entry.excludeTitles?.some((pattern) => pattern.test(pred.title || ''))) return null;
+  return (predictionDeEscalatoryOutcome ? entry.deescalatory : entry.adverse) || null;
+}
 
 const DOMAIN_ACTOR_BLUEPRINTS = {
   conflict: [
@@ -2655,15 +2717,26 @@ function calibrateWithMarkets(predictions, markets) {
     direction: 0,
     region: 0,
     semantic: 0,
+    eventClass: 0,
+    horizon: 0,
     capNoop: 0,
+    noClass: 0,
   };
   for (const pred of predictions) {
     const keywords = REGION_KEYWORDS[pred.region] || [];
     const regionTerms = [...new Set([...getSearchTermsForRegion(pred.region), pred.region])];
+    const subjectTerms = getSubjectTermsForRegion(pred.region);
     const expectedTags = buildExpectedRegionTags(regionTerms, pred.region);
     const titleTokens = extractMeaningfulTokens(pred.title, regionTerms);
     const predictionDeEscalatoryOutcome = predictionYesOutcomeLooksDeEscalatory(pred);
     if (keywords.length === 0 && regionTerms.length === 0) continue;
+    const eventPatterns = resolveMarketAnchorEventPatterns(pred, predictionDeEscalatoryOutcome);
+    if (!eventPatterns) {
+      stats.noClass++;
+      continue;
+    }
+    const requireTitleOverlap = MARKET_ANCHOR_EVENT_CLASSES[pred.domain].requireTitleOverlap === true;
+    const settlementWindow = resolveMarketAnchorSettlementWindow(pred);
     const candidates = marketUniverse
       .map(m => {
         const mRegions = tagRegions(m.title);
@@ -2688,16 +2761,23 @@ function calibrateWithMarkets(predictions, markets) {
           stats.region++;
           return false;
         }
-        const hasSpecificRegionSignal = item.regionHits > 0 || item.tagOverlap;
-        const hasSemanticOverlap = item.titleHits > 0 || item.domainHits > 0;
-        if (pred.domain === 'market') {
-          const keep = hasSpecificRegionSignal && item.titleHits > 0 && (item.domainHits > 0 || item.score >= 7);
-          if (!keep) stats.semantic++;
-          return keep;
+        // A shared macro tag or an entity-graph neighbour is not the same subject:
+        // "Escalation risk: Syria" must not anchor to a US-invades-Iran market.
+        const hasSpecificRegionSignal = countTermMatches(item.market.title, subjectTerms).hits > 0;
+        const hasTitleOverlap = item.titleHits > 0 && (item.domainHits > 0 || item.score >= 7);
+        if (!hasSpecificRegionSignal || (requireTitleOverlap && !hasTitleOverlap)) {
+          stats.semantic++;
+          return false;
         }
-        const keep = hasSpecificRegionSignal && (hasSemanticOverlap || item.score >= 6);
-        if (!keep) stats.semantic++;
-        return keep;
+        if (!textMatchesAnyPattern(item.market.title, eventPatterns)) {
+          stats.eventClass++;
+          return false;
+        }
+        if (!marketSettlesWithinWindow(item.market, settlementWindow)) {
+          stats.horizon++;
+          return false;
+        }
+        return true;
       })
       .sort((a, b) => {
         if (b.score !== a.score) return b.score - a.score;
@@ -2720,14 +2800,16 @@ function calibrateWithMarkets(predictions, markets) {
         marketPrice: +marketProb.toFixed(3),
         drift: +(originalProbability - marketProb).toFixed(3),
         source: match.source || 'polymarket',
+        internalProbability: originalProbability,
+        marketBlendedProbability: cappedProbability,
       };
       pred.probability = cappedProbability;
       stats.applied++;
     }
   }
-  const dropped = stats.noPrice + stats.lowVolume + stats.direction + stats.region + stats.semantic + stats.capNoop;
-  if (stats.applied > 0 || dropped > 0) {
-    console.log(`  [calibrateWithMarkets] applied=${stats.applied} dropped=${dropped} no_price=${stats.noPrice} low_volume=${stats.lowVolume} direction=${stats.direction} region=${stats.region} semantic=${stats.semantic} cap_noop=${stats.capNoop}`);
+  const dropped = stats.noPrice + stats.lowVolume + stats.direction + stats.region + stats.semantic + stats.eventClass + stats.horizon + stats.capNoop;
+  if (stats.applied > 0 || dropped > 0 || stats.noClass > 0) {
+    console.log(`  [calibrateWithMarkets] applied=${stats.applied} dropped=${dropped} no_price=${stats.noPrice} low_volume=${stats.lowVolume} direction=${stats.direction} region=${stats.region} semantic=${stats.semantic} event_class=${stats.eventClass} horizon=${stats.horizon} cap_noop=${stats.capNoop} no_class_forecasts=${stats.noClass}`);
   }
 }
 
@@ -2766,10 +2848,11 @@ function loadCountryCodes() {
 
 const NEWS_MATCHABLE_TYPES = new Set(['country', 'theater']);
 
-function getSearchTermsForRegion(region) {
+// The region's own names and country keywords, without the entity-graph
+// neighbours getSearchTermsForRegion adds (Syria -> Iran, Israel -> United States).
+function getSubjectTermsForRegion(region) {
   const terms = [region];
   const codes = loadCountryCodes();
-  const graph = loadEntityGraph();
 
   // 1. Country codes JSON: resolve ISO codes to names + keywords
   const countryEntry = codes[region];
@@ -2802,6 +2885,13 @@ function getSearchTermsForRegion(region) {
       terms.push(...matched.keywords);
     }
   }
+
+  return [...new Set(terms)].filter(t => t && t.length > 2);
+}
+
+function getSearchTermsForRegion(region) {
+  const terms = getSubjectTermsForRegion(region);
+  const graph = loadEntityGraph();
 
   // 3. Entity graph: add linked country/theater names (not commodities)
   const nodeId = graph.aliases?.[region];
@@ -4833,7 +4923,10 @@ function buildForecastCases(predictions) {
 function buildPriorForecastSnapshot(pred) {
   return {
     id: pred.id,
+    domain: pred.domain,
+    generationOrigin: pred.generationOrigin,
     probability: pred.probability,
+    ...(Number.isFinite(pred.uncalibratedProbability) && { uncalibratedProbability: pred.uncalibratedProbability }),
     signals: (pred.signals || []).map(signal => signal.value),
     newsContext: pred.newsContext || [],
     calibration: pred.calibration
@@ -4845,6 +4938,17 @@ function buildPriorForecastSnapshot(pred) {
   };
 }
 
+function buildCalibrationLineage(calibration) {
+  return {
+    ...(Number.isFinite(calibration.internalProbability) && { internalProbability: calibration.internalProbability }),
+    ...(Number.isFinite(calibration.marketBlendedProbability) && { marketBlendedProbability: calibration.marketBlendedProbability }),
+  };
+}
+
+function finiteOrNull(value) {
+  return typeof value === 'number' && Number.isFinite(value) ? value : null;
+}
+
 function buildHistoryForecastEntry(pred) {
   return {
     id: pred.id,
@@ -4852,9 +4956,11 @@ function buildHistoryForecastEntry(pred) {
     region: pred.region,
     title: pred.title,
     probability: pred.probability,
+    ...(Number.isFinite(pred.uncalibratedProbability) && { uncalibratedProbability: pred.uncalibratedProbability }),
     confidence: pred.confidence,
     timeHorizon: pred.timeHorizon,
     generationOrigin: pred.generationOrigin || 'legacy_detector',
+    stateBucketId: pred.stateDerivation?.bucketId,
     trend: pred.trend,
     priorProbability: pred.priorProbability,
     signals: (pred.signals || []).slice(0, 6).map(signal => ({
@@ -4869,6 +4975,7 @@ function buildHistoryForecastEntry(pred) {
           marketPrice: pred.calibration.marketPrice,
           drift: pred.calibration.drift,
           source: pred.calibration.source,
+          ...buildCalibrationLineage(pred.calibration),
         }
       : null,
     cascades: (pred.cascades || []).slice(0, 3).map(cascade => ({
@@ -4876,18 +4983,24 @@ function buildHistoryForecastEntry(pred) {
       effect: cascade.effect,
       probability: cascade.probability,
     })),
-    // Persist projections into the 45-day history too (#4933 audit gap —
-    // canonical payload already emits them at :5100; history was the only
-    // store dropping them, so the per-horizon curve a future multi-horizon
-    // Brier needs was lost). Mirror the canonical payload's shape.
+    // Horizon scoring grades each hard horizon contract on these values and
+    // reads them only from history; the canonical published payload omits
+    // them (#8967).
+    // A missing value stays null: a 0 would be graded as a real projection.
     projections: pred.projections ? {
-      h24: Number(pred.projections.h24 || 0),
-      d7: Number(pred.projections.d7 || 0),
-      d30: Number(pred.projections.d30 || 0),
+      h24: finiteOrNull(pred.projections.h24),
+      d7: finiteOrNull(pred.projections.d7),
+      d30: finiteOrNull(pred.projections.d30),
     } : null,
     // Resolution spec (#4976 Bet 1) — same camelCase block the canonical
     // payload emits, so Bet 2's resolver can score forecasts still in-window.
     resolution: buildResolutionOutputBlock(pred.resolution),
+    // Per-horizon projection contracts (#7075). History only, hard contracts
+    // only: the resolver registers one window per hard contract and reads
+    // nothing else, and the resolver re-reads 200 snapshots every cycle, so an
+    // unscored marker per horizon would be dead weight. The public payload is
+    // unchanged.
+    horizonResolutions: buildHorizonResolutionsOutputBlock(pred.horizonResolutions),
   };
 }
 
@@ -4945,6 +5058,67 @@ async function seedForecastFunnelHealth(predictions) {
     'SET', `seed-meta:${FUNNEL_HEALTH_KEY}`, JSON.stringify(meta), 'EX', FUNNEL_HEALTH_TTL_SECONDS,
   ]).catch((err) => console.warn(`  [FunnelHealth] seed-meta write failed: ${err.message}`));
   return assessment;
+}
+
+/**
+ * Reads the map, the gate verdict and the previous record, then decides this
+ * run's mode under the stateless rule in _forecast-calibration.mjs. A failed
+ * map or gate read publishes raw. A failed read of the previous record leaves
+ * the decision alone but returns no record, so the stored flip history is
+ * never overwritten by one built without it.
+ */
+async function resolveCalibrationPublication(nowMs, { env = process.env, logger = console } = {}) {
+  const forceRaw = env[CALIBRATION_FORCE_RAW_ENV] === '1';
+  const { url, token } = getRedisCredentials();
+  const read = (key) => redisGetOrThrow(url, token, key).then(
+    (value) => ({ ok: true, value }),
+    (err) => {
+      logger.warn(`  [Calibration] Read of ${key} failed: ${err.message}`);
+      return { ok: false, value: null };
+    },
+  );
+  const [mapRead, scorecardRead, previousRead] = await Promise.all([
+    read(CALIBRATION_MAP_KEY),
+    read(CALIBRATION_GATE_SCORECARD_KEY),
+    read(CALIBRATION_PUBLICATION_KEY),
+  ]);
+  const map = parseCalibrationMap(mapRead.value);
+  const shadow = scorecardRead.value?.calibrationShadow ?? null;
+  const readFailed = !mapRead.ok || !scorecardRead.ok;
+  const decision = decideCalibrationPublication(map, shadow, {
+    forceRaw,
+    readFailed,
+    nowMs,
+    gateGeneratedAt: Number(scorecardRead.value?.generatedAt),
+  });
+  if (!previousRead.ok) {
+    logger.warn(`  [Calibration] mode=${decision.mode} reason=${decision.reason} map=${decision.mapVersion ?? 'none'}; previous record unreadable, so no flip is recorded this run`);
+    return { map, decision, record: null, flipped: false };
+  }
+  const { flipped, record } = recordCalibrationPublication(previousRead.value, decision, nowMs);
+  const gate = decision.gate;
+  const gateText = gate
+    ? `eligible=${gate.eligible} forward=${gate.forwardCount} brierDeltaUpper=${gate.brierDeltaUpper} `
+      + `domains=${gate.domains.map((row) => `${row.domain}:${row.count}:${row.brierDeltaUpper}`).join(',') || 'none'} `
+      + `gateReasons=${gate.reasons.join(',') || 'none'}`
+    : 'gate=none';
+  const line = `mode=${decision.mode} reason=${decision.reason} map=${decision.mapVersion ?? 'none'} ${gateText}`;
+  if (flipped) logger.warn(`  [Calibration] FLIP ${record.lastFlip.from} -> ${record.lastFlip.to} ${line}`);
+  else logger.log(`  [Calibration] ${line}`);
+  return { map, decision, record, flipped };
+}
+
+// Unlike redisSet, checks the reply: Upstash reports a rejected SET as HTTP
+// 200 with an error body, and a silent miss would leave lastFlip stale.
+async function writeCalibrationPublication(record) {
+  if (!record) return;
+  const { url, token } = getRedisCredentials();
+  if (_testRedisStore) {
+    await redisSet(url, token, CALIBRATION_PUBLICATION_KEY, record, CALIBRATION_PUBLICATION_TTL_SECONDS);
+    return;
+  }
+  const reply = await redisCommand(url, token, ['SET', CALIBRATION_PUBLICATION_KEY, JSON.stringify(record), 'EX', CALIBRATION_PUBLICATION_TTL_SECONDS]);
+  if (reply?.result !== 'OK') throw new Error(`SET ${CALIBRATION_PUBLICATION_KEY} was not acknowledged: ${JSON.stringify(reply).slice(0, 200)}`);
 }
 
 function getTraceMaxForecasts(totalForecasts = 0) {
@@ -5440,6 +5614,30 @@ function buildResolutionOutputBlock(resolution) {
   };
 }
 
+function buildHorizonResolutionsOutputBlock(horizonResolutions) {
+  if (!horizonResolutions || typeof horizonResolutions !== 'object') return null;
+  const num = (v) => (Number.isFinite(v) ? Number(v) : undefined);
+  const str = (v) => (typeof v === 'string' && v.length > 0 ? v : undefined);
+  const block = {};
+  for (const [horizon, spec] of Object.entries(horizonResolutions)) {
+    if (spec?.kind !== 'hard') continue;
+    block[horizon] = Object.fromEntries(Object.entries({
+      ...buildResolutionOutputBlock(spec),
+      horizon: str(spec.horizon),
+      timeHorizon: str(spec.timeHorizon),
+      semantics: str(spec.semantics),
+      sampleToleranceMs: num(spec.sampleToleranceMs),
+      reason: str(spec.reason),
+    }).filter(([, value]) => value !== undefined));
+  }
+  return Object.keys(block).length ? block : null;
+}
+
+function scoredHorizonsBlock(pred) {
+  const scored = scoredHorizonKeys(pred);
+  return scored.length ? { scoredHorizons: scored } : {};
+}
+
 function buildPublishedForecastPayload(pred) {
   return {
     id: pred.id,
@@ -5472,6 +5670,7 @@ function buildPublishedForecastPayload(pred) {
       marketPrice: Number(pred.calibration.marketPrice || 0),
       drift: Number(pred.calibration.drift || 0),
       source: pred.calibration.source || '',
+      ...buildCalibrationLineage(pred.calibration),
     } : null,
     createdAt: Number(pred.createdAt || 0),
     updatedAt: Number(pred.updatedAt || 0),
@@ -5480,12 +5679,8 @@ function buildPublishedForecastPayload(pred) {
       regional: pred.perspectives.regional || '',
       contrarian: pred.perspectives.contrarian || '',
     } : null,
-    projections: pred.projections ? {
-      h24: Number(pred.projections.h24 || 0),
-      d7: Number(pred.projections.d7 || 0),
-      d30: Number(pred.projections.d30 || 0),
-    } : null,
     resolution: buildResolutionOutputBlock(pred.resolution),
+    ...scoredHorizonsBlock(pred),
     caseFile: slimForecastCaseForPublish(pred.caseFile),
     simulationAdjustment: Number(pred.simulationAdjustment || 0),
     simPathConfidence: Number(pred.simPathConfidence || 0),
@@ -5562,7 +5757,7 @@ function buildForecastRunActorRegistry(predictions) {
       objectives: [...actor.objectives].slice(0, 4),
       constraints: [...actor.constraints].slice(0, 4),
       likelyActions: [...actor.likelyActions].slice(0, 4),
-      forecastIds: [...actor.forecastIds].slice(0, 8),
+      forecastIds: [...actor.forecastIds],
     }))
     .sort((a, b) => b.influenceScore - a.influenceScore || a.name.localeCompare(b.name));
 }
@@ -6039,7 +6234,7 @@ function finalizeSituationCluster(cluster) {
     stableKey,
     label: formatSituationLabel(cluster),
     forecastCount: cluster.forecastCount,
-    forecastIds: cluster.forecastIds.slice(0, 12),
+    forecastIds: [...cluster.forecastIds],
     dominantRegion,
     dominantDomain,
     regions: cluster.regions,
@@ -6065,7 +6260,9 @@ function computeSituationSimilarity(currentCluster, priorCluster) {
     overlapCount(currentCluster.actors || [], priorCluster.actors || []) * 2 +
     overlapCount(currentCluster.domains || [], priorCluster.domains || []) * 1.5 +
     overlapCount(currentCluster.branchKinds || [], priorCluster.branchKinds || []) * 1 +
-    overlapCount(currentCluster.forecastIds || [], priorCluster.forecastIds || []) * 0.5
+    // Complete membership is unbounded; eight shared ids (4 points) alone still meet the
+    // continuity threshold but never outweigh a shared region plus actor.
+    Math.min(overlapCount(currentCluster.forecastIds || [], priorCluster.forecastIds || []), 8) * 0.5
   );
 }
 function buildSituationClusters(predictions) {
@@ -6581,7 +6778,7 @@ function finalizeStateUnit(unit) {
     sourceSituationIds: unit.sourceSituationIds,
     situationIds: unit.sourceSituationIds,
     situationCount: unit.sourceSituationIds.length,
-    forecastIds: unit.forecastIds.slice(0, 16),
+    forecastIds: [...unit.forecastIds],
     forecastCount,
     avgProbability: +avgProbability.toFixed(3),
     avgConfidence: +avgConfidence.toFixed(3),
@@ -7892,7 +8089,7 @@ function buildSituationSimulationState(worldState, priorWorldState = null) {
       avgConfidence: Number(source.avgConfidence || 0),
       regions: source.regions || [],
       domains: source.domains || [],
-      forecastIds: forecastIds.slice(0, 12),
+      forecastIds: [...forecastIds],
       actorIds: actors.map((actor) => actor.id).slice(0, 8),
       branchIds: branches.map((branch) => branch.id).slice(0, 10),
       pressureSignals: (source.topSignals || []).slice(0, 5),
@@ -9348,7 +9545,7 @@ function projectSituationClusters(situationClusters, predictions) {
         dominantDomain,
       }),
       forecastCount: clusterPredictions.length,
-      forecastIds: clusterPredictions.map((prediction) => prediction.id).slice(0, 12),
+      forecastIds: clusterPredictions.map((prediction) => prediction.id),
       avgProbability: +avgProbability.toFixed(3),
       avgConfidence: +avgConfidence.toFixed(3),
       topSignals,
@@ -14001,6 +14198,13 @@ function summarizePublishFiltering(predictions, selectedPredictions = [], publis
       .map((pred) => pred.publishDiagnostics?.reason)
       .filter(Boolean),
   );
+  const eligible = predictions.filter(pred => isPublishEligibleForecast(pred));
+  const realDomains = items => [...new Set(items.filter(isRealForecastForDomainCoverage).map(pred => pred.domain))].sort();
+  const eligibleDomains = realDomains(eligible);
+  const selectedDomains = realDomains(selectedPredictions);
+  const publishedDomains = realDomains(publishedPredictions);
+  const publishedResolutionCoverage = summarizeResolutionHardCoverage(publishedPredictions);
+  const targetHardCount = Math.ceil(publishedPredictions.length * MIN_HARD_RESOLUTION_PUBLISH_RATIO);
 
   return {
     suppressedFamilySelection: reasonCounts.family_selection || 0,
@@ -14025,12 +14229,59 @@ function summarizePublishFiltering(predictions, selectedPredictions = [], publis
     suppressedSupplyChainByReason,
     candidateResolutionCoverage: summarizeResolutionHardCoverage(predictions),
     selectedResolutionCoverage: summarizeResolutionHardCoverage(selectedPredictions),
-    publishedResolutionCoverage: summarizeResolutionHardCoverage(publishedPredictions),
+    publishedResolutionCoverage,
+    domainCoverage: {
+      eligible: eligibleDomains,
+      selected: selectedDomains,
+      published: publishedDomains,
+      missing: eligibleDomains.filter(domain => !publishedDomains.includes(domain)),
+    },
+    hardResolutionTarget: {
+      target: targetHardCount,
+      actual: publishedResolutionCoverage.hard,
+      met: publishedResolutionCoverage.hard >= targetHardCount,
+    },
   };
 }
 
+// Publish selection prefers hard-resolvable forecasts. A state-derived forecast
+// can carry a hard spec (#5234) without that preference applying to it, so the
+// published share of synthetic backfill does not change.
 function isHardResolvableForecast(pred) {
-  return pred?.resolution?.kind === 'hard';
+  return pred?.resolution?.kind === 'hard' && pred.generationOrigin !== 'state_derived';
+}
+
+function isRealForecastForDomainCoverage(pred) {
+  return !!pred?.domain && !NON_REAL_FUNNEL_ORIGINS.includes(pred.generationOrigin || 'legacy_detector');
+}
+
+function orderDomainRepresentativesFirst(predictions) {
+  const domains = new Set();
+  const representatives = [];
+  const remaining = [];
+  for (const pred of predictions) {
+    if (isRealForecastForDomainCoverage(pred) && !domains.has(pred.domain)) {
+      domains.add(pred.domain);
+      representatives.push(pred);
+    } else {
+      remaining.push(pred);
+    }
+  }
+  return [...representatives, ...remaining];
+}
+
+function isWeakForecastFallback(pred) {
+  if ((pred?.traceMeta?.narrativeSource || 'fallback') !== 'fallback') return false;
+  const readiness = pred?.readiness?.overall ?? scoreForecastReadiness(pred).overall;
+  const priority = typeof pred?.analysisPriority === 'number' ? pred.analysisPriority : computeAnalysisPriority(pred);
+  const counterEvidenceTypes = new Set((pred?.caseFile?.counterEvidence || []).map(item => item.type));
+  return readiness < 0.4 && priority < 0.08 && (pred?.confidence || 0) < 0.45
+    && (pred?.probability || 0) < 0.12 && counterEvidenceTypes.has('coverage_gap')
+    && counterEvidenceTypes.has('confidence');
+}
+
+function isPublishEligibleForecast(pred, minProbability = PUBLISH_MIN_PROBABILITY) {
+  return (pred?.probability || 0) > minProbability && !isWeakForecastFallback(pred);
 }
 
 function summarizeResolutionHardCoverage(predictions = []) {
@@ -14047,6 +14298,9 @@ function summarizeResolutionHardCoverage(predictions = []) {
 
 function selectDeferredForecastForPublishBackfill(deferredCandidates, publishedPredictions = [], targetCount = 0) {
   if (!Array.isArray(deferredCandidates) || deferredCandidates.length === 0) return null;
+  const publishedDomains = new Set(publishedPredictions.filter(isRealForecastForDomainCoverage).map(pred => pred.domain));
+  const isMissingDomain = pred => isRealForecastForDomainCoverage(pred)
+    && !publishedDomains.has(pred.domain) && isPublishEligibleForecast(pred);
   const publishedCoverage = summarizeResolutionHardCoverage(publishedPredictions);
   const deferredHardCount = deferredCandidates.filter(isHardResolvableForecast).length;
   const projectedTotal = Math.max(targetCount || 0, publishedCoverage.total + 1);
@@ -14054,6 +14308,12 @@ function selectDeferredForecastForPublishBackfill(deferredCandidates, publishedP
     publishedCoverage.hard + deferredHardCount,
     Math.ceil(projectedTotal * MIN_HARD_RESOLUTION_PUBLISH_RATIO),
   );
+  if (publishedCoverage.hard < targetHardCount) {
+    const missingHardIndex = deferredCandidates.findIndex(pred => isMissingDomain(pred) && isHardResolvableForecast(pred));
+    if (missingHardIndex >= 0) return deferredCandidates.splice(missingHardIndex, 1)[0];
+  }
+  const missingDomainIndex = deferredCandidates.findIndex(isMissingDomain);
+  if (missingDomainIndex >= 0) return deferredCandidates.splice(missingDomainIndex, 1)[0];
   if (publishedCoverage.hard < targetHardCount) {
     const hardIndex = deferredCandidates.findIndex(isHardResolvableForecast);
     if (hardIndex >= 0) return deferredCandidates.splice(hardIndex, 1)[0];
@@ -14169,7 +14429,7 @@ function computePublishSelectionScore(pred, memoryIndex = null) {
   const defensePenalty = topBucketId === 'defense' && pred.marketSelectionContext?.topChannel !== 'defense_repricing'
     ? 0.018
     : 0;
-  const resolvabilityLift = pred?.resolution?.kind === 'hard' ? RESOLVABLE_HARD_SELECTION_LIFT : 0;
+  const resolvabilityLift = isHardResolvableForecast(pred) ? RESOLVABLE_HARD_SELECTION_LIFT : 0;
   pred.publishSelectionMemory = memoryHint ? {
     matchedBy: memoryHint.matchedBy,
     situationId: memoryHint.memory?.situationId || '',
@@ -14265,7 +14525,7 @@ function canCoexistAsDistinctStrategicFollowOn(pred, selected = []) {
 }
 
 function selectPublishedForecastPool(predictions, options = {}) {
-  const eligible = (predictions || []).filter((pred) => (pred?.probability || 0) > (options.minProbability ?? PUBLISH_MIN_PROBABILITY));
+  const eligible = (predictions || []).filter((pred) => isPublishEligibleForecast(pred, options.minProbability ?? PUBLISH_MIN_PROBABILITY));
   const targetCount = options.targetCount ?? getPublishSelectionTarget(eligible);
   const memoryIndex = options.memoryIndex || null;
   const selected = [];
@@ -14281,7 +14541,8 @@ function selectPublishedForecastPool(predictions, options = {}) {
     .slice()
     .sort((a, b) => (b.publishSelectionScore || 0) - (a.publishSelectionScore || 0)
       || (b.analysisPriority || 0) - (a.analysisPriority || 0)
-      || (b.probability || 0) - (a.probability || 0));
+      || (b.probability || 0) - (a.probability || 0)
+      || a.id.localeCompare(b.id));
 
   const familyBuckets = new Map();
   for (const pred of ranked) {
@@ -14345,13 +14606,16 @@ function selectPublishedForecastPool(predictions, options = {}) {
     updateSelectionCounts(pred, 1);
   }
 
-  function isProtectedRebalanceRepresentative(pred) {
+  function isProtectedRebalanceRepresentative(pred, candidate) {
     if (!pred) return false;
-    if (pred.domain === 'military') {
-      return selected.filter((item) => item.domain === 'military').length <= 1;
+    if (isRealForecastForDomainCoverage(pred)
+      && selected.filter(item => item.domain === pred.domain && isRealForecastForDomainCoverage(item)).length === 1
+      && !(candidate.domain === pred.domain && isRealForecastForDomainCoverage(candidate))) {
+      return true;
     }
     if (pred.domain === 'supply_chain' && isStrategicSupplyChainCandidate(pred)) {
-      return selected.filter((item) => item.domain === 'supply_chain' && isStrategicSupplyChainCandidate(item)).length <= 1;
+      return selected.filter((item) => item.domain === 'supply_chain' && isStrategicSupplyChainCandidate(item)).length <= 1
+        && !isStrategicSupplyChainCandidate(candidate);
     }
     return false;
   }
@@ -14393,11 +14657,12 @@ function selectPublishedForecastPool(predictions, options = {}) {
       if (selectedHardCount >= targetHardCount) break;
       const replacements = selected
         .map((pred, index) => ({ pred, index }))
-        .filter(({ pred }) => !isHardResolvableForecast(pred) && !isProtectedRebalanceRepresentative(pred))
+        .filter(({ pred }) => !isHardResolvableForecast(pred) && !isProtectedRebalanceRepresentative(pred, candidate))
         .sort((a, b) => (a.pred.publishSelectionScore || 0) - (b.pred.publishSelectionScore || 0)
           || (a.pred.analysisPriority || 0) - (b.pred.analysisPriority || 0)
-          || (a.pred.probability || 0) - (b.pred.probability || 0));
-      if (replacements.length === 0) break;
+          || (a.pred.probability || 0) - (b.pred.probability || 0)
+          || a.pred.id.localeCompare(b.pred.id));
+      if (replacements.length === 0) continue;
 
       for (const replacement of replacements) {
         const selectionWithoutReplacement = selected.filter((_, index) => index !== replacement.index);
@@ -14445,8 +14710,14 @@ function selectPublishedForecastPool(predictions, options = {}) {
       )
     )
   ));
+  // Reserve real domains before a busy state or family can fill the shortlist.
+  for (const pred of ranked) {
+    if (selected.length >= targetCount) break;
+    if (!isRealForecastForDomainCoverage(pred) || selected.some(item => item.domain === pred.domain)) continue;
+    if (canSelect(pred, 'backfill')) take(pred);
+  }
   for (const pred of stateAnchors) {
-    if (selected.length >= Math.min(targetCount, stateAnchors.length)) break;
+    if (selected.length >= targetCount) break;
     if (canSelect(pred, 'state_anchor')) take(pred);
   }
   // These anchor passes intentionally stay in state-anchor mode, so once a state is already
@@ -14506,9 +14777,9 @@ function selectPublishedForecastPool(predictions, options = {}) {
     if (canSelect(pred, 'backfill')) take(pred);
   }
 
-  // Domain guarantee: data-driven detectors (military) structurally can't match LLM-enriched
-  // readiness scores, so they get buried in ranking. If no military forecast was selected
-  // and we have room below the hard cap, inject the best-scoring eligible one.
+  // Domain guarantee: the real-domain reservation above already takes a real military or
+  // supply-chain forecast when one fits within targetCount. This pass adds one above
+  // targetCount (up to the hard cap), or a synthetic one the reservation does not count.
   if (selected.length < MAX_TARGET_PUBLISHED_FORECASTS) {
     for (const guaranteedDomain of ['military']) {
       if (selected.some((p) => p.domain === guaranteedDomain)) continue;
@@ -14532,7 +14803,8 @@ function selectPublishedForecastPool(predictions, options = {}) {
     .slice()
     .sort((a, b) => (b.analysisPriority || 0) - (a.analysisPriority || 0)
       || (b.publishSelectionScore || 0) - (a.publishSelectionScore || 0)
-      || (b.probability || 0) - (a.probability || 0));
+      || (b.probability || 0) - (a.probability || 0)
+      || a.id.localeCompare(b.id));
   result.deferredCandidates = deferredCandidates;
   result.targetCount = targetCount;
   return result;
@@ -14574,6 +14846,10 @@ function markDeferredFamilySelection(predictions, selectedPool) {
     if ((pred?.probability || 0) <= PUBLISH_MIN_PROBABILITY) continue;
     if (selectedIds.has(pred.id)) continue;
     if (pred.publishDiagnostics?.reason) continue;
+    if (isWeakForecastFallback(pred)) {
+      pred.publishDiagnostics = { reason: 'weak_fallback' };
+      continue;
+    }
     pred.publishDiagnostics = {
       reason: 'family_selection',
       familyId: pred.familyContext?.id || '',
@@ -14594,27 +14870,15 @@ function filterPublishedForecasts(predictions, minProbability = PUBLISH_MIN_PROB
     pred.publishDiagnostics = null;
     pred.publishTokens = pred.publishTokens || getForecastSituationTokens(pred);
     if ((pred?.probability || 0) <= minProbability) continue;
-    const narrativeSource = pred?.traceMeta?.narrativeSource || 'fallback';
     const readiness = pred?.readiness?.overall ?? scoreForecastReadiness(pred).overall;
     const priority = typeof pred?.analysisPriority === 'number' ? pred.analysisPriority : computeAnalysisPriority(pred);
-    const counterEvidenceTypes = new Set((pred?.caseFile?.counterEvidence || []).map(item => item.type));
-    if (narrativeSource === 'fallback') {
-      const weakFallback = (
-        readiness < 0.4 &&
-        priority < 0.08 &&
-        (pred?.confidence || 0) < 0.45 &&
-        (pred?.probability || 0) < 0.12 &&
-        counterEvidenceTypes.has('coverage_gap') &&
-        counterEvidenceTypes.has('confidence')
-      );
-      if (weakFallback) {
-        weakFallbackCount++;
-        pred.publishDiagnostics = { reason: 'weak_fallback' };
-        continue;
-      }
+    if (isWeakForecastFallback(pred)) {
+      weakFallbackCount++;
+      pred.publishDiagnostics = { reason: 'weak_fallback' };
+      continue;
     }
 
-    const bestDuplicate = kept.find((item) => {
+    const isStrongerDuplicate = (item) => {
       if (item.domain !== pred.domain) return false;
       if (item.familyContext?.id && pred.familyContext?.id && item.familyContext.id !== pred.familyContext.id) return false;
       const duplicateScore = computeSituationDuplicateScore(pred, item);
@@ -14631,8 +14895,22 @@ function filterPublishedForecasts(predictions, minProbability = PUBLISH_MIN_PROB
         readinessGap >= 0.08 ||
         probabilityGap >= 0.08
       );
-    });
+    };
+    const bestDuplicate = isRealForecastForDomainCoverage(pred)
+      ? kept.find(item => isRealForecastForDomainCoverage(item) && isStrongerDuplicate(item)) || kept.find(isStrongerDuplicate)
+      : kept.find(isStrongerDuplicate);
 
+    if (bestDuplicate && isRealForecastForDomainCoverage(pred) && !isRealForecastForDomainCoverage(bestDuplicate)) {
+      // Real coverage displaces its synthetic or shadow twin instead of publishing beside it.
+      overlapSuppressedCount++;
+      bestDuplicate.publishDiagnostics = {
+        reason: 'situation_overlap',
+        keptForecastId: pred.id,
+        situationId: getForecastSelectionStateContext(bestDuplicate)?.id || '',
+      };
+      kept[kept.indexOf(bestDuplicate)] = pred;
+      continue;
+    }
     if (bestDuplicate) {
       overlapSuppressedCount++;
       pred.publishDiagnostics = {
@@ -14648,7 +14926,7 @@ function filterPublishedForecasts(predictions, minProbability = PUBLISH_MIN_PROB
   const published = [];
   const situationCounts = new Map();
   const situationDomainCounts = new Map();
-  for (const pred of kept) {
+  for (const pred of orderDomainRepresentativesFirst(kept)) {
     const situationId = getForecastSelectionStateContext(pred)?.id || '';
     if (!situationId) {
       published.push(pred);
@@ -14694,7 +14972,8 @@ function filterPublishedForecasts(predictions, minProbability = PUBLISH_MIN_PROB
   if (situationCapSuppressedCount > 0) {
     console.log(`  [filterPublished] Suppressed ${situationCapSuppressedCount} situation-cap forecast(s)`);
   }
-  return published;
+  const publishedIds = new Set(published.map(pred => pred.id));
+  return kept.filter(pred => publishedIds.has(pred.id));
 }
 
 function applySituationFamilyCaps(predictions, situationFamilies = []) {
@@ -14704,7 +14983,7 @@ function applySituationFamilyCaps(predictions, situationFamilies = []) {
   const familyDomainCounts = new Map();
   const familyIndex = buildSituationFamilyIndex(situationFamilies);
 
-  for (const pred of predictions || []) {
+  for (const pred of orderDomainRepresentativesFirst(predictions || [])) {
     const family = familyIndex.get(pred.situationContext?.id || '');
     if (!family) {
       published.push(pred);
@@ -14746,7 +15025,8 @@ function applySituationFamilyCaps(predictions, situationFamilies = []) {
     console.log(`  [filterPublished] Suppressed ${familyCapSuppressedCount} situation-family-cap forecast(s)`);
   }
 
-  return published;
+  const publishedIds = new Set(published.map(pred => pred.id));
+  return (predictions || []).filter(pred => publishedIds.has(pred.id));
 }
 
 function selectForecastsForEnrichment(predictions, options = {}) {
@@ -14821,8 +15101,8 @@ function selectForecastsForEnrichment(predictions, options = {}) {
 }
 
 // ── Phase 2: LLM Scenario Enrichment ───────────────────────
-// Forecast narrative calls try the paid OpenRouter model, two fixed free
-// OpenRouter variants, then Groq. Separate entries let application validation
+// Forecast narrative calls try the paid OpenRouter model, then two fixed free
+// OpenRouter variants. Separate entries let application validation
 // advance after malformed/empty content; do not replace them with the random
 // `openrouter/free` router. Per-stage FORECAST_LLM_*_PROVIDER_ORDER still overrides.
 const FORECAST_LLM_PROVIDERS = [
@@ -14838,13 +15118,12 @@ const FORECAST_LLM_PROVIDERS = [
   { name: 'openrouter', envKey: 'OPENROUTER_API_KEY', apiUrl: 'https://openrouter.ai/api/v1/chat/completions', model: 'deepseek/deepseek-v4-flash', timeout: 25_000, extraBody: { reasoning: { enabled: false }, provider: OPENROUTER_PROVIDER_ROUTING } },
   { name: 'openrouter-free', envKey: 'OPENROUTER_API_KEY', apiUrl: 'https://openrouter.ai/api/v1/chat/completions', model: OPENROUTER_FREE_PRIMARY_MODEL, timeout: 25_000, maxRetries: 0, extraBody: { reasoning: { enabled: false }, provider: OPENROUTER_PROVIDER_ROUTING } },
   { name: 'openrouter-free-backup', envKey: 'OPENROUTER_API_KEY', apiUrl: 'https://openrouter.ai/api/v1/chat/completions', model: OPENROUTER_FREE_BACKUP_MODEL, timeout: 25_000, maxRetries: 0, extraBody: { reasoning: { enabled: false }, provider: OPENROUTER_PROVIDER_ROUTING } },
-  { name: 'groq', envKey: 'GROQ_API_KEY', apiUrl: 'https://api.groq.com/openai/v1/chat/completions', model: GROQ_DEFAULT_MODEL, timeout: 20_000, extraBody: GROQ_REASONING_EXTRA_BODY },
 ];
 
 // PER-79 (upstream PR 3/3): generic OpenAI-compatible provider for the
 // forecast seeder. Activated ONLY when LLM_API_URL, LLM_API_KEY, and
 // LLM_MODEL are all set AND none of the named providers above (openrouter,
-// openrouter-free, openrouter-free-backup, groq) have a key. Resolved-time
+// openrouter-free, openrouter-free-backup) have a key. Resolved-time
 // append keeps the existing FORECAST_LLM_PROVIDERS table (and its
 // array-shape tests) intact. LLM_API_URL is the FULL chat/completions
 // endpoint verbatim (see SELF_HOSTING.md) and LLM_MODEL is required — the
@@ -14891,12 +15170,11 @@ function buildForecastGenericLlmProvider() {
   };
 }
 
-// market_implications does NOT fall back to groq. Groq's free tier caps at 100k
-// tokens/day and this stage alone needs ~114k (4,749 tokens x 24 hourly runs), so
-// the fallback 429s for most of the day. Reserving 20s of run budget for a provider
-// that returns 429 in 86ms only raises the admission bar and starves the stage.
-// OpenRouter is the primary and, with throughput routing, succeeds 100% of measured
-// runs. Still overridable via FORECAST_LLM_MARKET_IMPLICATIONS_PROVIDER_ORDER.
+// market_implications runs on paid OpenRouter alone. Admission reserves the whole
+// runnable chain (getMarketImplicationsMinRunBudgetMs), so every fallback rung
+// raises the admission bar and starves the stage. OpenRouter, with throughput
+// routing, succeeds 100% of measured runs. Still overridable via
+// FORECAST_LLM_MARKET_IMPLICATIONS_PROVIDER_ORDER.
 const MARKET_IMPLICATIONS_DEFAULT_PROVIDER_ORDER = ['openrouter'];
 
 // Requested window for DeepSeek-Flash in forecast stages. Kept above the Flash
@@ -14952,27 +15230,20 @@ function parseForecastProviderOrder(raw) {
   return providers.length > 0 ? providers : null;
 }
 
-function migrateLegacyGlobalProviderOrder(providerOrder) {
-  if (providerOrder.length !== 2
-    || providerOrder[0] !== 'openrouter'
-    || providerOrder[1] !== 'groq') return providerOrder;
-  const paidIndex = providerOrder.indexOf('openrouter');
-  const groqIndex = providerOrder.indexOf('groq');
-  if (paidIndex < 0 || groqIndex < 0 || paidIndex > groqIndex) return providerOrder;
-  const freeProviders = ['openrouter-free', 'openrouter-free-backup'];
-  return providerOrder.flatMap(provider => provider === 'groq'
-    ? [...freeProviders.filter(freeProvider => !providerOrder.includes(freeProvider)), provider]
-    : [provider]);
+// Production still carries the historical global `openrouter,groq` value. Groq
+// is no longer a provider, so that exact legacy value maps to the full
+// OpenRouter chain; any other value stays exact.
+function parseGlobalForecastProviderOrder(raw) {
+  const normalized = typeof raw === 'string'
+    ? raw.split(',').map(item => item.trim().toLowerCase()).filter(Boolean).join(',')
+    : '';
+  if (normalized === 'openrouter,groq') return FORECAST_LLM_PROVIDERS.map(provider => provider.name);
+  return parseForecastProviderOrder(raw);
 }
 
 function getForecastLlmCallOptions(stage = 'default') {
   const defaultProviderOrder = FORECAST_LLM_PROVIDERS.map(provider => provider.name);
-  const globalProviderOrder = parseForecastProviderOrder(process.env.FORECAST_LLM_PROVIDER_ORDER);
-  // Production carries the historical global `openrouter,groq` value. Migrate
-  // only that exact legacy default; stage-scoped operator overrides stay exact.
-  const effectiveGlobalProviderOrder = globalProviderOrder
-    ? migrateLegacyGlobalProviderOrder(globalProviderOrder)
-    : null;
+  const effectiveGlobalProviderOrder = parseGlobalForecastProviderOrder(process.env.FORECAST_LLM_PROVIDER_ORDER);
   const combinedProviderOrder = parseForecastProviderOrder(process.env.FORECAST_LLM_COMBINED_PROVIDER_ORDER);
   const criticalProviderOrder = parseForecastProviderOrder(process.env.FORECAST_LLM_CRITICAL_PROVIDER_ORDER);
   const impactProviderOrder = parseForecastProviderOrder(process.env.FORECAST_LLM_IMPACT_PROVIDER_ORDER);
@@ -14983,10 +15254,9 @@ function getForecastLlmCallOptions(stage = 'default') {
       ? (criticalProviderOrder || effectiveGlobalProviderOrder || defaultProviderOrder)
       : stage === 'impact_expansion'
         ? (impactProviderOrder || effectiveGlobalProviderOrder || defaultProviderOrder)
-      // Deliberately does NOT fall through to globalProviderOrder: that env is set
-      // to `openrouter,groq` in production, which would re-add the groq fallback
-      // this stage must not depend on (see MARKET_IMPLICATIONS_DEFAULT_PROVIDER_ORDER).
-      // Its own stage env still overrides.
+      // Deliberately does NOT fall through to the global order, which would add
+      // fallback rungs this stage must not reserve budget for (see
+      // MARKET_IMPLICATIONS_DEFAULT_PROVIDER_ORDER). Its own stage env still overrides.
       : stage === 'market_implications'
         ? (marketImplicationsProviderOrder || MARKET_IMPLICATIONS_DEFAULT_PROVIDER_ORDER)
       : (effectiveGlobalProviderOrder || defaultProviderOrder);
@@ -15006,25 +15276,23 @@ function getForecastLlmCallOptions(stage = 'default') {
   // strength/confidence flow into state-derived (market/supply_chain)
   // forecast probabilities and publish selection (frames → world signals →
   // pressure/confirmation scores → buildStateDerivedForecast probability).
-  // Hold this stage on the same provider hosts and OpenRouter fallback. Groq's
-  // decommissioned 8B model moves to its official gpt-oss-20b replacement.
+  // Hold this stage on paid OpenRouter with a pinned model.
   // ONLY the stage-scoped FORECAST_LLM_CRITICAL_PROVIDER_ORDER
   // unpins it — a global FORECAST_LLM_PROVIDER_ORDER must not move a
   // probability-coupled stage as a side effect (review finding on #4965).
   if (stage === 'critical_signals' && !criticalProviderOrder) {
     return {
-      providerOrder: ['groq', 'openrouter'],
+      providerOrder: ['openrouter'],
       modelOverrides: {
-        groq: GROQ_DEFAULT_MODEL,
-        // ONLY the stage-scoped model env may change the pinned fallback —
+        // ONLY the stage-scoped model env may change the pinned model —
         // a global FORECAST_LLM_MODEL_OPENROUTER must not move the
         // probability-coupled stage either (review finding on #4965).
         openrouter: process.env.FORECAST_LLM_CRITICAL_MODEL_OPENROUTER || 'google/gemini-2.5-flash',
       },
       // Legacy request-body parity: the pinned models predate the
       // reasoning-off extraBody on the table's openrouter entry. Keep that
-      // omission, but never drop the mandatory provider-routing policy: a
-      // Groq fallback still sends this probability-bearing prompt to OpenRouter.
+      // omission, but never drop the mandatory provider-routing policy: this
+      // probability-bearing prompt still goes to OpenRouter.
       extraBodyOverrides: { openrouter: { provider: OPENROUTER_PROVIDER_ROUTING } },
     };
   }
@@ -15074,13 +15342,12 @@ function resolveForecastLlmProviders(options = {}) {
   }
   // PER-79 (upstream PR 3/3): append the generic OpenAI-compatible provider
   // ONLY when all three envs are set AND the chain above matched no named
-  // provider (envKey for both openrouter and groq unset). The env check uses
+  // provider (OPENROUTER_API_KEY unset). The env check uses
   // ONLY the names — never echo or log the values. Kept out of
   // FORECAST_LLM_PROVIDERS so existing table-shape tests and the per-stage
   // pinning in critical_signals / market_implications stay exact.
   if (isForecastGenericLlmReady()
     && !process.env.OPENROUTER_API_KEY
-    && !process.env.GROQ_API_KEY
     && !seen.has(FORECAST_GENERIC_LLM_PROVIDER_SPEC.name)) {
     const generic = buildForecastGenericLlmProvider();
     const genericModel = generic.model;
@@ -15100,7 +15367,7 @@ function resolveForecastLlmProviders(options = {}) {
 }
 
 // Hosted production must keep the pin-based critical_signals cache tag
-// (#4965): `providerOrder` then the openrouter/groq override slots. Replacing
+// (#4965): `providerOrder` then the openrouter override slot. Replacing
 // that whole tag with the resolved runnable chain would change the hosted
 // key shape and bust the 20-minute Redis cache for no reason. Append the
 // generic name + model ONLY when generic is actually in the resolved chain
@@ -15110,7 +15377,6 @@ function buildCriticalSignalRouteTag(options = {}) {
   const pinTag = [
     (options.providerOrder || []).join('-') || 'default',
     options.modelOverrides?.openrouter || 'table',
-    options.modelOverrides?.groq || 'table',
   ].join('_');
   const generic = resolveForecastLlmProviders(options).find((provider) => provider.name === 'generic');
   const genericSuffix = generic ? `_generic_${generic.model}` : '';
@@ -15622,7 +15888,9 @@ async function callForecastLLM(systemPrompt, userPrompt, options = {}) {
         const model = json.model || provider.model;
         console.log(`  [LLM:${stage}] ${provider.name} success model=${model}`);
         recordLlmAttempt(provider.name, model, true, attemptT0, tokensExtra);
-        return { text, model, provider: provider.name };
+        return { text, model, provider: provider.name,
+          ...(stage === 'market_implications' ? { completionTokens: json.usage?.completion_tokens } : {}),
+        };
       } catch (err) {
         // All real attempts were recorded inside the retry callback; budget
         // pre-emptions never sent the prompt, so nothing to record here.
@@ -15702,9 +15970,6 @@ function buildUserPrompt(preds) {
   const predsText = preds.map((p, i) => {
     const sigs = p.signals.map(s => `[SIGNAL] ${sanitizeForPrompt(s.value)}`).join('\n');
     const cal = p.calibration ? `\n[CALIBRATION] ${sanitizeForPrompt(p.calibration.marketTitle)} at ${Math.round(p.calibration.marketPrice * 100)}%` : '';
-    const projections = p.projections
-      ? `\n[PROJECTIONS] 24h ${Math.round(p.projections.h24 * 100)}% | 7d ${Math.round(p.projections.d7 * 100)}% | 30d ${Math.round(p.projections.d30 * 100)}%`
-      : '';
     const cascades = (p.cascades || []).length > 0
       ? `\n[CASCADES] ${p.cascades.map(c => `${sanitizeForPrompt(c.domain)} via ${sanitizeForPrompt(c.effect)} (${Math.round(c.probability * 100)}%)`).join('; ')}`
       : '';
@@ -15733,7 +15998,7 @@ function buildUserPrompt(preds) {
       .map(branch => `- ${sanitizeForPrompt(branch.kind)}: ${sanitizeForPrompt(branch.summary)} | outcome: ${sanitizeForPrompt(branch.outcome)} | projected: ${Math.round((branch.projectedProbability || 0) * 100)}%`)
       .join('\n');
     const caseSections = `${support ? `\n[SUPPORTING_EVIDENCE]\n${support}` : ''}${counter ? `\n[COUNTER_EVIDENCE]\n${counter}` : ''}${triggers ? `\n[TRIGGERS]\n${triggers}` : ''}${actors ? `\n[ACTORS]\n${actors}` : ''}${worldSummary ? `\n[WORLD_STATE]\n- ${worldSummary}` : ''}${worldPressures ? `\n[ACTIVE_PRESSURES]\n${worldPressures}` : ''}${worldStabilizers ? `\n[STABILIZERS]\n${worldStabilizers}` : ''}${worldUnknowns ? `\n[KEY_UNKNOWNS]\n${worldUnknowns}` : ''}${branches ? `\n[SIMULATED_BRANCHES]\n${branches}` : ''}`;
-    return `[${i}] "${sanitizeForPrompt(p.title)}" (${p.domain}, ${p.region})\nProbability: ${Math.round(p.probability * 100)}% | Confidence: ${Math.round(p.confidence * 100)}% | Trend: ${p.trend} | Horizon: ${p.timeHorizon}\n${sigs}${cal}${projections}${cascades}${news}${caseSections}`;
+    return `[${i}] "${sanitizeForPrompt(p.title)}" (${p.domain}, ${p.region})\nProbability: ${Math.round(p.probability * 100)}% | Confidence: ${Math.round(p.confidence * 100)}% | Trend: ${p.trend} | Horizon: ${p.timeHorizon}\n${sigs}${cal}${cascades}${news}${caseSections}`;
   }).join('\n\n');
   return `Predictions to analyze:\n\n${predsText}`;
 }
@@ -16296,6 +16561,28 @@ async function updateEmaWindows(inputs, url, token) {
 }
 
 // ── Main pipeline ──────────────────────────────────────────
+/** This run's calibration decision, and the prior run on the same scale. */
+async function resolveCalibrationRun(nowMs) {
+  const calibrationPublication = await resolveCalibrationPublication(nowMs);
+  const prior = alignPriorToPublication(await readPriorPredictions(), calibrationPublication.map, calibrationPublication.decision);
+  return { calibrationPublication, prior };
+}
+
+// Detector output to scored forecasts. The published calibration applies to
+// the post-blend probability, before anything derived from it.
+function scoreDetectedPredictions(predictions, { inputs, prior, calibrationPublication, cascadeRules }) {
+  attachNewsContext(predictions, inputs.newsInsights, inputs.newsDigest);
+  calibrateWithMarkets(predictions, inputs.predictionMarkets);
+  applyPublishedCalibration(predictions, calibrationPublication.map, calibrationPublication.decision);
+  computeConfidence(predictions);
+  computeProjections(predictions);
+  resolveCascades(predictions, cascadeRules);
+  discoverGraphCascades(predictions, loadEntityGraph());
+  computeTrends(predictions, prior);
+  buildForecastCases(predictions);
+  annotateForecastChanges(predictions, prior);
+}
+
 async function fetchForecasts() {
   await warmPingChokepoints();
   const traceStorageConfig = resolveR2StorageConfig();
@@ -16319,7 +16606,7 @@ async function fetchForecasts() {
   console.log('  Extracting urgent critical event frames...');
   inputs.criticalSignalBundle = await extractCriticalSignalBundle(inputs);
   console.log(`  [CriticalSignals] source=${inputs.criticalSignalBundle.source} candidates=${inputs.criticalSignalBundle.candidateCount} frames=${inputs.criticalSignalBundle.extractedFrameCount} fallbackNewsSignals=${inputs.criticalSignalBundle.fallbackNewsSignalCount} structuredSignals=${inputs.criticalSignalBundle.structuredSignalCount}`);
-  const prior = await readPriorPredictions();
+  const { calibrationPublication, prior } = await resolveCalibrationRun(runGeneratedAt);
 
   console.log('  Running domain detectors...');
   const { url: emaUrl, token: emaToken } = getRedisCredentials();
@@ -16342,16 +16629,8 @@ async function fetchForecasts() {
     console.log(`  Forecast trace config: raw=${traceCap.raw ?? 'default'} resolved=${traceCap.resolved} total=${traceCap.totalForecasts}`);
   }
 
-  attachNewsContext(predictions, inputs.newsInsights, inputs.newsDigest);
-  calibrateWithMarkets(predictions, inputs.predictionMarkets);
-  computeConfidence(predictions);
-  computeProjections(predictions);
   const cascadeRules = loadCascadeRules();
-  resolveCascades(predictions, cascadeRules);
-  discoverGraphCascades(predictions, loadEntityGraph());
-  computeTrends(predictions, prior);
-  buildForecastCases(predictions);
-  annotateForecastChanges(predictions, prior);
+  scoreDetectedPredictions(predictions, { inputs, prior, calibrationPublication, cascadeRules });
   let fullRunPredictions = predictions.slice();
   let fullRunSituationClusters = attachSituationContext(predictions);
   let fullRunSituationFamilies = attachSituationFamilyContext(predictions, buildSituationFamilies(fullRunSituationClusters));
@@ -16467,6 +16746,8 @@ async function fetchForecasts() {
   const initiallyPublishedSituationClusters = publishArtifacts.filteredSituationClusters;
   const initiallyPublishedSituationFamilies = publishArtifacts.filteredSituationFamilies;
   const publishedPredictions = publishArtifacts.publishedPredictions;
+  // Only published forecasts reach the resolution ledger, so only they are measured.
+  await runExtractionGateShadow(publishedPredictions);
   const publishTelemetry = summarizePublishFiltering(predictions, finalSelectionPool, publishedPredictions);
   const publishedSituationClusters = publishArtifacts.publishedSituationClusters;
   const publishedSituationFamilies = publishArtifacts.publishedSituationFamilies;
@@ -16496,10 +16777,43 @@ async function fetchForecasts() {
     marketSelectionIndex,
     impactExpansionCandidates,
     deepForecast,
+    calibrationPublication: calibrationPublication.record,
     priorWorldStateKey: priorTracePointer?.worldStateKey || '',
     priorWorldState,
     priorWorldStates,
   };
+}
+
+// Extraction gate shadow (#7067): reads each hard spec's sourceFeed raw, as
+// seed-forecast-resolutions does (no envelope unwrap; the shared shaper needs
+// `_seed`), and logs per-family/per-domain counters plus the would-downgrade
+// cohort. Never changes a spec and never fails the run.
+async function runExtractionGateShadow(predictions) {
+  try {
+    const keys = extractionShadowFeedKeys(predictions);
+    const { url, token } = getRedisCredentials();
+    const reads = await Promise.allSettled(keys.map(async (key) => {
+      if (_testRedisStore) return _testRedisStore[key] ?? null;
+      const raw = await redisCommand(url, token, ['GET', key]);
+      return raw?.result == null ? null : JSON.parse(raw.result);
+    }));
+    const rawByKey = {};
+    reads.forEach((read, index) => {
+      if (read.status === 'fulfilled') rawByKey[keys[index]] = read.value;
+      else console.warn(`  [ExtractionGate] feed ${keys[index]} unavailable: ${read.reason?.message || read.reason}`);
+    });
+    const verdicts = evaluateExtractionShadow(predictions, rawByKey);
+    const summary = summarizeExtractionShadow(verdicts);
+    const count = (outcome) => summary.byOutcome[outcome] || 0;
+    console.log(`  [ExtractionGate] shadow hard=${summary.total} pass=${count('pass')} fail=${count('fail')} feed_unavailable=${count('feed_unavailable')} skipped=${count('skipped')} byFamily=${JSON.stringify(summary.byFamily)} byDomain=${JSON.stringify(summary.byDomain)}`);
+    for (const v of verdicts) {
+      if (v.outcome === 'fail') console.log(`  [ExtractionGate] would_downgrade id=${JSON.stringify(v.id)} family=${v.family} domain=${v.domain} metricKey=${JSON.stringify(v.metricKey)} reason=${v.reason}`);
+    }
+    return { verdicts, summary };
+  } catch (err) {
+    console.warn(`  [ExtractionGate] shadow skipped: ${err?.message || err}`);
+    return null;
+  }
 }
 
 async function readForecastRefreshRequest() {
@@ -17144,10 +17458,11 @@ const ALL_ALLOWED_TICKERS = new Set([
   ...ALLOWED_INSTRUMENTS.rates,
 ]);
 
-const MARKET_IMPLICATIONS_SYSTEM_PROMPT = `You are a senior macro strategist generating structured trade-implication cards from live world intelligence.
+function buildMarketImplicationsSystemPrompt(cardCount) {
+  return `You are a senior macro strategist generating structured trade-implication cards from live world intelligence.
 
 RULES:
-- Generate 3 to 5 trade-implication cards based ONLY on the provided world-state context.
+- Generate ${cardCount} trade-implication cards based ONLY on the provided world-state context.
 - Each card must reference a specific ticker from the ALLOWED TICKERS list.
 - direction must be exactly one of: LONG, SHORT, HEDGE
 - timeframe must be one of: 1W, 2W, 1M, 3M
@@ -17170,6 +17485,7 @@ RULES:
 
 Respond with ONLY a JSON array:
 [{"ticker":"","name":"","direction":"","timeframe":"","confidence":"","title":"","narrative":"","risk_caveat":"","driver":"","transmission_chain":[{"node":"","impact_type":"","logic":""}]},...]`;
+}
 
 function buildMarketImplicationsContext(inputs) {
   const parts = [];
@@ -17393,8 +17709,8 @@ const MARKET_IMPLICATIONS_STAGE_CACHE_PREFIX = 'forecast:llm-market-implications
 // overridden) order that actually has an API key, ONE attempt each (market_implications
 // forces maxRetries:0), summed with the 5s stage guard that getUsableForecastLlmBudgetMs
 // subtracts. Reserving only the PRIMARY timeout (the original 30_000) was a latent bug:
-// with the default openrouter→groq order a DeepSeek Flash timeout drained the
-// budget so the groq FALLBACK was stranded and a recoverable timeout was misreported as
+// with a two-provider order a DeepSeek Flash timeout drained the
+// budget so the FALLBACK was stranded and a recoverable timeout was misreported as
 // SEED_ERROR (health WARNING). Reserving the full chain means an admitted call can exhaust
 // the primary AND still run the fallback; below that we skip and preserve last-good (green,
 // age-based STALE_SEED still escalates past 2h) rather than attempt a chain we cannot finish.
@@ -17667,7 +17983,8 @@ async function buildAndSeedMarketImplications(inputs) {
 
   const userPrompt = `World state as of ${new Date().toISOString()}:\n\n${context}\n\nAllowed tickers: ${[...ALL_ALLOWED_TICKERS].join(', ')}`;
 
-  const result = await callForecastLLM(MARKET_IMPLICATIONS_SYSTEM_PROMPT, userPrompt, {
+  const synthesisStartedAt = Date.now();
+  const callOptions = {
     ...llmOptions,
     stage: 'market_implications',
     maxTokens: 2500,
@@ -17677,7 +17994,8 @@ async function buildAndSeedMarketImplications(inputs) {
     // providers) would exceed the entire run budget, so a slow primary must fall
     // straight through to the fallback instead of retrying it (#5003 review).
     maxRetries: 0,
-  });
+  };
+  let result = await callForecastLLM(buildMarketImplicationsSystemPrompt('3 to 5'), userPrompt, callOptions);
 
   if (!result?.text) {
     // A budget-exhausted result is the same benign starve as the pre-call guard.
@@ -17693,7 +18011,31 @@ async function buildAndSeedMarketImplications(inputs) {
     return;
   }
 
-  const parsed = extractStructuredLlmPayload(result.text);
+  let parsed = extractStructuredLlmPayload(result.text);
+  if (!Array.isArray(parsed.items) || parsed.items.length === 0) {
+    // A malformed completion otherwise waits for the next hourly job. Allow
+    // one smaller generation, only with measured unused completion tokens and
+    // enough time for the responding provider under the original stage deadline.
+    const usedTokens = result.completionTokens;
+    const remainingTokens = Number.isInteger(usedTokens) && usedTokens > 0
+      ? callOptions.maxTokens - usedTokens : 0;
+    const remainingStageMs = getForecastLlmStageBudgetMs(callOptions) - (Date.now() - synthesisStartedAt);
+    const recoveryOptions = { ...callOptions, providerOrder: [result.provider],
+      maxTokens: remainingTokens, stageBudgetMs: remainingStageMs };
+    const recoveryAdmitted = remainingTokens >= 512
+      && Math.min(remainingStageMs, getRemainingForecastLlmRunBudgetMs()) >= getMarketImplicationsMinRunBudgetMs(recoveryOptions);
+    console.log(JSON.stringify({ event: 'llm_market_implications', parseFailure: true,
+      recoveryAdmitted, remainingTokens, parseStage: parsed.diagnostics.stage }));
+    if (recoveryAdmitted) {
+      const recovered = await callForecastLLM(buildMarketImplicationsSystemPrompt('1 or 2 concise'),
+        `${userPrompt}\n\nThe previous response could not be parsed. Return ONLY a valid JSON array with one or two concise cards. Keep every required field.`,
+        recoveryOptions);
+      if (recovered?.text) {
+        result = recovered;
+        parsed = extractStructuredLlmPayload(result.text);
+      }
+    }
+  }
   const rawCards = parsed.items;
 
   if (!Array.isArray(rawCards) || rawCards.length === 0) {
@@ -17784,6 +18126,122 @@ export const FORECAST_EXTRA_KEYS = [
   },
 ];
 
+// Runs after the canonical publish. The calibration record goes first: it
+// describes the probabilities just published, and the later stages share an
+// LLM budget and R2 latency that must not delay or skip it.
+async function runForecastAfterPublish(data, meta, triggerContext) {
+  try {
+    await writeCalibrationPublication(data.calibrationPublication);
+  } catch (err) {
+    console.warn(`  [Calibration] Publication record write failed: ${err.message}`);
+  }
+
+  if (triggerContext.triggerRequest) {
+    await clearForecastRefreshRequestIfUnchanged(triggerContext.triggerRequest);
+  }
+
+  // market_implications is the last remaining LLM stage and shares the 200s
+  // run budget (#4978). Run it BEFORE the best-effort telemetry below
+  // (history + deep-forecast snapshots, ~20s R2 trace export) so their
+  // wall-clock can't push the tail stage past the run deadline and starve
+  // it into a (pre-fix) SEED_ERROR. Independent of that telemetry — it reads
+  // data.inputs and publishes to its own key.
+  try {
+    await buildAndSeedMarketImplications(data.inputs || {});
+  } catch (err) {
+    console.warn(`  [MarketImplications] Stage failed: ${err.message}`);
+  }
+
+  try {
+    const snapshot = await appendHistorySnapshot(data);
+    console.log(`  History appended: ${snapshot.predictions.length} forecasts -> ${HISTORY_KEY}`);
+  } catch (err) {
+    console.warn(`  [History] Append failed: ${err.message}`);
+  }
+
+  try {
+    await seedForecastFunnelHealth(data.predictions || []);
+  } catch (err) {
+    console.warn(`  [FunnelHealth] Assessment/write failed: ${err.message}`);
+  }
+
+  try {
+    const runId = meta?.runId || `${Date.now()}`;
+    let deepForecast = data.deepForecast || {
+      status: 'skipped',
+      reason: 'not_eligible',
+      eligibleStateCount: 0,
+      selectedStateIds: [],
+      selectedPathCount: 0,
+      failureReason: '',
+      completedAt: '',
+      replacedFastRun: false,
+      rejectedPathsPreview: [],
+    };
+    const snapshotPayload = buildDeepForecastSnapshotPayload({
+      ...data,
+      triggerContext,
+      forecastDepth: 'fast',
+    }, { runId });
+    const snapshotWrite = await writeDeepForecastSnapshot(snapshotPayload, { runId });
+    if (snapshotWrite?.storageConfig && (data.impactExpansionCandidates || []).length > 0) {
+      writeSimulationPackage(snapshotPayload, { storageConfig: snapshotWrite.storageConfig, priorWorldState: data.priorWorldState || null })
+        .then(() => enqueueSimulationTask(runId))
+        .catch((err) => console.warn(`  [SimulationPackage] Write/enqueue failed: ${err.message}`));
+    }
+    if (deepForecast.status === 'queued' && (data.impactExpansionCandidates || []).length > 0) {
+      if (snapshotWrite?.snapshotKey) {
+        const queueResult = await enqueueDeepForecastTask({
+          runId,
+          snapshotKey: snapshotWrite.snapshotKey,
+          fastPrefix: buildTraceRunPrefix(runId, data.generatedAt, snapshotWrite.storageConfig?.basePrefix || FORECAST_DEEP_RUN_PREFIX),
+          priorWorldStateKey: data.priorWorldStateKey || '',
+          selectedCandidateStateIds: deepForecast.selectedStateIds || [],
+          createdAt: Date.now(),
+          retryCount: 0,
+        });
+        if (!queueResult.queued) {
+          deepForecast = {
+            ...deepForecast,
+            status: queueResult.reason === 'duplicate' ? 'queued' : 'failed',
+            failureReason: queueResult.reason === 'duplicate' ? '' : (queueResult.reason || 'queue_failed'),
+          };
+        }
+      } else {
+        deepForecast = {
+          ...deepForecast,
+          status: 'failed',
+          failureReason: 'snapshot_write_failed',
+        };
+      }
+    } else if (!snapshotWrite?.snapshotKey) {
+      console.warn('  [DeepForecast] Snapshot write skipped or failed; replay will not be available for this run');
+    }
+    console.log('  [Trace] Starting R2 export...');
+    const pointer = await writeForecastTraceArtifacts({
+      ...data,
+      triggerContext,
+      forecastDepth: 'fast',
+      deepForecast,
+      runStatusContext: {
+        status: deepForecast.status,
+        stage: 'fast_published',
+        progressPercent: 100,
+        completedAt: deepForecast.completedAt || '',
+        failureReason: deepForecast.failureReason || '',
+      },
+    }, { runId });
+    if (pointer) {
+      console.log(`  [Trace] Written: ${pointer.summaryKey} (${pointer.tracedForecastCount} forecasts)`);
+    } else {
+      console.log('  [Trace] Skipped: R2 storage not configured');
+    }
+  } catch (err) {
+    console.warn(`  [Trace] Export failed: ${err.message}`);
+    if (err.stack) console.warn(`  [Trace] Stack: ${err.stack.split('\n').slice(0, 3).join(' | ')}`);
+  }
+}
+
 if (_isDirectRun) {
   const refreshRequest = await readForecastRefreshRequest();
   const triggerContext = buildForecastTriggerContext(refreshRequest);
@@ -17810,112 +18268,7 @@ if (_isDirectRun) {
     schemaVersion: 1,
     maxStaleMin: 90,
     publishTransform: buildPublishedSeedPayload,
-    afterPublish: async (data, meta) => {
-      if (triggerContext.triggerRequest) {
-        await clearForecastRefreshRequestIfUnchanged(triggerContext.triggerRequest);
-      }
-
-      // market_implications is the last remaining LLM stage and shares the 200s
-      // run budget (#4978). Run it BEFORE the best-effort telemetry below
-      // (history + deep-forecast snapshots, ~20s R2 trace export) so their
-      // wall-clock can't push the tail stage past the run deadline and starve
-      // it into a (pre-fix) SEED_ERROR. Independent of that telemetry — it reads
-      // data.inputs and publishes to its own key.
-      try {
-        await buildAndSeedMarketImplications(data.inputs || {});
-      } catch (err) {
-        console.warn(`  [MarketImplications] Stage failed: ${err.message}`);
-      }
-
-      try {
-        const snapshot = await appendHistorySnapshot(data);
-        console.log(`  History appended: ${snapshot.predictions.length} forecasts -> ${HISTORY_KEY}`);
-      } catch (err) {
-        console.warn(`  [History] Append failed: ${err.message}`);
-      }
-
-      try {
-        await seedForecastFunnelHealth(data.predictions || []);
-      } catch (err) {
-        console.warn(`  [FunnelHealth] Assessment/write failed: ${err.message}`);
-      }
-
-      try {
-        const runId = meta?.runId || `${Date.now()}`;
-        let deepForecast = data.deepForecast || {
-          status: 'skipped',
-          reason: 'not_eligible',
-          eligibleStateCount: 0,
-          selectedStateIds: [],
-          selectedPathCount: 0,
-          failureReason: '',
-          completedAt: '',
-          replacedFastRun: false,
-          rejectedPathsPreview: [],
-        };
-        const snapshotPayload = buildDeepForecastSnapshotPayload({
-          ...data,
-          triggerContext,
-          forecastDepth: 'fast',
-        }, { runId });
-        const snapshotWrite = await writeDeepForecastSnapshot(snapshotPayload, { runId });
-        if (snapshotWrite?.storageConfig && (data.impactExpansionCandidates || []).length > 0) {
-          writeSimulationPackage(snapshotPayload, { storageConfig: snapshotWrite.storageConfig, priorWorldState: data.priorWorldState || null })
-            .then(() => enqueueSimulationTask(runId))
-            .catch((err) => console.warn(`  [SimulationPackage] Write/enqueue failed: ${err.message}`));
-        }
-        if (deepForecast.status === 'queued' && (data.impactExpansionCandidates || []).length > 0) {
-          if (snapshotWrite?.snapshotKey) {
-            const queueResult = await enqueueDeepForecastTask({
-              runId,
-              snapshotKey: snapshotWrite.snapshotKey,
-              fastPrefix: buildTraceRunPrefix(runId, data.generatedAt, snapshotWrite.storageConfig?.basePrefix || FORECAST_DEEP_RUN_PREFIX),
-              priorWorldStateKey: data.priorWorldStateKey || '',
-              selectedCandidateStateIds: deepForecast.selectedStateIds || [],
-              createdAt: Date.now(),
-              retryCount: 0,
-            });
-            if (!queueResult.queued) {
-              deepForecast = {
-                ...deepForecast,
-                status: queueResult.reason === 'duplicate' ? 'queued' : 'failed',
-                failureReason: queueResult.reason === 'duplicate' ? '' : (queueResult.reason || 'queue_failed'),
-              };
-            }
-          } else {
-            deepForecast = {
-              ...deepForecast,
-              status: 'failed',
-              failureReason: 'snapshot_write_failed',
-            };
-          }
-        } else if (!snapshotWrite?.snapshotKey) {
-          console.warn('  [DeepForecast] Snapshot write skipped or failed; replay will not be available for this run');
-        }
-        console.log('  [Trace] Starting R2 export...');
-        const pointer = await writeForecastTraceArtifacts({
-          ...data,
-          triggerContext,
-          forecastDepth: 'fast',
-          deepForecast,
-          runStatusContext: {
-            status: deepForecast.status,
-            stage: 'fast_published',
-            progressPercent: 100,
-            completedAt: deepForecast.completedAt || '',
-            failureReason: deepForecast.failureReason || '',
-          },
-        }, { runId });
-        if (pointer) {
-          console.log(`  [Trace] Written: ${pointer.summaryKey} (${pointer.tracedForecastCount} forecasts)`);
-        } else {
-          console.log('  [Trace] Skipped: R2 storage not configured');
-        }
-      } catch (err) {
-        console.warn(`  [Trace] Export failed: ${err.message}`);
-        if (err.stack) console.warn(`  [Trace] Stack: ${err.stack.split('\n').slice(0, 3).join(' | ')}`);
-      }
-    },
+    afterPublish: (data, meta) => runForecastAfterPublish(data, meta, triggerContext),
     extraKeys: FORECAST_EXTRA_KEYS,
   });
 }
@@ -19323,6 +19676,12 @@ async function runSimulationWorker({ once = false, runId = '' } = {}) {
 }
 
 export {
+  CALIBRATION_PUBLICATION_KEY,
+  resolveCalibrationRun,
+  runForecastAfterPublish,
+  scoreDetectedPredictions,
+  resolveCalibrationPublication,
+  writeCalibrationPublication,
   CANONICAL_KEY,
   DASHBOARD_KEY,
   PRIOR_KEY,
@@ -19396,6 +19755,7 @@ export {
   rankForecastsForAnalysis,
   selectPublishedForecastPool,
   selectDeferredForecastForPublishBackfill,
+  markDeferredFamilySelection,
   buildPublishedForecastArtifacts,
   filterPublishedForecasts,
   applySituationFamilyCaps,
@@ -19424,6 +19784,7 @@ export {
   getMacroRegion,
   attachSituationContext,
   projectSituationClusters,
+  computeSituationSimilarity,
   refreshPublishedNarratives,
   loadCascadeRules,
   evaluateRuleConditions,
@@ -19434,6 +19795,7 @@ export {
   normalizeChokepoints,
   normalizeGpsJamming,
   deriveStateDrivenForecasts,
+  getStateDerivedAllowedBuckets,
   detectUcdpConflictZones,
   detectCyberScenarios,
   detectGpsJammingScenarios,
@@ -19555,6 +19917,7 @@ export {
   callForecastLLM,
   __setForecastLlmRunDeadlineForTests,
   __setRedisStoreForTests,
+  runExtractionGateShadow,
   buildMarketImplicationsFingerprint,
   buildAndSeedMarketImplications,
 };

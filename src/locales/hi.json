@@ -85,7 +85,7 @@
     "predictionMarkets": "पूर्वानुमान बाजार",
     "loadingMarkets": "पूर्वानुमान बाजार लोड कर रहे हैं...",
     "infrastructure": "बुनियादी ढांचे का प्रदर्शन",
-    "briefUnavailable": "AI ब्रीफ उपलब्ध नहीं — सेटिंग्स में GROQ_API_KEY सेट करें।",
+    "briefUnavailable": "AI ब्रीफ उपलब्ध नहीं — सेटिंग्स में OPENROUTER_API_KEY सेट करें।",
     "cached": "कैश किए गए",
     "fresh": "ताजा",
     "noMarkets": "इस देश के लिए कोई सक्रिय बाजार नहीं।",
@@ -145,6 +145,7 @@
       "suppliers": "Arms suppliers ({{start}}–{{end}})",
       "source": "Sources: World Bank and SIPRI Arms Transfers Database. TIV measures transfer volume, not financial value.",
       "sourceWorldBank": "Source: World Bank.",
+      "snapshotAssembled": "{{source}} का डेटा स्नैपशॉट {{time}} को संकलित किया गया",
       "unavailable": "Not available",
       "coverage": "Mapped coverage",
       "supplierRetained": "Supplier data retained from the last successful importer refresh."
@@ -184,11 +185,13 @@
       "doNotTravel": "यात्रा न करें",
       "reconsiderTravel": "यात्रा पर पुनर्विचार करें",
       "exerciseCaution": "सावधानी बरतें",
+      "normalPrecautions": "सामान्य सावधानियाँ",
       "advisory": "सलाह",
       "activeSirens": "सक्रिय सायरन",
       "sirens24h": "सायरन / 24 घंटे",
       "aviationDisruptions": "हवाई मार्ग विघ्न",
-      "gpsJammingZones": "जीपीएस जामिंग क्षेत्र"
+      "gpsJammingZones": "जीपीएस जामिंग क्षेत्र",
+      "temporalUnavailable": "अस्थायी प्रेक्षण उपलब्ध नहीं"
     },
     "fallback": {
       "instabilityIndex": "**अस्थिरता सूचकांक: {{score}}/100** ({{level}}, {{trend}})",
@@ -261,7 +264,7 @@
       "decisionSignalsUnavailable": "चीन का निर्णय-संकेत स्नैपशॉट वर्तमान में अनुपलब्ध है।"
     },
     "foodStocks": "Food stocks",
-    "foodStocksHelp": "USDA PSD commodity stocks-to-use by marketing year, with the world ratio alongside for context. FAOSTAT fills production only where PSD has no country coverage.",
+    "foodStocksHelp": "USDA PSD commodity stocks-to-use by marketing year, with the world ratio alongside for context. FAOSTAT Food Balances supplies production and domestic supply when PSD has no complete country balance.",
     "loadingFoodStocks": "Loading food stocks…",
     "foodStocksUnavailable": "Food stocks unavailable.",
     "foodStocksProLocked": "Upgrade to PRO for commodity stocks-to-use",
@@ -301,6 +304,71 @@
       "manufacturingShare": "Manufacturing employment",
       "source": "Sources: {{sources}}.",
       "retained": "{{stage}} data retained from the last successful refresh."
+    },
+    "fiveFactorScorecard": {
+      "title": "पाँच-कारक लचीलाता स्कोरकार्ड",
+      "help": "खान-पान, ऊर्जा, जनसांख्यिकी, प्रौद्योगिकी और रक्षा के लिए फ्रोज़न v1 प्रमाण स्कोर। इनपुट, स्रोत प्रामाणिकता और डेटा-अनुपलब्धता के कारणों की जाँच करने के लिए एक पंक्ति का विस्तार करें।",
+      "loading": "पाँच-कारक स्कोरकार्ड लोड हो रहा है…",
+      "unavailable": "पाँच-कारक स्कोरकार्ड अनुपलब्ध है।",
+      "proLocked": "पाँच-कारक लचीलाता स्कोरकार्ड के लिए PRO में अपग्रेड करें",
+      "insufficient": "अपर्याप्त डेटा",
+      "notAvailable": "अनुपलब्ध",
+      "noEvidence": "इस स्तंभ के लिए कोई प्रमाण उपलब्ध नहीं है।",
+      "score": "{{score}}/5",
+      "coverage": "{{coverage}}% कवरेज",
+      "methodologyVersion": "पद्धति v{{version}}",
+      "methodologyLink": "पद्धति देखें",
+      "pillars": {
+        "food": "खान-पान",
+        "energy": "ऊर्जा",
+        "demographics": "जनसांख्यिकी",
+        "technology": "प्रौद्योगिकी",
+        "defense": "रक्षा"
+      },
+      "reasons": {
+        "source-unavailable": "स्रोत अनुपलब्ध",
+        "country-unavailable": "देश अनुपलब्ध",
+        "invalid-value": "अमान्य स्रोत मान",
+        "stale": "सूचना पुरानी है",
+        "coverage-below-floor": "स्कोरिंग फ्लोर से कम कवरेज",
+        "required-group-missing": "आवश्यक प्रमाण समूह अनुपलब्ध",
+        "missing-population": "जनसंख्या अनुपलब्ध",
+        "redistribution-blocked": "स्रोत पुनर्वितरण की अनुमति नहीं है",
+        "pillar-unavailable": "स्तंभ अनुपलब्ध"
+      },
+      "inputs": {
+        "population": "Population",
+        "food_productionBalance": "उत्पादन संतुलन",
+        "food_stocksToUse": "उपयोग हेतु स्टॉक",
+        "food_waterSecurity": "जल सुरक्षा",
+        "food_importDiversity": "आयात विविधता",
+        "energy_productionBalance": "उत्पादन संतुलन",
+        "energy_lowCarbonShare": "कम-कार्बन ऊर्जा हिस्सा",
+        "energy_gridEfficiency": "ग्रिड दक्षता",
+        "demographics_totalDependency": "कुल निर्भरता",
+        "demographics_oldAgeDependency": "वृद्धावस्था निर्भरता",
+        "demographics_workingAgeProjection": "कार्यक्षम आयु वर्ग पूर्वानुमान",
+        "demographics_tertiaryEnrollment": "उच्च शिक्षा प्रवेश",
+        "demographics_researchersPerMillion": "प्रति मिलियन शोधकर्ता",
+        "demographics_stemGraduateShare": "STEM स्नातकों का हिस्सा",
+        "demographics_trainedIndustrialShare": "प्रशिक्षित औद्योगिक श्रम बल का हिस्सा",
+        "demographics_manufacturingEmploymentShare": "निर्माण रोजगार का हिस्सा",
+        "technology_internetUse": "इंटरनेट उपयोग",
+        "technology_mobileSubscriptions": "मोबाइल सब्सक्रिप्शन",
+        "technology_fixedBroadband": "फिक्स्ड ब्रॉडबैंड",
+        "technology_rdSpend": "शोध और विकास खर्च",
+        "technology_researchersPerMillion": "प्रति मिलियन शोधकर्ता",
+        "technology_stemGraduateShare": "STEM स्नातकों का हिस्सा",
+        "technology_electricityAccess": "बिजली की सुविधा",
+        "defense_expenditureUsd": "सैन्य व्यय",
+        "defense_expenditurePctGdp": "सैन्य बोझ",
+        "defense_personnel": "सशस्त्र बलों का जनशक्ति",
+        "defense_industrialBalance": "रक्षा औद्योगिक संतुलन",
+        "defense_supplierDiversity": "हथियार आपूर्तिकर्ता विविधता"
+      }
+    },
+    "defenseIndustrialBase": {
+      "proLocked": "हथियार आपूर्तिकर्ता निर्भरता और सैन्य क्षमता के लिए PRO में अपग्रेड करें"
     }
   },
   "header": {
@@ -801,7 +869,7 @@
       "fresh": "ताजा",
       "noMarkets": "कोई अनुमान बाजार नहीं मिला",
       "predictionMarkets": "अनुमान बाजार",
-      "unavailable": "AI सारांश उपलब्ध नहीं — सेटिंग्स में GROQ_API_KEY सेट करें।"
+      "unavailable": "AI सारांश उपलब्ध नहीं — सेटिंग्स में OPENROUTER_API_KEY सेट करें।"
     },
     "countryBrief": {
       "identifying": "देश पहचान रहे हैं...",
@@ -817,7 +885,7 @@
       "predictionMarkets": "अनुमान बाजार",
       "loadingMarkets": "अनुमान बाजार लोड हो रहे हैं...",
       "infrastructure": "इन्फ्रास्ट्रक्चर एक्सपोजर",
-      "briefUnavailable": "AI सारांश उपलब्ध नहीं — सेटिंग्स में GROQ_API_KEY सेट करें।",
+      "briefUnavailable": "AI सारांश उपलब्ध नहीं — सेटिंग्स में OPENROUTER_API_KEY सेट करें।",
       "cached": "कैश हुआ",
       "fresh": "ताजा",
       "noMarkets": "कोई अनुमान बाजार नहीं मिला",
@@ -859,7 +927,6 @@
   "components": {
     "webcams": {
       "paused": "वेबकैम रुके हुए हैं",
-      "pausedIdle": "वेबकैम रुके हुए हैं — फिर से चालू करने के लिए माउस हिलाएँ",
       "regions": {
         "all": "सभी",
         "mideast": "मिडिल ईस्ट",
@@ -869,7 +936,11 @@
         "space": "अंतरिक्ष"
       },
       "play": "चलाएं",
-      "previewStatus": "लाइव पूर्वावलोकन"
+      "previewStatus": "चलाने के लिए तैयार",
+      "connecting": "कनेक्ट हो रहा है…",
+      "unverified": "इस स्ट्रीम के लाइव होने की पुष्टि नहीं की जा सकी",
+      "offline": "{{city}} अभी ऑफलाइन है",
+      "noFeeds": "इस क्षेत्र में अभी कोई लाइव वेबकैम नहीं है"
     },
     "pinnedWebcams": {
       "pinFromMap": "मैप से वेबकैम पिन करें"
@@ -1018,7 +1089,8 @@
       "refineryStage": "Refine",
       "stageUnavailable": "No published figures for this stage",
       "withheldNote": "W withheld",
-      "productionCaption": "Country shares of actual production. The map deposits layer shows where resources sit; this table shows who mines or refines them."
+      "productionCaption": "Country shares of actual production. The map deposits layer shows where resources sit; this table shows who mines or refines them.",
+      "productionProLocked": "खान और रिफाइनरी देश शेयर के लिए PRO में अपग्रेड करें, चरण के अनुसार सांद्रता (HHI) के साथ।"
     },
     "tradePolicy": {
       "overview": "ओवरव्यू",
@@ -1123,7 +1195,7 @@
       "infoTooltip": "<strong>स्टेबलकॉइन</strong> प्रमुख USD-पेग्ड टोकन (USDT, USDC, DAI, BUSD) के पेग स्वास्थ्य, मार्केट कैप, और 24 घंटे वॉल्यूम। टूटा हुआ पेग प्रणालीगत जोखिम का संकेत देता है।"
     },
     "marketImplications": {
-      "infoTooltip": "<strong>एआई मार्केट प्रभाव</strong> लाइव भू-राजनीतिक, कमोडिटी, और मैक्रो स्थिति से प्राप्त LLM-जनित ट्रेड संकेत:<ul><li><strong>दिशा</strong>: LONG / SHORT / HEDGE विश्वास रेटिंग के साथ</li><li><strong>समय सीमा</strong>: 1 सप्ताह, 2 सप्ताह, 1 महीना, या 3 महीने के लिए</li><li><strong>ड्राइवर</strong>: संकेत के पीछे मुख्य कारक</li><li><strong>जोखिम</strong>: चेतावनी या अमान्यता की स्थिति</li></ul><em>केवल जानकारी के लिए। निवेश सलाह नहीं।</em>",
+      "infoTooltip": "<strong>एआई मार्केट प्रभाव</strong> लाइव भू-राजनीतिक, कमोडिटी, और मैक्रो स्थिति से प्राप्त LLM-जनित ट्रेड संकेत:<ul><li><strong>दिशा</strong>: LONG / SHORT / HEDGE</li><li><strong>समय सीमा</strong>: 1 सप्ताह, 2 सप्ताह, 1 महीना, या 3 महीने के लिए</li><li><strong>ड्राइवर</strong>: संकेत के पीछे मुख्य कारक</li><li><strong>जोखिम</strong>: चेतावनी या अमान्यता की स्थिति</li></ul><em>केवल जानकारी के लिए। निवेश सलाह नहीं।</em>",
       "title": "एआई मार्केट प्रभाव",
       "directions": {
         "long": "लॉन्ग",
@@ -1136,7 +1208,8 @@
       "signals_one": "{{count}} संकेत",
       "signals_other": "{{count}} संकेत",
       "disclaimer": "एआई-जनित ट्रेड संकेत केवल जानकारी के लिए हैं। निवेश सलाह नहीं। हमेशा अपनी खुद की जांच करें।",
-      "unavailable": "एआई मार्केट प्रभाव प्रत्येक पूर्वानुमान चक्र के बाद उत्पन्न होते हैं। कृपया बाद में देखें।"
+      "unavailable": "एआई मार्केट प्रभाव प्रत्येक पूर्वानुमान चक्र के बाद उत्पन्न होते हैं। कृपया बाद में देखें।",
+      "unscored": "कथात्मक परिदृश्य, सटीकता के लिए मूल्यांकित नहीं।"
     },
     "status": {
       "updatedAt": "अपडेट हुआ {{time}}"
@@ -1152,10 +1225,18 @@
       "skipToEnd": "अंत पर जाएं"
     },
     "pizzint": {
+      "indexSource": "सूचकांक: World Monitor · स्थल डेटा:",
+      "statusNormal": "सामान्य",
+      "statusNoData": "डेटा नहीं",
+      "statusNoBaseline": "आधार नहीं",
+      "vsUsual": "सामान्य की तुलना में",
       "title": "पेंटागन पिज़्ज़ा इंडेक्स",
       "defcon": "डिफकॉन {{level}}",
       "updated": "{{timeAgo}} पहले अपडेट हुआ",
       "tensionsTitle": "भू-राजनीतिक तनाव",
+      "tensionsSource": "तनाव: GDELT घटनाओं पर आधारित World Monitor",
+      "insufficientData": "अपर्याप्त डेटा",
+      "pizzaUnavailable": "पिज़्ज़ा दुकानों की गतिविधि उपलब्ध नहीं है",
       "source": "स्रोत:",
       "statusClosed": "बंद",
       "statusSpike": "स्पाइक",
@@ -1167,11 +1248,11 @@
       "minutesAgo": "{{m}} मिनट पहले",
       "hoursAgo": "{{h}} घंटे पहले",
       "defconLabels": {
-        "1": "COCKED PISTOL - अधिकतम तत्परता",
-        "2": "FAST PACE - सेना तैयार",
-        "3": "ROUND HOUSE - बल तत्परता बढ़ाना",
-        "4": "DOUBLE TAKE - बढ़ी हुई खुफिया सतर्कता",
-        "5": "FADE OUT - न्यूनतम तत्परता"
+        "1": "अधिकतम गतिविधि",
+        "2": "उच्च गतिविधि",
+        "3": "बढ़ी हुई गतिविधि",
+        "4": "सामान्य से ऊपर",
+        "5": "सामान्य गतिविधि"
       }
     },
     "strategicPosture": {
@@ -1252,9 +1333,6 @@
       "datacenter": "डेटा केंद्र",
       "base": "बेस",
       "nuclear": "परमाणु"
-    },
-    "community": {
-      "joinDiscussion": "आगे क्या होगा में मदद करें"
     },
     "threatLabels": {
       "critical": "गंभीर",
@@ -1495,7 +1573,7 @@
       "rankingStories": "महत्वपूर्ण कहानियों को रैंक कर रहे हैं...",
       "analyzingSentiment": "भावना विश्लेषण...",
       "generatingBrief": "विश्व संक्षेप बना रहे हैं...",
-      "infoTooltip": "<strong>एआई-चालित विश्लेषण</strong><br>• <strong>विश्व संक्षेप</strong>: AI सारांश (Groq/OpenRouter)<br>• <strong>भावना</strong>: समाचार टोन विश्लेषण<br>• <strong>गति</strong>: तेजी से बढ़ती कहानियाँ<br>• <strong>फोकल पॉइंट्स</strong>: समाचार एंटिटीज को मानचित्र संकेतों से जोड़ना (सैन्य, प्रदर्शन, व्यवधान)<br><em>केवल डेस्कटॉप · Llama 3.3 + फोकल पॉइंट डिटेक्शन से समर्थित</em>",
+      "infoTooltip": "<strong>एआई-चालित विश्लेषण</strong><br>• <strong>विश्व संक्षेप</strong>: AI सारांश (OpenRouter)<br>• <strong>भावना</strong>: समाचार टोन विश्लेषण<br>• <strong>गति</strong>: तेजी से बढ़ती कहानियाँ<br>• <strong>फोकल पॉइंट्स</strong>: समाचार एंटिटीज को मानचित्र संकेतों से जोड़ना (सैन्य, प्रदर्शन, व्यवधान)<br><em>केवल डेस्कटॉप · Llama 3.3 + फोकल पॉइंट डिटेक्शन से समर्थित</em>",
       "streamQualityLabel": "वीडियो गुणवत्ता",
       "streamQualityDesc": "सभी लाइव स्ट्रीम के लिए गुणवत्ता सेट करें (नीची गुणवत्ता बैंडविड्थ बचाती है)",
       "globeRenderScaleOptions": {
@@ -1507,7 +1585,7 @@
       },
       "mapFlashLabel": "लाइव इवेंट पल्स",
       "mapFlashDesc": "ब्रेकिंग न्यूज आने पर मानचित्र पर स्थान चमकाएं",
-      "aiFlowCloudLabel": "क्लाउड एआई (Groq & OpenRouter)",
+      "aiFlowCloudLabel": "क्लाउड एआई (OpenRouter)",
       "aiFlowCloudDesc": "शीर्षक क्लाउड में भेजें AI सारांश के लिए (सिफारिश की गई)",
       "aiFlowBrowserLabel": "ब्राउज़र लोकल मॉडल",
       "aiFlowBrowserDesc": "अपने ब्राउज़र में AI चलाएं",
@@ -1565,7 +1643,10 @@
       "provenanceTitle": "कवरेज प्रोवेनेंस: इस ब्रीफ को कितनी अंतर्ग्रहीत कहानियों और विशिष्ट स्रोतों से चुना गया था",
       "compiledFrom": "{{stories}} कहानियों और {{sources}} स्रोतों से संकलित",
       "briefFreshness": "{{minutes}}m पहले जनरेट किया गया · नवीनतम स्रोत {{hours}}h पुराना",
-      "briefStoryDetails": "Story details ({{count}})"
+      "briefStoryDetails": "खबर का विवरण ({{count}})",
+      "streamIdleStopLabel": "निष्क्रियता पर लाइव वीडियो रोकें",
+      "streamIdleStopDesc": "निष्क्रियता की इस अवधि के बाद लाइव न्यूज़ और लाइव वेबकैम को रोक देता है और पैनल में एक नोटिस दिखाता है।",
+      "streamIdleStopNever": "कभी नहीं"
     },
     "settings": {
       "exportSettings": "सेटिंग्स निर्यात करें",
@@ -1894,6 +1975,16 @@
       "loading": "टेलीग्राम रिले से जुड़ रहे हैं...",
       "empty": "कोई संदेश उपलब्ध नहीं",
       "disabled": "टेलीग्राम रिले सक्रिय नहीं है",
+      "watchlistPlaceholder": "@username से सार्वजनिक चैनल जोड़ें",
+      "resolving": "चैनल खोजा जा रहा है...",
+      "invalidUsername": "सार्वजनिक टेलीग्राम @username का उपयोग करें",
+      "resolveFailed": "चैनल नहीं मिला",
+      "watchlistLimit": "आप अधिकतम {{count}} कस्टम चैनल फ़ॉलो कर सकते हैं",
+      "previewMembers": "{{count}} सदस्य",
+      "addChannel": "चैनल जोड़ें",
+      "added": "जोड़ा गया",
+      "remove": "हटाएँ",
+      "custom": "कस्टम",
       "filterAll": "सभी",
       "filterBreaking": "ब्रेकिंग",
       "filterConflict": "संघर्ष",
@@ -1967,6 +2058,7 @@
       "etfs": "ETF",
       "netInflow": "नेट इनफ्लो",
       "netOutflow": "नेट आउटफ्लो",
+      "netNeutral": "नेट तटस्थ",
       "table": {
         "ticker": "टिकर",
         "issuer": "इश्युअर",
@@ -1995,7 +2087,60 @@
       "infoTooltip": "<strong>BTC शासन</strong> बिटकॉइन स्थिति और जोखिम भूख का संयोजन संकेत:<ul><li><strong>तरलता</strong>: नेट Fed तरलता संकेत</li><li><strong>प्रवाह</strong>: BTC बनाम QQQ 5-दिन रिटर्न</li><li><strong>शासन</strong>: QQQ बनाम XLP रोटेशन (जोखिम ऑन/ऑफ)</li><li><strong>BTC रुझान</strong>: कीमत बनाम SMA50/200, मेयर मल्टीपल</li><li><strong>हैश रेट</strong>: 30-दिन नेटवर्क हैश परिवर्तन</li><li><strong>भय और लालच</strong>: बाजार भावना सूचकांक</li></ul>यह पैनल शासन और स्थिति के लिए है, व्यापक मैक्रो डेटा नहीं।"
     },
     "forecast": {
-      "infoTooltip": "<strong>एआई पूर्वानुमान</strong> भू-राजनीतिक और आर्थिक घटनाओं के लिए AI-जनित संभावना अनुमान:<ul><li>क्रॉस-डोमेन कवरेज: संघर्ष, बाजार, सप्लाई चेन, साइबर, राजनीतिक</li><li>प्रत्येक पूर्वानुमान में अनुमानित संभावना, विश्वास स्तर, और समय सीमा दिखाता है</li><li>जहाँ उपलब्ध हो वहाँ पूर्वानुमान बाजार आधार रेखा के साथ कैलिब्रेटेड</li></ul>नई इंटेलिजेंस संकेतों के साथ अपडेट होता रहता है। ऊपर टैब से डोमेन से फ़िल्टर करें।"
+      "infoTooltip": "<strong>एआई पूर्वानुमान</strong> भू-राजनीतिक और आर्थिक घटनाओं के लिए AI-जनित संभावना अनुमान:<ul><li>क्रॉस-डोमेन कवरेज: संघर्ष, बाजार, सप्लाई चेन, साइबर, राजनीतिक</li><li>प्रत्येक पूर्वानुमान में अनुमानित संभावना, विश्वास स्तर, और समय सीमा दिखाता है</li><li>जहाँ उपलब्ध हो वहाँ पूर्वानुमान बाजार आधार रेखा के साथ कैलिब्रेटेड</li></ul>नई इंटेलिजेंस संकेतों के साथ अपडेट होता रहता है। ऊपर टैब से डोमेन से फ़िल्टर करें।",
+      "record": {
+        "label": "ट्रैक रिकॉर्ड",
+        "labelHint": "पिछले {{days}} दिनों में प्रकाशित पूर्वानुमानों ने परिणाम तय होने के बाद कैसा स्कोर किया। किसी संख्या का अर्थ देखने के लिए उस पर कर्सर रखें।",
+        "unavailable": "अभी उपलब्ध नहीं",
+        "insufficient": "अभी पर्याप्त ग्रेड किए गए पूर्वानुमान नहीं हैं",
+        "brier": "ब्रायर स्कोर {{score}} (n={{n}})",
+        "brierHint": "{{n}} ग्रेड किए गए पूर्वानुमानों पर ब्रायर स्कोर: पूर्वानुमानित संभावना और वास्तविक परिणाम के अंतर के वर्ग का औसत। 0 सही है, 0.25 सिक्का उछालने जैसा है, कम बेहतर है।",
+        "baseRate": "आधार दर {{score}} (n={{n}})",
+        "baseRateHint": "इन्हीं {{n}} पूर्वानुमानों पर हमेशा देखी गई 'हाँ' दर का उत्तर देने वाले को क्या स्कोर मिलता ({{pct}}% का परिणाम 'हाँ' रहा)। इससे बेहतर होने का मतलब है कि पूर्वानुमान जानकारी जोड़ते हैं।",
+        "void": "रद्द {{pct}}% ({{resolved}} में से {{count}})",
+        "voidHint": "ऐसे पूर्वानुमान जिनका परिणाम तय हुआ पर ग्रेड नहीं किए जा सके, इस अवधि में तय हुए {{resolved}} में से।",
+        "stale": "पुराना",
+        "staleHint": "अंतिम ग्रेडिंग {{date}} को। तब से ग्रेडर नहीं चला है, इसलिए ये आंकड़े जितने होने चाहिए उससे पुराने हैं।",
+        "fullRecord": "पूरा रिकॉर्ड"
+      },
+      "reliability": {
+        "measured": "{{domain}} n={{n}} · Brier {{score}} बनाम आधार दर {{base}}",
+        "measuredHint": "{{n}} ग्रेडेड पूर्वानुमानों पर पिछले {{days}} दिनों में प्रकाशित {{domain}} पूर्वानुमान कैसे स्कोर किए गए हैं। आधार दर वह है जो डोमेन की देखी गई हां दर का हमेशा उत्तर देने से स्कोर होता। कम बेहतर है। यह डोमेन का रिकॉर्ड है, इस पूर्वानुमान का नहीं।",
+        "unmeasured": "अभी तक मापा नहीं गया",
+        "unmeasuredHint": "{{domain}} पूर्वानुमानों के पास पिछले {{days}} दिनों में {{n}} ग्रेडेड परिणाम हैं। किसी डोमेन को अपनी सटीकता दिखाने से पहले {{min}} की आवश्यकता है।"
+      },
+      "resolution": {
+        "last": "अंतिम: {{outcome}}",
+        "lastSr": "इस पूर्वानुमान की पिछली विंडो {{outcome}} के रूप में निर्धारित हुई।",
+        "history": "हाल की विंडोएँ, नवीनतम पहले: {{list}}",
+        "outcome": {
+          "yes": "हाँ",
+          "no": "नहीं",
+          "void": "अमान्य"
+        },
+        "void": {
+          "no_establishable_metric": "फीड के पास इस प्रश्न के लिए कोई रीडिंग नहीं थी",
+          "value_source_never_settled": "फीड ने कभी कोई निर्धारित मान प्रकाशित नहीं किया",
+          "count_source_window_not_retained": "फीड ने अब प्रश्न विंडो को बरकरार नहीं रखा था",
+          "unsupported_window": "प्रश्न को अपने फीड के विरुद्ध जाँचा नहीं जा सका",
+          "unsupported_metric_key": "प्रश्न को अपने फीड के विरुद्ध जाँचा नहीं जा सका",
+          "not_hard_spec": "प्रश्न को अपने फीड के विरुद्ध जाँचा नहीं जा सका",
+          "missing_threshold": "प्रश्न में सीमा नहीं थी",
+          "missing_deadline": "प्रश्न में समय सीमा नहीं थी",
+          "missing_generated_at": "पूर्वानुमान में प्रारंभ तिथि नहीं थी",
+          "beyond_archive_horizon": "समाचार संग्रह अब प्रश्न विंडो को कवर नहीं करता था",
+          "no_archive_evidence": "समाचार संग्रह के पास विषय पर कुछ नहीं था",
+          "all_judges_void": "दोनों न्यायाधीशों को साक्ष्य अपर्याप्त लगा",
+          "judge_disagreement": "न्यायाधीशों में असहमति थी",
+          "judge_retry_exhausted": "न्यायाधीशों ने कोई निर्णय नहीं दिया",
+          "withheld_unpublished": "इस प्रकार का पूर्वानुमान अब प्रकाशित नहीं होता",
+          "other": "निर्धारित नहीं किया जा सका"
+        }
+      },
+      "horizons": {
+        "label": "इसके अलावा स्कोर किया गया: {{list}}",
+        "hint": "हेडलाइन संभावना पूर्वानुमान के अपने क्षितिज पर ग्रेड की जाती है। प्रत्येक इन क्षितिज पर प्रक्षेपण भी ग्रेड किया जाता है, इसके स्रोत फीड के विरुद्ध, इस पूर्वानुमान के लिए पहली बार प्रकाशित मान का उपयोग करके। प्रक्षेपण मान प्रदर्शित नहीं हैं क्योंकि वर्तमान मान ग्रेड किए गए मान से भिन्न हो सकता है।"
+      }
     },
     "escalationCorrelation": {
       "infoTooltip": "<strong>एस्केलेशन मॉनिटर</strong> संगम भू-राजनीतिक संकेतों का पता लगाता है:<ul><li>सैन्य गतिविधि, संघर्ष घटनाएं, और खबरों में वृद्धि का संगतता</li><li>गंभीरता के अनुसार संगम क्षेत्र का स्कोर (गंभीर/उच्च/मध्यम/निम्न)</li><li>समय के साथ एस्केलेशन या कमी के रुझान को ट्रैक करता है</li></ul>क्षेत्र पर ज़ूम करने के लिए कार्ड क्लिक करें।"
@@ -2041,6 +2186,22 @@
       "metals": {
         "gold": "Gold",
         "silver": "Silver"
+      },
+      "divergence": {
+        "compositeValue": "भौतिक तनाव सूचकांक: {{value}} / 100",
+        "fiveDayTrend": "पाँच-कारोबारी-दिन प्रीमियम प्रवृत्ति",
+        "regimes": {
+          "normal": "सामान्य",
+          "elevated": "उन्नत",
+          "stressed": "दबाव में",
+          "extreme": "अत्यंत"
+        },
+        "states": {
+          "insufficientHistory": "तैयारी में: {{count}} / {{required}} कारोबारी बिंदु",
+          "staleInput": "भौतिक बेंचमार्क पुराना है",
+          "missingInput": "विचलन संकेत उपलब्ध नहीं"
+        },
+        "twentyDayTrend": "बीस कारोबारी दिन का प्रीमियम प्रवृत्ति"
       }
     },
     "crypto": {
@@ -2158,15 +2319,11 @@
     },
     "liveNews": {
       "notLive": "{{name}} फिलहाल लाइव नहीं है",
-      "cannotEmbed": "{{name}} यहाँ नहीं चलाया जा सकता — क्षेत्र में प्रतिबंधित हो सकता है (त्रुटि {{code}})",
-      "botCheck": "YouTube {{name}} चलाने के लिए साइन-इन मांग रहा है",
       "signInToYouTube": "YouTube में साइन-इन करें",
       "openOnYouTube": "YouTube पर खोलें",
       "manage": "चैनल प्रबंधित करें",
       "addChannel": "चैनल जोड़ें",
       "remove": "हटाएं",
-      "youtubeHandle": "YouTube हैंडल (जैसे @Channel)",
-      "youtubeHandleOrUrl": "YouTube हैंडल या URL",
       "displayName": "डिस्प्ले नाम (वैकल्पिक)",
       "channelSettings": "चैनल सेटिंग्स",
       "save": "सहेजें",
@@ -2182,12 +2339,24 @@
       "regionMiddleEast": "मध्य पूर्व",
       "regionAfrica": "अफ्रीका",
       "regionOceania": "ओशिनिया",
-      "invalidHandle": "सही YouTube हैंडल दर्ज करें (जैसे @ChannelName)",
       "verifying": "सत्यापित कर रहे हैं…",
       "hlsUrl": "HLS स्ट्रीम URL (वैकल्पिक)",
       "invalidHlsUrl": "वैध HLS स्ट्रीम URL दर्ज करें (.m3u8)",
       "playLiveFeed": "लाइव फ़ीड चलाएं",
-      "readyStatus": "आप तैयार हों तो तैयार"
+      "readyStatus": "आप तैयार हों तो तैयार",
+      "embedBlocked": "YouTube अभी {{name}} को अन्य साइटों के अंदर चलाना नहीं चाहता",
+      "unavailable": "{{name}} को अभी चलाया नहीं जा सकता",
+      "noStream": "{{name}} के लिए अभी कोई लाइव स्ट्रीम सेट अप नहीं की गई है",
+      "needsChannelUrl": "{{name}} को फिर से इसके चैनल URL (youtube.com/channel/UC…) या लाइव वीडियो URL के साथ जोड़ें",
+      "insecureStream": "{{name}} एक असुरक्षित (http) स्ट्रीम का उपयोग करता है, जिसे ब्राउज़र ब्लॉक करते हैं। इसे एक सुरक्षित (https) स्ट्रीम URL के साथ फिर से जोड़ें",
+      "connecting": "{{name}} से कनेक्ट हो रहे हैं…",
+      "recording": "रिकॉर्डिंग",
+      "unverified": "इस स्ट्रीम के लाइव होने की पुष्टि नहीं की जा सकी",
+      "playNextChannel": "अगला चैनल चलाएं",
+      "channelOrVideoUrl": "YouTube चैनल या वीडियो URL",
+      "channelUrlHint": "चैनल URL (youtube.com/channel/UC…) या लाइव वीडियो URL पेस्ट करें",
+      "youtubeChannel": "YouTube चैनल",
+      "httpsStreamHint": "ब्राउज़र असुरक्षित (http) स्ट्रीम ब्लॉक करते हैं। एक सुरक्षित (https) स्ट्रीम URL पेस्ट करें"
     },
     "map": {
       "showMap": "मानचित्र दिखाएं",
@@ -2287,7 +2456,7 @@
       "infoTooltip": "<strong>आर्थिक कैलेंडर</strong> निर्धारित मैक्रोइकॉनॉमिक रिलीज: CPI, NFP, GDP, PMI, और केंद्रीय बैंक निर्णय। पूर्वानुमान बनाम वास्तविक बनाम पिछला दिखाता है। प्रभावी घटनाएं हाइलाइट। स्रोत: आर्थिक डेटा प्रदाता।"
     },
     "fsi": {
-      "infoTooltip": "<strong>वित्तीय तनाव संकेतक</strong> कनसास सिटी फेड फाइनेंशियल स्ट्रेस इंडेक्स (KCFSI): अमेरिकी वित्तीय बाजारों में तनाव मापता है 11 संकेतकों से, जैसे यील्ड स्प्रेड, अस्थिरता, और क्रॉस-कोरिलेशंस। सकारात्मक मान औसत से ऊपर तनाव दिखाते हैं। स्रोत: फेडरल रिजर्व बैंक ऑफ कनसास सिटी।",
+      "infoTooltip": "<strong>वित्तीय तनाव संकेतक</strong> उच्च-प्रतिफल ऋण और दीर्घकालिक अमेरिकी ट्रेजरी के बीच WorldMonitor अनुपात, जिसे इक्विटी अस्थिरता और उच्च-प्रतिफल स्प्रेड के लिए समायोजित किया गया है: (HYG / TLT) / (VIX × HY spread / 100)। यह कैनसस सिटी फेड वित्तीय तनाव सूचकांक नहीं है। 1.5 या अधिक का मान कम तनाव दर्शाता है; 0.3 से नीचे उच्च तनाव दर्शाता है।",
       "title": "वित्तीय तनाव संकेतक",
       "usFsiValue": "US FSI मान",
       "cissTitle": "EU CISS (यूरो क्षेत्र प्रणालीगत तनाव)",
@@ -2327,6 +2496,26 @@
         "unavailable": "FSI डेटा उपलब्ध नहीं",
         "failedToLoad": "लोड करने में विफल"
       }
+    },
+    "supplyVulnerability": {
+      "title": "वस्तु संवेदनशीलता",
+      "help": "आपूर्तिकर्ता संकेंद्रण, समुद्री पारगमन और उपलब्ध रणनीतिक भंडार के आधार पर वस्तु-वार देश का जोखिम।",
+      "loading": "वस्तु संवेदनशीलता लोड हो रही है…",
+      "unavailable": "वस्तु संवेदनशीलता डेटा उपलब्ध नहीं है",
+      "noCoverage": "इस देश के लिए पर्याप्त साक्ष्य नहीं हैं",
+      "unknown": "अज्ञात",
+      "concentration": "संकेंद्रण",
+      "transit": "पारगमन",
+      "buffer": "भंडार",
+      "sources": "स्रोत",
+      "methodology": "कार्यप्रणाली",
+      "hormuzTitle": "वस्तु निर्भरताएँ",
+      "dependentCountries": "निर्भर देश",
+      "dependentCommodities": "निर्भर वस्तुएँ",
+      "stateOk": "वर्तमान",
+      "stateStale": "पुराना इनपुट",
+      "stateInsufficient": "अपर्याप्त डेटा",
+      "proLocked": "वस्तु कमजोरी स्कोरिंग के लिए PRO में अपग्रेड करें"
     },
     "hormuzTracker": {
       "infoTooltip": "<strong>हर्मुज व्यापार ट्रैकर</strong> हर्मुज स्ट्रेट के माध्यम से लाइव AIS जहाज ट्रैकिंग, विश्व का सबसे महत्वपूर्ण तेल चोकपॉइंट। टैंकर गिनती, व्यवधान घटनाएं, और साप्ताहिक प्रवाह परिवर्तन मॉनिटर करता है। लगभग 20% वैश्विक तेल दैनिक यहां से गुजरता है।",
@@ -2584,7 +2773,14 @@
       "signals_one": "{{count}} संकेत",
       "signals_other": "{{count}} संकेत",
       "analyzing": "विश्लेषण कर रहे हैं...",
-      "viewOnMap": "मानचित्र पर देखें"
+      "viewOnMap": "मानचित्र पर देखें",
+      "waiting": "डेटा के अगले अपडेट की प्रतीक्षा है। यह पैनल अपने आप अपडेट होता है।",
+      "offline": "कनेक्शन की प्रतीक्षा है। आपके फिर से ऑनलाइन होने पर यह पैनल अपने आप अपडेट होगा।",
+      "updated": "अपडेट किया गया {{time}}",
+      "saved": "अंतिम ज्ञात अपडेट {{time}} · अपडेट की जाँच जारी है",
+      "savedOffline": "अंतिम ज्ञात अपडेट {{time}} · ऑफ़लाइन",
+      "localSignals": "डैशबोर्ड में लोड किए गए संकेतों पर आधारित",
+      "emptySaved": "अंतिम ज्ञात अपडेट में कोई अभिसरण नहीं था।"
     },
     "thermalEscalation": {
       "title": "थर्मल बढ़ोतरी",
@@ -2734,6 +2930,68 @@
       "rubBase": "बैंक ऑफ रूस — प्रति 1 इकाई रूबल",
       "rubPerUnit": "प्रति इकाई रूबल",
       "sourceCbr": "स्रोत: बैंक ऑफ रूस"
+    },
+    "passkeyOffer": {
+      "title": "एक पासकी सेव करें?",
+      "body": "अगली बार अपने फिंगरप्रिंट, चेहरे या डिवाइस PIN से साइन इन करें — याद रखने के लिए कोई पासवर्ड नहीं।",
+      "accept": "पासकी सेव करें",
+      "dismiss": "अभी नहीं",
+      "close": "बंद करें",
+      "announce": "अगली बार तेजी से साइन इन करने के लिए एक पासकी सेव करें।",
+      "busy": "आपके डिवाइस की प्रतीक्षा की जा रही है…",
+      "succeeded": "पासकी सेव हो गई। आप इसे अगली बार साइन इन करते समय उपयोग कर सकते हैं।",
+      "retryable": "वह पूरी नहीं हुई। आप फिर से कोशिश कर सकते हैं।",
+      "failed": "हम इस डिवाइस पर एक पासकी सेव नहीं कर सके।"
+    },
+    "decisionBrief": {
+      "commodityTitle": "वस्तु निर्णय सारांश",
+      "commodity": "वस्तु / उत्पाद",
+      "blockedChokepoint": "अवरुद्ध माना गया मार्ग",
+      "commodityCapture": "वस्तु तुलना दर्ज करें",
+      "title": "निर्णय सारांश",
+      "fuel": "ईंधन",
+      "chokepoint": "अवरोध बिंदु",
+      "baseline": "आधारभूत व्यवधान",
+      "comparison": "तुलनात्मक व्यवधान",
+      "capture": "दोनों प्राप्त / रीफ़्रेश करें",
+      "downloadHtml": "सारांश HTML में डाउनलोड करें",
+      "downloadJson": "सारांश JSON में डाउनलोड करें",
+      "back": "← देश सारांश पर वापस जाएँ",
+      "select": "ऊर्जा आपूर्ति में व्यवधान चुनें, फिर दोनों परिदृश्य प्राप्त करें।",
+      "changed": "चयन बदल गया है। निर्यात से पहले दोनों परिदृश्य प्राप्त करें।",
+      "loading": "दोनों परिदृश्य प्राप्त किए जा रहे हैं…",
+      "captured": "प्राप्त हो गया। डाउनलोड करने से पहले अवलोकन की तारीखें और सीमाएँ जाँचें।",
+      "failed": "परिदृश्य प्राप्त नहीं हो सके। अपनी पहुँच जाँचें और फिर कोशिश करें। निर्यात के लिए कोई परिणाम उपलब्ध नहीं है।",
+      "locked": "निर्णय सारांश Pro में उपलब्ध है।"
+    },
+    "liveMedia": {
+      "idleStatus": "निष्क्रियता के कारण रुका हुआ",
+      "idleBody": "माउस, कीबोर्ड या टच गतिविधि के बिना {{duration}} के बाद लाइव वीडियो रुक गया।",
+      "idleResume": "फिर से शुरू करें",
+      "idleKeepPlaying": "निष्क्रियता में चलाते रहें",
+      "idleSettingsHint": "सेटिंग्स › मीडिया में कभी भी यह बदलें।",
+      "idleKeepPlayingToast": "लाइव वीडियो निष्क्रियता के दौरान भी चलता रहेगा। इसे सेटिंग्स › मीडिया में कभी भी बदलें।"
+    },
+    "corroboration": {
+      "singlePublisher": "एक प्रकाशक",
+      "singlePublisherHint": "अभी केवल एक प्रकाशक इसकी रिपोर्टिंग कर रहा है। यह कवरेज का वर्णन करता है, सटीकता का नहीं।",
+      "tier4Only": "निम्न-स्तर के स्रोत ही",
+      "tier4OnlyHint": "इसकी रिपोर्टिंग करने वाला हर आउटलेट एक tier-4 स्रोत है (एकत्रकर्ता और ब्लॉग)। यह कवरेज का वर्णन करता है, सटीकता का नहीं।",
+      "rosterListed": "({{listed}} सूचीबद्ध)",
+      "rosterFeeds": "देखे गए फीड: {{labels}}",
+      "rosterLegend": "स्तर स्रोतों को श्रेणीबद्ध करते हैं; वे इस दावे का निर्णय नहीं करते।",
+      "tierDocsLink": "स्तर कैसे निर्धारित किए जाते हैं",
+      "tierChip": "T{{tier}}",
+      "tierChipUndeclared": "T?",
+      "tierTitle1": "स्तर 1: तार सेवाएं और आधिकारिक निकाय",
+      "tierTitle2": "स्तर 2: प्रमुख आउटलेट",
+      "tierTitle3": "स्तर 3: विशेषज्ञ, क्षेत्रीय और थिंक-टैंक स्रोत",
+      "tierTitle4": "स्तर 4: एकीकारक और ब्लॉग",
+      "tierTitleUndeclared": "स्तर घोषित नहीं: अभी तक की समीक्षा नहीं की गई",
+      "rosterSummary": "{{publishers}} द्वारा रिपोर्ट किया गया",
+      "rosterSummaryTier1": "{{publishers}} द्वारा रिपोर्ट किया गया, जिनमें {{tier1}} स्तर-1 शामिल हैं",
+      "rosterPublishers_one": "{{count}} प्रकाशक",
+      "rosterPublishers_other": "{{count}} प्रकाशक"
     }
   },
   "popups": {
@@ -2772,14 +3030,18 @@
     "protest": {
       "acledVerified": "ACLED (पुष्टि किया गया)",
       "gdelt": "GDELT",
+      "records": "रिकॉर्ड",
+      "mediaSignal": "अपुष्ट मीडिया संकेत",
+      "relatedArticle": "संबंधित लेख",
+      "mediaSignalDetail": "अशांति से जुड़े लेखों में इस स्थान का उल्लेख है। स्थानीय घटना की पुष्टि नहीं हुई है।",
       "riots": "दंगे",
       "highSeverity": "उच्च गंभीरता"
     },
     "gpsJamming": {
       "title": "GPS/GNSS व्यवधान",
-      "navPerformance": "नेविगेशन प्रदर्शन",
-      "samples": "ADS-B नमूने",
-      "aircraft": "विमान",
+      "navPerformance": "प्रभावित विमान",
+      "samples": "प्रभावित विमानों की संख्या",
+      "aircraft": "देखे गए विमान",
       "h3Hex": "H3 हेक्स"
     },
     "flight": {
@@ -3217,8 +3479,8 @@
   "signals": {
     "context": {
       "prediction_leads_news": {
-        "whyItMatters": "प्रिडिक्शन मार्केट अक्सर खबर आने से पहले जानकारी को कीमत में शामिल कर लेते हैं—ट्रेडर को नए घटनाक्रम की जल्दी जानकारी हो सकती है।",
-        "actionableInsight": "अगले 1-6 घंटे में ब्रेकिंग न्यूज की निगरानी करें जो बाजार की चाल को समझा सके।",
+        "whyItMatters": "एक भविष्यवाणी बाज़ार में हलचल हुई जबकि इस विषय पर समाचार कवरेज कम रहा—बाज़ार ऐसी जानकारी पर प्रतिक्रिया दे सकता है जो अभी तक रिपोर्ट नहीं हुई है।",
+        "actionableInsight": "बाज़ार की हलचल को समझा सकने वाली ताज़ा ख़बरों पर नज़र रखें।",
         "confidenceNote": "अगर कई प्रिडिक्शन मार्केट्स एक ही दिशा में बढ़ें तो भरोसा ज्यादा होता है।"
       },
       "news_leads_markets": {
@@ -3446,7 +3708,8 @@
   "auth": {
     "signIn": "साइन इन करें",
     "createAccount": "खाता बनाएं",
-    "settings": "सेटिंग्स"
+    "settings": "सेटिंग्स",
+    "passkeyOffer": {}
   },
   "mcp": {
     "connectPanel": "MCP से जुड़ें",

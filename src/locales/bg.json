@@ -16,7 +16,7 @@
     "predictionMarkets": "Пазари на предвиждане",
     "loadingMarkets": "Зареждане на пазарите на предвиждане...",
     "infrastructure": "Експозиция на инфраструктура",
-    "briefUnavailable": "AI преглед недостъпен — конфигурирайте GROQ_API_KEY в Settings.",
+    "briefUnavailable": "AI преглед недостъпен — конфигурирайте OPENROUTER_API_KEY в Settings.",
     "cached": "Кеширан",
     "fresh": "Свеж",
     "noMarkets": "Няма активни пазари за тази страна.",
@@ -76,6 +76,7 @@
       "suppliers": "Arms suppliers ({{start}}–{{end}})",
       "source": "Sources: World Bank and SIPRI Arms Transfers Database. TIV measures transfer volume, not financial value.",
       "sourceWorldBank": "Source: World Bank.",
+      "snapshotAssembled": "Моментната снимка на {{source}} е съставена на {{time}}",
       "unavailable": "Not available",
       "coverage": "Mapped coverage",
       "supplierRetained": "Supplier data retained from the last successful importer refresh."
@@ -115,11 +116,13 @@
       "doNotTravel": "Не пътувайте",
       "reconsiderTravel": "Преразгледайте пътуването",
       "exerciseCaution": "Упражнявайте предпазливост",
+      "normalPrecautions": "Обичайни предпазни мерки",
       "advisory": "Препоръка",
       "activeSirens": "Активни сирени",
       "sirens24h": "Сирени / 24h",
       "aviationDisruptions": "Нарушения на авиацията",
-      "gpsJammingZones": "GPS закълчаване зони"
+      "gpsJammingZones": "GPS закълчаване зони",
+      "temporalUnavailable": "Времевите наблюдения са недостъпни"
     },
     "fallback": {
       "instabilityIndex": "**Индекс на нестабилност: {{score}}/100** ({{level}}, {{trend}})",
@@ -192,7 +195,7 @@
       "decisionSignalsUnavailable": "Снимката на сигналите за решения на Китай в момента не е налична."
     },
     "foodStocks": "Food stocks",
-    "foodStocksHelp": "USDA PSD commodity stocks-to-use by marketing year, with the world ratio alongside for context. FAOSTAT fills production only where PSD has no country coverage.",
+    "foodStocksHelp": "USDA PSD commodity stocks-to-use by marketing year, with the world ratio alongside for context. FAOSTAT Food Balances supplies production and domestic supply when PSD has no complete country balance.",
     "loadingFoodStocks": "Loading food stocks…",
     "foodStocksUnavailable": "Food stocks unavailable.",
     "foodStocksProLocked": "Upgrade to PRO for commodity stocks-to-use",
@@ -232,6 +235,71 @@
       "manufacturingShare": "Manufacturing employment",
       "source": "Sources: {{sources}}.",
       "retained": "{{stage}} data retained from the last successful refresh."
+    },
+    "fiveFactorScorecard": {
+      "title": "Карта на устойчивостта с пет фактора",
+      "help": "Оценки на доказателствата Frozen v1 за хранителни продукти, енергия, демография, технологии и защита. Разгънете реда, за да видите входните данни, произхода на източника и причините за липсващи данни.",
+      "loading": "Зареждане на картата с пет фактора…",
+      "unavailable": "Карта с пет фактора не е налична.",
+      "proLocked": "Надградете до PRO за картата с пет фактора",
+      "insufficient": "Недостатъчно данни",
+      "notAvailable": "Не е налично",
+      "noEvidence": "Няма налични доказателства за този стълб.",
+      "score": "{{score}}/5",
+      "coverage": "{{coverage}}% покритие",
+      "methodologyVersion": "Методология v{{version}}",
+      "methodologyLink": "Преглед на методологията",
+      "pillars": {
+        "food": "Храна",
+        "energy": "Енергия",
+        "demographics": "Демография",
+        "technology": "Технологии",
+        "defense": "Защита"
+      },
+      "reasons": {
+        "source-unavailable": "Източник недостъпен",
+        "country-unavailable": "Държава недостъпна",
+        "invalid-value": "Невалидна стойност на източника",
+        "stale": "Доказателствата са остарели",
+        "coverage-below-floor": "Покритие под минималното ниво",
+        "required-group-missing": "Липсва задължителна група доказателства",
+        "missing-population": "Неприложима популация",
+        "redistribution-blocked": "Реорганизацията на източника не е разрешена",
+        "pillar-unavailable": "Стълб недостъпен"
+      },
+      "inputs": {
+        "population": "Население",
+        "food_productionBalance": "Баланс на производството",
+        "food_stocksToUse": "Сигурност на запасите",
+        "food_waterSecurity": "Водна сигурност",
+        "food_importDiversity": "Разнообразие на импортите",
+        "energy_productionBalance": "Баланс на енергийното производство",
+        "energy_lowCarbonShare": "Дял на нискоуглеродна енергия",
+        "energy_gridEfficiency": "Ефективност на мрежата",
+        "demographics_totalDependency": "Обща зависимост",
+        "demographics_oldAgeDependency": "Зависимост от възрастта",
+        "demographics_workingAgeProjection": "Проекция на работоспособната възраст",
+        "demographics_tertiaryEnrollment": "Записване в третичната образователна система",
+        "demographics_researchersPerMillion": "Изследователи на милион",
+        "demographics_stemGraduateShare": "Дял на STEM дипломати",
+        "demographics_trainedIndustrialShare": "Дял на обучен индустриален работен персонал",
+        "demographics_manufacturingEmploymentShare": "Дял на заетостта в производството",
+        "technology_internetUse": "Използване на интернет",
+        "technology_mobileSubscriptions": "Мобилни абонаменти",
+        "technology_fixedBroadband": "Фиксирана широколентова връзка",
+        "technology_rdSpend": "Разходи за научноизследователска и развойна дейност",
+        "technology_researchersPerMillion": "Изследователи на милион",
+        "technology_stemGraduateShare": "Дял на STEM дипломати",
+        "technology_electricityAccess": "Достъп до електричество",
+        "defense_expenditureUsd": "Военни разходи",
+        "defense_expenditurePctGdp": "Военна тежест",
+        "defense_personnel": "Персонал на въоръжени сили",
+        "defense_industrialBalance": "Баланс на отбранителната индустрия",
+        "defense_supplierDiversity": "Разнообразие на доставчиците на оръжия"
+      }
+    },
+    "defenseIndustrialBase": {
+      "proLocked": "Надградете на PRO за зависимост на доставчиците на оръжия и военен капацитет"
     }
   },
   "header": {
@@ -732,7 +800,7 @@
       "fresh": "Свеж",
       "noMarkets": "Не са намерени пазари на предвиждане",
       "predictionMarkets": "Пазари на предвиждане",
-      "unavailable": "AI преглед недостъпен — конфигурирайте GROQ_API_KEY в Settings."
+      "unavailable": "AI преглед недостъпен — конфигурирайте OPENROUTER_API_KEY в Settings."
     },
     "countryBrief": {
       "identifying": "Идентифициране на държава...",
@@ -748,7 +816,7 @@
       "predictionMarkets": "Пазари на предвиждане",
       "loadingMarkets": "Зареждане на пазарите на предвиждане...",
       "infrastructure": "Експозиция на инфраструктура",
-      "briefUnavailable": "AI преглед недостъпен — конфигурирайте GROQ_API_KEY в Settings.",
+      "briefUnavailable": "AI преглед недостъпен — конфигурирайте OPENROUTER_API_KEY в Settings.",
       "cached": "Кеширан",
       "fresh": "Свеж",
       "noMarkets": "Не са намерени пазари на предвиждане",
@@ -790,7 +858,6 @@
   "components": {
     "webcams": {
       "paused": "Уеб камерите са на пауза",
-      "pausedIdle": "Уеб камерите са на пауза — преместете мишката за възобновяване",
       "regions": {
         "all": "ВСИЧКИ",
         "mideast": "БЛИЗКИЯ ИЗТОК",
@@ -800,7 +867,11 @@
         "space": "КОСМОС"
       },
       "play": "Пуск",
-      "previewStatus": "Преглед на живо"
+      "previewStatus": "Готово за възпроизвеждане",
+      "connecting": "Свързване…",
+      "unverified": "Не е възможно да се потвърди дали потокът е в реално време",
+      "offline": "{{city}} е офлайн в момента",
+      "noFeeds": "Няма живи уебкамери в този регион в момента"
     },
     "positiveNewsFeed": {
       "noStories": "Все още няма истории в тази категория"
@@ -917,7 +988,8 @@
       "refineryStage": "Refine",
       "stageUnavailable": "No published figures for this stage",
       "withheldNote": "W withheld",
-      "productionCaption": "Country shares of actual production. The map deposits layer shows where resources sit; this table shows who mines or refines them."
+      "productionCaption": "Country shares of actual production. The map deposits layer shows where resources sit; this table shows who mines or refines them.",
+      "productionProLocked": "Надградете на PRO за дялове на страната в мини и рафинерии с концентрация (HHI) по етап"
     },
     "tradePolicy": {
       "tariffs": "Митнически такси",
@@ -1011,10 +1083,18 @@
       "skipToEnd": "Към края"
     },
     "pizzint": {
+      "indexSource": "Индекс: World Monitor · данни за заведенията:",
+      "statusNormal": "НОРМАЛНО",
+      "statusNoData": "НЯМА ДАННИ",
+      "statusNoBaseline": "НЯМА БАЗОВО НИВО",
+      "vsUsual": "спрямо обичайното",
       "title": "Индекс на пица на Пентагона",
       "defcon": "DEFCON {{level}}",
       "updated": "Актуализирано {{timeAgo}}",
       "tensionsTitle": "Геополитични напрежения",
+      "tensionsSource": "Напрежение: World Monitor по събития от GDELT",
+      "insufficientData": "Недостатъчно данни",
+      "pizzaUnavailable": "Данните за активността на пицариите не са налични",
       "source": "Източник:",
       "statusClosed": "ЗАТВОРЕНО",
       "statusSpike": "СКОК",
@@ -1026,11 +1106,11 @@
       "minutesAgo": "{{m}}m преди",
       "hoursAgo": "{{h}}h преди",
       "defconLabels": {
-        "1": "КОКИРАН ПИСТОЛЕТ - МАКСИМАЛНА ГОТОВНОСТ",
-        "2": "БЪРЗО ТЕМПО - ВЪОРЪЖЕНИ СИЛИ ГОТОВИ",
-        "3": "КРЪГЛА КЪЩА -増ВАНЕ НА ГОТОВНОСТ",
-        "4": "ДВОЙНА ГЛЕДКА - ПОВИШЕНА РАЗУЗНАВАТЕЛНА ВАХТА",
-        "5": "ИЗБЛЕДНЯВАМ - НАЙ-НИСКА ГОТОВНОСТ"
+        "1": "Максимална активност",
+        "2": "Висока активност",
+        "3": "Повишена активност",
+        "4": "Над нормално",
+        "5": "Нормална активност"
       }
     },
     "strategicPosture": {
@@ -1111,9 +1191,6 @@
       "datacenter": "Центр за данни",
       "base": "База",
       "nuclear": "Ядрена"
-    },
-    "community": {
-      "joinDiscussion": "Help Shape What's Next"
     },
     "threatLabels": {
       "critical": "КРИТ",
@@ -1354,7 +1431,7 @@
       "rankingStories": "Класиране на важни истории...",
       "analyzingSentiment": "Анализиране на сентимент...",
       "generatingBrief": "Генериране на световен преглед...",
-      "infoTooltip": "<strong>AI-управлява анализ</strong><br>• <strong>Световен преглед</strong>: AI обобщение (Groq/OpenRouter)<br>• <strong>Сентимент</strong>: Анализ на тона на новини<br>• <strong>Скорост</strong>: Бързо движещи се истории<br>• <strong>Фокусни точки</strong>: Коерелира новинни субекти със сигнали на карта (военни, протести, прекъсвания)<br><em>Десктоп само • Захранено от Llama 3.3 + Откритие на фокусни точки</em>",
+      "infoTooltip": "<strong>AI-управлява анализ</strong><br>• <strong>Световен преглед</strong>: AI обобщение (OpenRouter)<br>• <strong>Сентимент</strong>: Анализ на тона на новини<br>• <strong>Скорост</strong>: Бързо движещи се истории<br>• <strong>Фокусни точки</strong>: Коерелира новинни субекти със сигнали на карта (военни, протести, прекъсвания)<br><em>Десктоп само • Захранено от Llama 3.3 + Откритие на фокусни точки</em>",
       "streamQualityLabel": "Качество на видеото",
       "streamQualityDesc": "Задайте качество за всички живи потоци (по-ниско спестява честотна лента)",
       "globeRenderScaleOptions": {
@@ -1366,7 +1443,7 @@
       },
       "mapFlashLabel": "Импулс на живо събитие",
       "mapFlashDesc": "Светкавица местоположения на карта, когда прибиране на новини пристига",
-      "aiFlowCloudLabel": "Облачна AI (Groq & OpenRouter)",
+      "aiFlowCloudLabel": "Облачна AI (OpenRouter)",
       "aiFlowCloudDesc": "Изпратете заглавия към облак за AI обобщение (препоръчано)",
       "aiFlowBrowserLabel": "Браузер локален модел",
       "aiFlowBrowserDesc": "Изпълнете AI локално във вашия браузер",
@@ -1424,7 +1501,10 @@
       "provenanceTitle": "Произход на обхвата: колко включени истории и отделни източници е избрано от този преглед",
       "compiledFrom": "Събрано от {{stories}} истории в {{sources}} източници",
       "briefFreshness": "Генериран преди {{minutes}}м · най-нов източник {{hours}}ч стар",
-      "briefStoryDetails": "Story details ({{count}})"
+      "briefStoryDetails": "Подробности за историята ({{count}})",
+      "streamIdleStopLabel": "Спиране на живото видео при неактивност",
+      "streamIdleStopDesc": "Спира Live News и Live Webcams след толкова дълго време без активност и показва уведомление в панела.",
+      "streamIdleStopNever": "Никога"
     },
     "settings": {
       "exportSettings": "Експорт на настройки",
@@ -1753,6 +1833,16 @@
       "loading": "Свързване към Telegram релея...",
       "empty": "Няма налични съобщения",
       "disabled": "Telegram релей не е активен",
+      "watchlistPlaceholder": "Добавете публичен канал чрез @username",
+      "resolving": "Проверка на канала...",
+      "invalidUsername": "Използвайте публично Telegram @username",
+      "resolveFailed": "Каналът не може да бъде намерен",
+      "watchlistLimit": "Можете да следвате до {{count}} персонализирани канала",
+      "previewMembers": "{{count}} членове",
+      "addChannel": "Добавяне на канал",
+      "added": "Добавен",
+      "remove": "Премахване",
+      "custom": "Персонализиран",
       "filterAll": "Всички",
       "filterBreaking": "Последни",
       "filterConflict": "Конфликт",
@@ -1826,6 +1916,7 @@
       "etfs": "ETFs",
       "netInflow": "НЕТЕН ПРИЛИВАНЕ",
       "netOutflow": "НЕТЕН ОТЛИВАНЕ",
+      "netNeutral": "НЕТО НЕУТРАЛНО",
       "table": {
         "ticker": "Тикер",
         "issuer": "Издател",
@@ -1908,15 +1999,11 @@
     },
     "liveNews": {
       "notLive": "{{name}} не е в момента живо",
-      "cannotEmbed": "{{name}} не може да бъде възпроизведен тук — може да е ограничен в вашия регион (грешка {{code}})",
-      "botCheck": "YouTube е поискане на вход, за да възпроизведе {{name}}",
       "signInToYouTube": "Влез в YouTube",
       "openOnYouTube": "Отворени на YouTube",
       "manage": "Управляване на канали",
       "addChannel": "Добавяне на канал",
       "remove": "Премахвам",
-      "youtubeHandle": "YouTube манипулатор (напр. @Channel)",
-      "youtubeHandleOrUrl": "YouTube манипулатор или URL",
       "displayName": "Име на дисплей (дополнително)",
       "channelSettings": "Канал настройки",
       "save": "Запази",
@@ -1932,12 +2019,24 @@
       "regionMiddleEast": "Близкия изток",
       "regionAfrica": "Африка",
       "regionOceania": "Океания",
-      "invalidHandle": "Въведете валидна YouTube манипулатор (напр. @ChannelName)",
       "verifying": "Проверка…",
       "hlsUrl": "URL на HLS поток (незадължително)",
       "invalidHlsUrl": "Въведете валиден URL на HLS поток (.m3u8)",
       "playLiveFeed": "Пусни живото предаване",
-      "readyStatus": "Готово, когато сте готови"
+      "readyStatus": "Готово, когато сте готови",
+      "embedBlocked": "YouTube не възпроизвежда {{name}} в други сайтове в момента",
+      "unavailable": "{{name}} не може да бъде възпроизведено в момента",
+      "noStream": "За {{name}} все още няма настроен живо предаване",
+      "needsChannelUrl": "Добавете {{name}} отново с неговия URL на канал (youtube.com/channel/UC…) или URL на живо видео",
+      "insecureStream": "{{name}} използва небезопасен (http) поток, който браузърите блокират. Добавете го отново с безопасен (https) URL на потока",
+      "connecting": "Свързване към {{name}}…",
+      "recording": "Записване",
+      "unverified": "Не може да се потвърди, че този поток е живо",
+      "playNextChannel": "Възпроизведи следващия канал",
+      "channelOrVideoUrl": "YouTube канал или видео URL",
+      "channelUrlHint": "Поставете URL на канал (youtube.com/channel/UC…) или URL на живо видео",
+      "youtubeChannel": "YouTube канал",
+      "httpsStreamHint": "Браузърите блокират небезопасни (http) потоци. Поставете безопасен (https) URL на потока"
     },
     "map": {
       "showMap": "Показване на карта",
@@ -1964,6 +2063,22 @@
       "metals": {
         "gold": "Gold",
         "silver": "Silver"
+      },
+      "divergence": {
+        "compositeValue": "Индекс на физическото напрежение: {{value}} / 100",
+        "fiveDayTrend": "Тренд на премия за пет търговски дни",
+        "regimes": {
+          "normal": "Нормално",
+          "elevated": "Повишено",
+          "stressed": "Натоварено",
+          "extreme": "Екстремно"
+        },
+        "states": {
+          "insufficientHistory": "Загряване: {{count}} / {{required}} търговски точки",
+          "staleInput": "Физическият еталон е остарял",
+          "missingInput": "Сигналът за дивергенция е недостъпен"
+        },
+        "twentyDayTrend": "Тенденция на премията за двадесет търговски дни"
       }
     },
     "crypto": {
@@ -2080,7 +2195,7 @@
       "infoTooltip": "<strong>Икономически календар</strong> Планирани макроикономически публикации: CPI, NFP, GDP, PMI и решения на централни банки. Показва прогноза срещу реално срещу предходно. Събития с висок импакт са маркирани. Източник: доставчици на икономически данни."
     },
     "fsi": {
-      "infoTooltip": "<strong>Индикатор за финансов стрес</strong> Индекс на финансовия стрес на Федералния резерв на Канзас Сити (KCFSI): измерва стреса на финансовите пазари в САЩ чрез 11 индикатора, включващи спредове на доходността, волатилност и кръстосани корелации. Положителни стойности означават стрес над средното. Източник: Федерална резервна банка на Канзас Сити.",
+      "infoTooltip": "<strong>Индикатор за финансов стрес</strong> Съотношението на WorldMonitor между високодоходния кредит и дългосрочните държавни облигации на САЩ, коригирано за волатилността на акциите и спреда при високодоходните облигации: (HYG / TLT) / (VIX × HY spread / 100). Това не е Индексът за финансов стрес на Федералния резерв в Канзас Сити. Стойност 1.5 или по-висока означава нисък стрес; под 0.3 означава висок стрес.",
       "title": "Индикатор на финансовия стрес",
       "usFsiValue": "US FSI СТОЙНОСТ",
       "cissTitle": "EU CISS (евро зона системен стрес)",
@@ -2120,6 +2235,26 @@
         "failedToLoad": "Неуспешно зареждане"
       },
       "cissStale": "ЕЦБ не е публикувал по-нова стойност — това отчитане може да е остаревало."
+    },
+    "supplyVulnerability": {
+      "title": "Уязвимост при суровините",
+      "help": "Експозиция на страната по суровини според концентрацията на доставчиците, морския транзит и наличните стратегически запаси.",
+      "loading": "Зареждане на уязвимостта при суровините…",
+      "unavailable": "Данните за уязвимостта при суровините не са налични",
+      "noCoverage": "Недостатъчно доказателства за тази държава",
+      "unknown": "Неизвестно",
+      "concentration": "Концентрация",
+      "transit": "Транзит",
+      "buffer": "Резерв",
+      "sources": "Източници",
+      "methodology": "Методология",
+      "hormuzTitle": "Зависимости от суровини",
+      "dependentCountries": "Зависими държави",
+      "dependentCommodities": "Зависими суровини",
+      "stateOk": "Актуално",
+      "stateStale": "Остарели входни данни",
+      "stateInsufficient": "Недостатъчни данни",
+      "proLocked": "Надградете на PRO за оценяване на уязвимостта на стоките"
     },
     "hormuzTracker": {
       "infoTooltip": "<strong>Тракер на търговията в Хормуз</strong> Проследяване на AIS плавателни съдове в реално време през Ормузкия проток, най-критичната петролна точка на задръстване в света. Следи броя на танкери, събития на прекъсване и седмични промени в потоците. Приблизително 20% от световните доставки на петрол преминават тук ежедневно.",
@@ -2201,7 +2336,7 @@
       }
     },
     "marketImplications": {
-      "infoTooltip": "<strong>AI пазарни последици</strong> LLM-генерирани търговски сигнали, произлизащи от живи геополитически, суровинни и макроикономически данни след всеки цикъл на прогноза.<ul><li><strong>Направление</strong>: ДЪЛГА / КЪСА / ЗАСТРАХОВКА с оценка на доверието</li><li><strong>Период</strong>: 1W, 2W, 1M или 3M хоризонт</li><li><strong>Драйвер</strong>: Ключов катализатор зад сигнала</li><li><strong>Риск</strong>: Предупреждение или условие за невалидиране</li></ul><em>За информационни цели. Не е инвестиционен съвет.</em>",
+      "infoTooltip": "<strong>AI пазарни последици</strong> LLM-генерирани търговски сигнали, произлизащи от живи геополитически, суровинни и макроикономически данни след всеки цикъл на прогноза.<ul><li><strong>Направление</strong>: ДЪЛГА / КЪСА / ЗАСТРАХОВКА</li><li><strong>Период</strong>: 1W, 2W, 1M или 3M хоризонт</li><li><strong>Драйвер</strong>: Ключов катализатор зад сигнала</li><li><strong>Риск</strong>: Предупреждение или условие за невалидиране</li></ul><em>За информационни цели. Не е инвестиционен съвет.</em>",
       "title": "AI пазарни последици",
       "directions": {
         "long": "LONG",
@@ -2214,10 +2349,64 @@
       "signals_one": "{{count}} сигнал",
       "signals_other": "{{count}} сигнала",
       "disclaimer": "AI-генерирани търговски сигнали само за информационни цели. Не е инвестиционен съвет. Винаги направете собственото си проучване.",
-      "unavailable": "AI пазарните последици се генерират след всяко предвидимо изпълнение. Проверете отново скоро."
+      "unavailable": "AI пазарните последици се генерират след всяко предвидимо изпълнение. Проверете отново скоро.",
+      "unscored": "Нарративни сценарии, които не са оценени за точност."
     },
     "forecast": {
-      "infoTooltip": "<strong>AI прогнози</strong> Вероятностни оценки, генерирани от AI, за геополитични и икономически събития:<ul><li>Покритие в множество области: конфликти, пазари, верига на доставки, кибер, политика</li><li>Всяка прогноза показва прогнозирана вероятност, ниво на доверие и времеви хоризонт</li><li>Калибрирана спрямо базовите линии на пазара на прогнози, където е налично</li></ul>Прогнозите се актуализират при получаване на нови сигнали за разузнаване. Филтрирайте по област, като използвате раздалите по-горе."
+      "infoTooltip": "<strong>AI прогнози</strong> Вероятностни оценки, генерирани от AI, за геополитични и икономически събития:<ul><li>Покритие в множество области: конфликти, пазари, верига на доставки, кибер, политика</li><li>Всяка прогноза показва прогнозирана вероятност, ниво на доверие и времеви хоризонт</li><li>Калибрирана спрямо базовите линии на пазара на прогнози, където е налично</li></ul>Прогнозите се актуализират при получаване на нови сигнали за разузнаване. Филтрирайте по област, като използвате раздалите по-горе.",
+      "record": {
+        "label": "Досегашни резултати",
+        "labelHint": "Как се представиха публикуваните прогнози след разрешаването им през последните {{days}} дни. Задръжте курсора върху число, за да видите какво означава.",
+        "unavailable": "В момента не е налично",
+        "insufficient": "Все още няма достатъчно оценени прогнози",
+        "brier": "Оценка на Брайър {{score}} (n={{n}})",
+        "brierHint": "Оценка на Брайър за {{n}} оценени прогнози: средният квадрат на разликата между прогнозираната вероятност и случилото се. 0 е идеално, 0,25 е като хвърляне на монета, по-ниското е по-добро.",
+        "baseRate": "Базова честота {{score}} (n={{n}})",
+        "baseRateHint": "Какво би постигнал този, който винаги отговаря с наблюдавания дял „да“, за същите {{n}} прогнози ({{pct}}% завършиха с „да“). Ако сме по-добри, прогнозите добавят информация.",
+        "void": "Анулирани {{pct}}% ({{count}} от {{resolved}})",
+        "voidHint": "Прогнози, които са разрешени, но не можаха да бъдат оценени, от общо {{resolved}} разрешени в периода.",
+        "stale": "Неактуално",
+        "staleHint": "Последна оценка на {{date}}. Оттогава оценяването не е изпълнявано, така че тези числа са по-стари, отколкото трябва.",
+        "fullRecord": "Пълни резултати"
+      },
+      "reliability": {
+        "measured": "{{domain}} n={{n}} · Brier {{score}} срещу базов процент {{base}}",
+        "measuredHint": "Как публикуваните прогнози за {{domain}} са получили точки над {{n}} оценени прогнози през последните {{days}} дни. Базовият процент е това, което винаги отговаряне на наблюдавания процент „да\" на домейна би получило. По-ниско е по-добре. Това е записът на домейна, не на тази прогноза.",
+        "unmeasured": "Все още не е измерено",
+        "unmeasuredHint": "Прогнозите на {{domain}} имат {{n}} оценени резултата през последните {{days}} дни. Един домейн има нужда от {{min}} преди точността му да бъде показана."
+      },
+      "resolution": {
+        "last": "Последно: {{outcome}}",
+        "lastSr": "Предишният период на тази прогноза приключи с {{outcome}}.",
+        "history": "Скорошни периоди, най-нови първо: {{list}}",
+        "outcome": {
+          "yes": "ДА",
+          "no": "НЕ",
+          "void": "НЕВАЛИДНА"
+        },
+        "void": {
+          "no_establishable_metric": "Източникът на данни нямаше показание за този въпрос",
+          "value_source_never_settled": "Източникът на данни никога не публикува утвърдена стойност",
+          "count_source_window_not_retained": "Източникът на данни вече не съхраняваше периода на въпроса",
+          "unsupported_window": "Въпросът не може да бъде проверен спрямо своя източник",
+          "unsupported_metric_key": "Въпросът не може да бъде проверен спрямо своя източник",
+          "not_hard_spec": "Въпросът не може да бъде проверен спрямо своя източник",
+          "missing_threshold": "На въпроса липсва праг",
+          "missing_deadline": "На въпроса липсва краен срок",
+          "missing_generated_at": "На прогнозата липсва дата на начало",
+          "beyond_archive_horizon": "Архивът на новини вече не обхващаше периода на въпроса",
+          "no_archive_evidence": "В архива на новини няма нищо за темата",
+          "all_judges_void": "И двамата експерти намериха доказателствата за недостатъчни",
+          "judge_disagreement": "Експертите не се съгласиха",
+          "judge_retry_exhausted": "Експертите не върнаха решение",
+          "withheld_unpublished": "Този вид прогноза вече не се публикува",
+          "other": "Не можа да бъде разрешена"
+        }
+      },
+      "horizons": {
+        "label": "Също оценени в: {{list}}",
+        "hint": "Вероятността на заглавието е оценена на хоризонта на прогнозата. Прогнозата за всеки от тези хоризонти е оценена и срещу неговия източник feed, използвайки стойността, първо публикувана за тази прогноза. Стойностите на прогнозата не се показват, защото текущата стойност може да се различава от оценената."
+      }
     },
     "escalationCorrelation": {
       "infoTooltip": "<strong>Монитор на ескалацията</strong> Открива конвергиращи геополитични сигнали:<ul><li>Корелира военни движения, событията в конфликти и пикове на новини</li><li>Оценява зоните на конвергенция по тежест (критична/висока/средна/ниска)</li><li>Проследява тенденциите на ескалация или деескалация във времето</li></ul>Кликнете върху карта, за да увеличите мащаба на региона на картата."
@@ -2515,7 +2704,14 @@
       "signals_one": "{{count}} сигнал",
       "signals_other": "{{count}} сигнала",
       "analyzing": "Анализиране...",
-      "viewOnMap": "Преглед на карта"
+      "viewOnMap": "Преглед на карта",
+      "waiting": "Изчаква се следващото обновяване на данните. Този панел се обновява автоматично.",
+      "offline": "Изчаква се връзка. Този панел се обновява автоматично, когато отново сте онлайн.",
+      "updated": "Обновено {{time}}",
+      "saved": "Последно известно обновяване {{time}} · Проверка за обновявания",
+      "savedOffline": "Последно известно обновяване {{time}} · Офлайн",
+      "localSignals": "Въз основа на заредените сигнали в таблото",
+      "emptySaved": "Няма конвергенция в последното известно обновяване."
     },
     "thermalEscalation": {
       "title": "Топлинска еске лация",
@@ -2665,6 +2861,68 @@
       "rubBase": "Банк на Русия — рубли за 1 единица",
       "rubPerUnit": "Рубли за единица",
       "sourceCbr": "Източник: Банк на Русия"
+    },
+    "passkeyOffer": {
+      "title": "Да запазите ключ за достъп?",
+      "body": "Влезте следващия път с вашия отпечатък, лице или PIN код на устройството — без парола за запомняне.",
+      "accept": "Запазване на ключ за достъп",
+      "dismiss": "Не сега",
+      "close": "Затвори",
+      "announce": "Запазете ключ за достъп, за да влезете по-бързо следващия път.",
+      "busy": "Очаквам вашето устройство…",
+      "succeeded": "Ключът за достъп е запазен. Можете да го използвате следващия път, когато влезете.",
+      "retryable": "Това не се завърши. Можете да опитате отново.",
+      "failed": "Не можахме да запазим ключ за достъп на това устройство."
+    },
+    "decisionBrief": {
+      "commodityTitle": "Справка за решения за суровини",
+      "commodity": "Суровина / продукт",
+      "blockedChokepoint": "Предполагаемо блокиран проход",
+      "commodityCapture": "Запис на сравнението на суровини",
+      "title": "Справка за решение",
+      "fuel": "Гориво",
+      "chokepoint": "Тясно място",
+      "baseline": "Базово прекъсване",
+      "comparison": "Сравнително прекъсване",
+      "capture": "Зареди / обнови двата",
+      "downloadHtml": "Изтегли справката в HTML",
+      "downloadJson": "Изтегли справката в JSON",
+      "back": "← Назад към справката за страната",
+      "select": "Изберете прекъсване на енергийните доставки, след което заредете двата сценария.",
+      "changed": "Изборът е променен. Заредете двата сценария преди експортиране.",
+      "loading": "Зареждане на двата сценария…",
+      "captured": "Заредено. Проверете датите на наблюденията и ограниченията преди изтегляне.",
+      "failed": "Сценариите не могат да бъдат заредени. Проверете достъпа си и опитайте отново. Няма резултат за експортиране.",
+      "locked": "Справката за решение е достъпна с Pro."
+    },
+    "liveMedia": {
+      "idleStatus": "Пауза поради неактивност",
+      "idleBody": "Живото видео спря след {{duration}} без активност на мишката, клавиатурата или сензорния екран.",
+      "idleResume": "Продължи",
+      "idleKeepPlaying": "Продължаване на възпроизвеждането при неактивност",
+      "idleSettingsHint": "Променете това когато искате в Настройки › Мултимедия.",
+      "idleKeepPlayingToast": "Живото видео ще продължи да се възпроизвежда при неактивност. Променете в Настройки › Мултимедия."
+    },
+    "corroboration": {
+      "singlePublisher": "Един издател",
+      "singlePublisherHint": "Засега само един издател докладва за това. Това описва медийното покритие, не точността.",
+      "tier4Only": "Само нискостепенни източници",
+      "tier4OnlyHint": "Всеки медиен канал, който докладва за това, е източник от ниво 4 (агрегатори и блогове). Това описва медийното покритие, не точността.",
+      "rosterListed": "({{listed}} в списъка)",
+      "rosterFeeds": "Видени емисии: {{labels}}",
+      "rosterLegend": "Нивата класират източниците; те не оценяват това твърдение.",
+      "tierDocsLink": "Как се определят нивата",
+      "tierChip": "Н{{tier}}",
+      "tierChipUndeclared": "Н?",
+      "tierTitle1": "Ниво 1: Информационни агенции и официални органи",
+      "tierTitle2": "Ниво 2: Големи медии",
+      "tierTitle3": "Ниво 3: Специализирани, регионални и експертни източници",
+      "tierTitle4": "Ниво 4: Агрегатори и блогове",
+      "tierTitleUndeclared": "Нивото не е обявено: все още не е прегледано",
+      "rosterSummary": "Съобщено от {{publishers}}",
+      "rosterSummaryTier1": "Съобщено от {{publishers}}, включително {{tier1}} от ниво 1",
+      "rosterPublishers_one": "{{count}} издател",
+      "rosterPublishers_other": "{{count}} издатели"
     }
   },
   "popups": {
@@ -2703,14 +2961,18 @@
     "protest": {
       "acledVerified": "ACLED (проверено)",
       "gdelt": "GDELT",
+      "records": "записа",
+      "mediaSignal": "Непотвърден медиен сигнал",
+      "relatedArticle": "Свързана статия",
+      "mediaSignalDetail": "Това място се споменава в статии за безредици. Местно събитие не е потвърдено.",
       "riots": "Разпри",
       "highSeverity": "Висока тежест"
     },
     "gpsJamming": {
       "title": "GPS/GNSS интерференция",
-      "navPerformance": "Nav Performance",
-      "samples": "ADS-B Samples",
-      "aircraft": "Aircraft",
+      "navPerformance": "Засегнати летателни средства",
+      "samples": "Брой засегнати летателни средства",
+      "aircraft": "Наблюдавани летателни средства",
       "h3Hex": "H3 Hex"
     },
     "flight": {
@@ -3148,8 +3410,8 @@
   "signals": {
     "context": {
       "prediction_leads_news": {
-        "whyItMatters": "Пазари на предвиждане често цена в информация преди того, което се превръща в новини — търговци могат да имат ранен достъп до развитие.",
-        "actionableInsight": "Монитор за последни новини в следващите 1-6 часа, което могат да обяснят пазара преместване.",
+        "whyItMatters": "Пазар на предсказания се раздвижи, докато новинарското покритие на темата остана ниско — пазарът може да реагира на информация, която все още не е публикувана.",
+        "actionableInsight": "Следете за извънредни новини, които биха могли да обяснят движението на пазара.",
         "confidenceNote": "По-висока доверие, ако множество пазари на предвиждане движат се в също направление."
       },
       "news_leads_markets": {
@@ -3446,7 +3708,8 @@
   "auth": {
     "signIn": "Влез",
     "createAccount": "Създай профил",
-    "settings": "Настройки"
+    "settings": "Настройки",
+    "passkeyOffer": {}
   },
   "mcp": {
     "connectPanel": "Свързване на MCP",

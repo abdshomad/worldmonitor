@@ -52,6 +52,7 @@ vi.mock('@/services/entitlements', () => ({
   getEntitlementState: () => ({ planKey: 'pro_monthly', validUntil: Date.now() + 1e9 }),
   getEntitlementVerificationStatus: () => 'ready',
   hasFeature: () => true,
+  hasEmbedAccessForAccount: () => true,
   isEntitled: () => true,
   onEntitlementChange: () => () => {},
   onEntitlementVerificationChange: () => () => {},
@@ -111,7 +112,11 @@ vi.mock('@/services/billing', () => ({
   removeBusinessSeat: async () => ({ status: 'removed' as const }),
 }));
 
-vi.mock('@/services/billing-state', () => ({
+// Partial: only the UX-state verdict is pinned for this file's cases. The
+// status-tone helpers stay real so a new billing-state export cannot silently
+// leave this stub short (#7315).
+vi.mock('@/services/billing-state', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/services/billing-state')>()),
   deriveBillingUxState: () => 'active',
   getReactivationHref: () => '/pro#pricing',
 }));

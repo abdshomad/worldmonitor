@@ -9,6 +9,7 @@ import {
   buildDemographicsPayload,
   demographicsContentMeta,
   demographicsStageCoverageMeta,
+  fetchWppStage,
   parseIlostatWorkforceCsv,
   parseWorldBankEducation,
   parseWppCapability,
@@ -23,6 +24,26 @@ import { resolveSourceOrigin } from '../scripts/source-origin.mjs';
 
 const fixture = (name) => readFileSync(new URL(`./fixtures/demographics-capability/${name}`, import.meta.url), 'utf8');
 const repoFile = (name) => readFileSync(new URL(`../${name}`, import.meta.url), 'utf8');
+
+function wppResponse(url, currentYear = 2026) {
+  const requestUrl = String(url);
+  const locations = requestUrl.match(/\/locations\/([^/]+)\//)?.[1].split(',').map(Number) || [];
+  const shared = { variantId: 4, sexId: 3 };
+  const rows = requestUrl.includes('/indicators/70/')
+    ? locations.flatMap((locationId) => [
+      { ...shared, locationId, indicatorId: 70, ageId: 40, timeLabel: currentYear, value: 1_000_000 },
+      { ...shared, locationId, indicatorId: 70, ageId: 40, timeLabel: currentYear + 10, value: 900_000 },
+    ])
+    : locations.flatMap((locationId) => [
+      { ...shared, locationId, indicatorId: 67, ageId: 188, timeLabel: currentYear, value: 40 },
+      { ...shared, locationId, indicatorId: 84, ageId: 1005, timeLabel: currentYear, value: 20 },
+      { ...shared, locationId, indicatorId: 86, ageId: 1015, timeLabel: currentYear, value: 50 },
+    ]);
+  return new Response(JSON.stringify(rows), {
+    status: 200,
+    headers: { 'Content-Type': 'application/json' },
+  });
+}
 
 describe('demographics capability source parsers (#6437)', () => {
   it('parses real WPP JSON without turning null into zero', () => {
@@ -58,6 +79,62 @@ describe('demographics capability source parsers (#6437)', () => {
     assert.equal(result.countries.US?.manufacturingEmploymentSharePercent, undefined, 'economic rows from different years must not be divided');
   });
 
+  it('preserves the original source of each ILOSTAT dimension without inferring observation quality', () => {
+    const occupation = fixture('ilostat-occupation.csv');
+    const economic = fixture('ilostat-economic.csv');
+    const original = parseIlostatWorkforceCsv(occupation, economic).countries.DE;
+    for (const metric of ['craftTradesEmploymentPeople', 'plantMachineOperatorsEmploymentPeople', 'trainedIndustrialWorkforcePeople']) {
+      assert.equal(original[metric].source, 'ILOSTAT: LFS - EU Labour Force Survey');
+      assert.equal(original[metric].year, 2025);
+    }
+    assert.equal(original.manufacturingEmploymentSharePercent.source, 'ILOSTAT: ILO - Modelled Estimates');
+    const survey = parseIlostatWorkforceCsv(occupation, economic.replaceAll('ILO - Modelled Estimates', 'LFS - EU Labour Force Survey')).countries.DE;
+    assert.deepEqual(survey.manufacturingEmploymentSharePercent, {
+      ...original.manufacturingEmploymentSharePercent,
+      source: 'ILOSTAT: LFS - EU Labour Force Survey',
+    });
+    const statusChanged = parseIlostatWorkforceCsv(occupation, economic.replaceAll(',A,NB,', ',Z,NB,')).countries.DE;
+    assert.deepEqual(statusChanged, original, 'OBS_STATUS is not a supplied quality classification');
+    assert.deepEqual(Object.keys(original.manufacturingEmploymentSharePercent).sort(), ['source', 'value', 'year']);
+  });
+
+  it('keeps blank or missing ILOSTAT SOURCE generic and preserves measured zero', () => {
+    const occupation = fixture('ilostat-occupation.csv').replaceAll('LFS - EU Labour Force Survey', '').replace('2025,4602.43,', '2025,0,');
+    const economic = fixture('ilostat-economic.csv').replaceAll('ILO - Modelled Estimates', '').replace('2025,7604.915,', '2025,0,');
+    const result = parseIlostatWorkforceCsv(occupation, economic).countries.DE;
+    assert.deepEqual(result.craftTradesEmploymentPeople, { value: 0, year: 2025, source: 'ILOSTAT' });
+    assert.deepEqual(result.manufacturingEmploymentSharePercent, { value: 0, year: 2025, source: 'ILOSTAT' });
+    const withoutSource = (csv) => csv.split('\n').map((line) => line.slice(0, line.lastIndexOf(','))).join('\n');
+    assert.deepEqual(parseIlostatWorkforceCsv(withoutSource(occupation), withoutSource(economic)).countries.DE, result);
+  });
+
+  it('selects an older common source/year instead of combining mismatched ILOSTAT rows', () => {
+    const changeLatestSecondSource = (csv, code) => csv.split('\n').map((line) => (
+      line.includes(`,${code},2025,`) ? `${line.slice(0, line.lastIndexOf(','))},Different survey` : line
+    )).join('\n');
+    const occupation = changeLatestSecondSource(fixture('ilostat-occupation.csv'), 'OCU_ISCO08_8');
+    const economic = changeLatestSecondSource(fixture('ilostat-economic.csv'), 'ECO_AGGREGATE_MAN');
+    const result = parseIlostatWorkforceCsv(occupation, economic).countries.DE;
+    assert.equal(result.trainedIndustrialWorkforcePeople.year, 2024);
+    assert.equal(result.trainedIndustrialWorkforcePeople.value, 7_056_336);
+    assert.equal(result.trainedIndustrialWorkforcePeople.source, 'ILOSTAT: LFS - EU Labour Force Survey');
+    assert.equal(result.manufacturingEmploymentSharePercent.year, 2024);
+    assert.equal(result.manufacturingEmploymentSharePercent.source, 'ILOSTAT: ILO - Modelled Estimates');
+    const noOlderRows = (csv) => csv.split('\n').filter((line) => !line.includes(',2024,')).join('\n');
+    assert.equal(parseIlostatWorkforceCsv(noOlderRows(occupation), noOlderRows(economic)).countries.DE, undefined);
+  });
+
+  it('rejects competing complete same-year sources without a row-order preference', () => {
+    const addAlternative = (csv) => `${csv.trim()}\n${csv.split('\n').filter((line) => line.includes(',DEU,') && line.includes(',2025,')).map((line) => `${line.slice(0, line.lastIndexOf(','))},Alternative survey`).join('\n')}\n`;
+    const occupation = addAlternative(fixture('ilostat-occupation.csv'));
+    const economic = addAlternative(fixture('ilostat-economic.csv'));
+    const result = parseIlostatWorkforceCsv(occupation, economic).countries.DE;
+    assert.equal(result.trainedIndustrialWorkforcePeople.year, 2024);
+    assert.equal(result.manufacturingEmploymentSharePercent.year, 2024);
+    const reverseRows = (csv) => { const [header, ...rows] = csv.trim().split('\n'); return `${header}\n${rows.reverse().join('\n')}\n`; };
+    assert.deepEqual(parseIlostatWorkforceCsv(reverseRows(occupation), reverseRows(economic)).countries.DE, result);
+  });
+
   it('rejects an HTTP-200 stage that loses a required metric family', () => {
     const countries = Object.fromEntries(Array.from({ length: 150 }, (_, index) => [
       `C${index}`,
@@ -75,6 +152,49 @@ describe('demographics capability source parsers (#6437)', () => {
       country.manufacturingEmploymentSharePercent = { value: 10 };
     }
     assert.equal(validateDemographicsStageCoverage(countries, 'ilostat').trainedIndustrialWorkforcePeople, 150);
+  });
+
+  it('recovers after two consecutive HTTP 502 responses from one WPP page', async () => {
+    const targetPage = '/indicators/67,84,86/locations/100,104,';
+    let targetPageRequests = 0;
+    const result = await fetchWppStage({
+      currentYear: 2026,
+      fetchImpl: async (url) => {
+        if (String(url).includes(targetPage)) {
+          targetPageRequests += 1;
+          if (targetPageRequests <= 2) return new Response('Bad Gateway', { status: 502 });
+        }
+        return wppResponse(url);
+      },
+    });
+
+    assert.equal(targetPageRequests, 3);
+    const recordCount = Object.keys(result.countries).length;
+    assert.ok(recordCount >= 229);
+    assert.equal(validateDemographicsStageCoverage(result.countries, 'wpp').medianAgeYears, recordCount);
+  });
+
+  it('identifies the exact WPP page when its HTTP failure is exhausted', async () => {
+    const failedPage = '/indicators/70/locations/288,292,';
+    let failedPageRequests = 0;
+    await assert.rejects(
+      fetchWppStage({
+        currentYear: 2026,
+        fetchImpl: async (url) => {
+          if (String(url).includes(failedPage)) {
+            failedPageRequests += 1;
+            return new Response('Bad Gateway', { status: 502 });
+          }
+          return wppResponse(url);
+        },
+      }),
+      (error) => {
+        assert.match(error.message, /HTTP 502/);
+        assert.match(error.message, new RegExp(failedPage));
+        return true;
+      },
+    );
+    assert.equal(failedPageRequests, 4);
   });
 });
 

@@ -62,6 +62,7 @@ vi.mock('@/services/entitlements', () => ({
   getEntitlementState: () => entitlementState,
   getEntitlementVerificationStatus: () => 'ready',
   hasFeature: () => true,
+  hasEmbedAccessForAccount: () => true,
   isEntitled: () => true,
   onEntitlementChange: () => () => {},
   onEntitlementVerificationChange: () => () => {},
@@ -127,7 +128,10 @@ vi.mock('@/services/billing', () => ({
   removeBusinessSeat: async () => ({ status: 'removed' as const }),
 }));
 
-vi.mock('@/services/billing-state', () => ({
+// Partial so the real status-tone helpers stay available: a full stub goes
+// stale the moment billing-state gains an export the panel renders (#7315).
+vi.mock('@/services/billing-state', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/services/billing-state')>()),
   deriveBillingUxState: () => 'active',
   getReactivationHref: () => '/pro#pricing',
 }));

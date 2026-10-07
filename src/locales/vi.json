@@ -16,7 +16,7 @@
     "predictionMarkets": "Thị trường Dự đoán",
     "loadingMarkets": "Đang tải thị trường dự đoán...",
     "infrastructure": "Mức độ phơi bày Hạ tầng",
-    "briefUnavailable": "Bản tin AI không khả dụng — cấu hình GROQ_API_KEY trong Cài đặt.",
+    "briefUnavailable": "Bản tin AI không khả dụng — cấu hình OPENROUTER_API_KEY trong Cài đặt.",
     "cached": "Đã lưu cache",
     "fresh": "Mới cập nhật",
     "noMarkets": "Không tìm thấy thị trường dự đoán",
@@ -76,6 +76,7 @@
       "suppliers": "Arms suppliers ({{start}}–{{end}})",
       "source": "Sources: World Bank and SIPRI Arms Transfers Database. TIV measures transfer volume, not financial value.",
       "sourceWorldBank": "Source: World Bank.",
+      "snapshotAssembled": "Ảnh chụp dữ liệu {{source}} được tổng hợp lúc {{time}}",
       "unavailable": "Not available",
       "coverage": "Mapped coverage",
       "supplierRetained": "Supplier data retained from the last successful importer refresh."
@@ -115,11 +116,13 @@
       "doNotTravel": "Không nên đi",
       "reconsiderTravel": "Cân nhắc lại chuyến đi",
       "exerciseCaution": "Thận trọng",
+      "normalPrecautions": "Biện pháp phòng ngừa thông thường",
       "advisory": "Khuyến cáo",
       "activeSirens": "Còi báo động hoạt động",
       "sirens24h": "Còi báo động / 24h",
       "aviationDisruptions": "Gián đoạn hàng không",
-      "gpsJammingZones": "Vùng nhiễu GPS"
+      "gpsJammingZones": "Vùng nhiễu GPS",
+      "temporalUnavailable": "Quan sát theo thời gian không khả dụng"
     },
     "fallback": {
       "instabilityIndex": "**Chỉ số Bất ổn: {{score}}/100** ({{level}}, {{trend}})",
@@ -190,7 +193,7 @@
       "decisionSignalsUnavailable": "Ảnh chụp nhanh tín hiệu quyết định của Trung Quốc hiện không có sẵn."
     },
     "foodStocks": "Food stocks",
-    "foodStocksHelp": "USDA PSD commodity stocks-to-use by marketing year, with the world ratio alongside for context. FAOSTAT fills production only where PSD has no country coverage.",
+    "foodStocksHelp": "USDA PSD commodity stocks-to-use by marketing year, with the world ratio alongside for context. FAOSTAT Food Balances supplies production and domestic supply when PSD has no complete country balance.",
     "loadingFoodStocks": "Loading food stocks…",
     "foodStocksUnavailable": "Food stocks unavailable.",
     "foodStocksProLocked": "Upgrade to PRO for commodity stocks-to-use",
@@ -230,6 +233,71 @@
       "manufacturingShare": "Manufacturing employment",
       "source": "Sources: {{sources}}.",
       "retained": "{{stage}} data retained from the last successful refresh."
+    },
+    "fiveFactorScorecard": {
+      "title": "Bảng điểm khả năng phục hồi 5 yếu tố",
+      "help": "Điểm bằng chứng v1 cố định cho thực phẩm, năng lượng, nhân khẩu học, công nghệ và quốc phòng. Mở rộng một dòng để kiểm tra đầu vào, nguồn gốc dữ liệu và lý do thiếu dữ liệu.",
+      "loading": "Đang tải bảng điểm 5 yếu tố…",
+      "unavailable": "Bảng điểm 5 yếu tố không khả dụng.",
+      "proLocked": "Nâng cấp lên PRO để xem bảng điểm khả năng phục hồi 5 yếu tố",
+      "insufficient": "Dữ liệu không đủ",
+      "notAvailable": "Không khả dụng",
+      "noEvidence": "Không có bằng chứng nào cho trụ cột này.",
+      "score": "{{score}}/5",
+      "coverage": "Phủ {{coverage}}%",
+      "methodologyVersion": "Phương pháp v{{version}}",
+      "methodologyLink": "Xem phương pháp luận",
+      "pillars": {
+        "food": "Thực phẩm",
+        "energy": "Năng lượng",
+        "demographics": "Dân số",
+        "technology": "Công nghệ",
+        "defense": "Quốc phòng"
+      },
+      "reasons": {
+        "source-unavailable": "Nguồn không khả dụng",
+        "country-unavailable": "Quốc gia không khả dụng",
+        "invalid-value": "Giá trị nguồn không hợp lệ",
+        "stale": "Bằng chứng đã cũ",
+        "coverage-below-floor": "Phạm vi bao phủ dưới ngưỡng chấm điểm",
+        "required-group-missing": "Thiếu nhóm bằng chứng bắt buộc",
+        "missing-population": "Không có dữ liệu dân số",
+        "redistribution-blocked": "Không được phép phân phối lại nguồn",
+        "pillar-unavailable": "Cột trụ không khả dụng"
+      },
+      "inputs": {
+        "population": "Population",
+        "food_productionBalance": "Cân bằng sản xuất",
+        "food_stocksToUse": "Kho dự trữ sử dụng",
+        "food_waterSecurity": "An ninh nguồn nước",
+        "food_importDiversity": "Đa dạng hóa nhập khẩu",
+        "energy_productionBalance": "Cân bằng sản xuất",
+        "energy_lowCarbonShare": "Tỷ trọng năng lượng carbon thấp",
+        "energy_gridEfficiency": "Hiệu quả lưới điện",
+        "demographics_totalDependency": "Tỷ lệ phụ thuộc tổng",
+        "demographics_oldAgeDependency": "Tỷ lệ phụ thuộc người cao tuổi",
+        "demographics_workingAgeProjection": "Dự báo lực lượng lao động",
+        "demographics_tertiaryEnrollment": "Tỷ lệ nhập học bậc cao đẳng, đại học",
+        "demographics_researchersPerMillion": "Nhà nghiên cứu trên một triệu dân",
+        "demographics_stemGraduateShare": "Tỷ trọng cử nhân STEM",
+        "demographics_trainedIndustrialShare": "Tỷ trọng lực lượng lao động công nghiệp được đào tạo",
+        "demographics_manufacturingEmploymentShare": "Tỷ trọng việc làm trong ngành sản xuất",
+        "technology_internetUse": "Sử dụng Internet",
+        "technology_mobileSubscriptions": "Đăng ký di động",
+        "technology_fixedBroadband": "Cáp quang cố định",
+        "technology_rdSpend": "Chi tiêu nghiên cứu và phát triển",
+        "technology_researchersPerMillion": "Nhà nghiên cứu trên một triệu dân",
+        "technology_stemGraduateShare": "Tỷ lệ tốt nghiệp STEM",
+        "technology_electricityAccess": "Truy cập điện",
+        "defense_expenditureUsd": "Chi tiêu quân sự",
+        "defense_expenditurePctGdp": "Gánh nặng quân sự",
+        "defense_personnel": "Cán bộ lực lượng vũ trang",
+        "defense_industrialBalance": "Cân bằng công nghiệp quốc phòng",
+        "defense_supplierDiversity": "Đa dạng nhà cung cấp vũ khí"
+      }
+    },
+    "defenseIndustrialBase": {
+      "proLocked": "Nâng cấp lên PRO để xem phụ thuộc nhà cung cấp vũ khí và năng lực quân sự"
     }
   },
   "header": {
@@ -729,7 +797,7 @@
       "fresh": "Mới cập nhật",
       "noMarkets": "Không tìm thấy thị trường dự đoán",
       "predictionMarkets": "Thị trường Dự đoán",
-      "unavailable": "Bản tin AI không khả dụng — cấu hình GROQ_API_KEY trong Cài đặt."
+      "unavailable": "Bản tin AI không khả dụng — cấu hình OPENROUTER_API_KEY trong Cài đặt."
     },
     "countryBrief": {
       "identifying": "Đang xác định quốc gia...",
@@ -745,7 +813,7 @@
       "predictionMarkets": "Thị trường Dự đoán",
       "loadingMarkets": "Đang tải thị trường dự đoán...",
       "infrastructure": "Mức độ phơi bày Hạ tầng",
-      "briefUnavailable": "Bản tin AI không khả dụng — cấu hình GROQ_API_KEY trong Cài đặt.",
+      "briefUnavailable": "Bản tin AI không khả dụng — cấu hình OPENROUTER_API_KEY trong Cài đặt.",
       "cached": "Đã lưu cache",
       "fresh": "Mới cập nhật",
       "noMarkets": "Không tìm thấy thị trường dự đoán",
@@ -787,7 +855,6 @@
   "components": {
     "webcams": {
       "paused": "Webcam đã tạm dừng",
-      "pausedIdle": "Webcam đã tạm dừng — di chuyển chuột để tiếp tục",
       "regions": {
         "all": "TẤT CẢ",
         "mideast": "TRUNG ĐÔNG",
@@ -797,7 +864,11 @@
         "space": "KHÔNG GIAN"
       },
       "play": "Phát",
-      "previewStatus": "Xem trước trực tiếp"
+      "previewStatus": "Sẵn sàng phát",
+      "connecting": "Đang kết nối…",
+      "unverified": "Không thể xác nhận luồng này đang phát trực tiếp",
+      "offline": "{{city}} hiện đang ngoại tuyến",
+      "noFeeds": "Không có webcam trực tiếp trong khu vực này lúc này"
     },
     "positiveNewsFeed": {
       "noStories": "Chưa có bài viết trong danh mục này"
@@ -914,7 +985,8 @@
       "refineryStage": "Refine",
       "stageUnavailable": "No published figures for this stage",
       "withheldNote": "W withheld",
-      "productionCaption": "Country shares of actual production. The map deposits layer shows where resources sit; this table shows who mines or refines them."
+      "productionCaption": "Country shares of actual production. The map deposits layer shows where resources sit; this table shows who mines or refines them.",
+      "productionProLocked": "Nâng cấp lên PRO để xem thị phần quốc gia của mỏ và nhà máy lọc dầu với độ tập trung (HHI) theo giai đoạn"
     },
     "tradePolicy": {
       "tariffs": "Thuế quan",
@@ -1008,10 +1080,18 @@
       "skipToEnd": "Tới cuối"
     },
     "pizzint": {
+      "indexSource": "Chỉ số: World Monitor · dữ liệu địa điểm:",
+      "statusNormal": "BÌNH THƯỜNG",
+      "statusNoData": "KHÔNG CÓ DỮ LIỆU",
+      "statusNoBaseline": "KHÔNG CÓ MỐC CHUẨN",
+      "vsUsual": "so với thường lệ",
       "title": "Chỉ số Pizza Lầu Năm Góc",
       "defcon": "DEFCON {{level}}",
       "updated": "Cập nhật {{timeAgo}}",
       "tensionsTitle": "Căng thẳng Địa chính trị",
+      "tensionsSource": "Căng thẳng: World Monitor tính từ các sự kiện GDELT",
+      "insufficientData": "Không đủ dữ liệu",
+      "pizzaUnavailable": "Không có dữ liệu hoạt động của các tiệm pizza",
       "source": "Nguồn:",
       "statusClosed": "ĐÓNG CỬA",
       "statusSpike": "ĐỘT BIẾN",
@@ -1023,11 +1103,11 @@
       "minutesAgo": "{{m}}ph trước",
       "hoursAgo": "{{h}}g trước",
       "defconLabels": {
-        "1": "COCKED PISTOL - SẴN SÀNG TỐI ĐA",
-        "2": "FAST PACE - LỰC LƯỢNG VŨ TRANG SẴN SÀNG",
-        "3": "ROUND HOUSE - TĂNG MỨC SẴN SÀNG",
-        "4": "DOUBLE TAKE - TĂNG CƯỜNG GIÁM SÁT TÌNH BÁO",
-        "5": "FADE OUT - MỨC SẴN SÀNG THẤP NHẤT"
+        "1": "Hoạt động tối đa",
+        "2": "Hoạt động cao",
+        "3": "Hoạt động gia tăng",
+        "4": "Trên bình thường",
+        "5": "Hoạt động bình thường"
       }
     },
     "strategicPosture": {
@@ -1108,9 +1188,6 @@
       "datacenter": "Trung tâm Dữ liệu",
       "base": "Căn cứ",
       "nuclear": "Hạt nhân"
-    },
-    "community": {
-      "joinDiscussion": "Đóng góp ý kiến phát triển"
     },
     "threatLabels": {
       "critical": "N.TRỌNG",
@@ -1351,7 +1428,7 @@
       "rankingStories": "Đang xếp hạng tin quan trọng...",
       "analyzingSentiment": "Đang phân tích cảm xúc...",
       "generatingBrief": "Đang tạo bản tin thế giới...",
-      "infoTooltip": "<strong>Phân tích Hỗ trợ AI</strong><br>• <strong>Bản tin Thế giới</strong>: Tóm tắt AI (Groq/OpenRouter)<br>• <strong>Cảm xúc</strong>: Phân tích sắc thái tin tức<br>• <strong>Tốc độ</strong>: Tin đang lan nhanh<br>• <strong>Điểm Hội tụ</strong>: Tương quan thực thể tin tức với tín hiệu bản đồ (quân sự, biểu tình, gián đoạn)<br><em>Chỉ Desktop • Được hỗ trợ bởi Llama 3.3 + Phát hiện Điểm Hội tụ</em>",
+      "infoTooltip": "<strong>Phân tích Hỗ trợ AI</strong><br>• <strong>Bản tin Thế giới</strong>: Tóm tắt AI (OpenRouter)<br>• <strong>Cảm xúc</strong>: Phân tích sắc thái tin tức<br>• <strong>Tốc độ</strong>: Tin đang lan nhanh<br>• <strong>Điểm Hội tụ</strong>: Tương quan thực thể tin tức với tín hiệu bản đồ (quân sự, biểu tình, gián đoạn)<br><em>Chỉ Desktop • Được hỗ trợ bởi Llama 3.3 + Phát hiện Điểm Hội tụ</em>",
       "streamQualityLabel": "Chất lượng Video",
       "streamQualityDesc": "Đặt chất lượng cho tất cả luồng phát trực tiếp (thấp hơn tiết kiệm băng thông)",
       "globeRenderScaleOptions": {
@@ -1363,7 +1440,7 @@
       },
       "mapFlashLabel": "Xung Sự kiện Trực tiếp",
       "mapFlashDesc": "Nhấp nháy vị trí trên bản đồ khi có tin tức nóng",
-      "aiFlowCloudLabel": "AI Đám mây (Groq & OpenRouter)",
+      "aiFlowCloudLabel": "AI Đám mây (OpenRouter)",
       "aiFlowCloudDesc": "Gửi tiêu đề tới cloud để AI tóm tắt (khuyến nghị)",
       "aiFlowBrowserLabel": "Mô hình cục bộ trên trình duyệt",
       "aiFlowBrowserDesc": "Chạy AI cục bộ trong trình duyệt của bạn",
@@ -1420,7 +1497,10 @@
       "provenanceTitle": "Nguồn gốc bài viết: số lượng bài viết được nhập và các nguồn riêng biệt mà bài viết này được chọn từ đó",
       "compiledFrom": "Được biên soạn từ {{stories}} câu chuyện trên {{sources}} nguồn",
       "briefFreshness": "Được tạo {{minutes}}m trước · nguồn mới nhất {{hours}}h tuổi",
-      "briefStoryDetails": "Story details ({{count}})"
+      "briefStoryDetails": "Chi tiết tin tức ({{count}})",
+      "streamIdleStopLabel": "Dừng video trực tiếp khi không hoạt động",
+      "streamIdleStopDesc": "Dừng Live News và Live Webcams sau khoảng thời gian này nếu không có hoạt động và hiển thị thông báo trong panel.",
+      "streamIdleStopNever": "Không bao giờ"
     },
     "settings": {
       "exportSettings": "Xuất cài đặt",
@@ -1749,6 +1829,16 @@
       "loading": "Đang kết nối đến relay Telegram...",
       "empty": "Không có tin nhắn",
       "disabled": "Relay Telegram không hoạt động",
+      "watchlistPlaceholder": "Thêm kênh công khai bằng @username",
+      "resolving": "Đang tìm kênh...",
+      "invalidUsername": "Hãy dùng @username Telegram công khai",
+      "resolveFailed": "Không tìm thấy kênh",
+      "watchlistLimit": "Bạn có thể theo dõi tối đa {{count}} kênh tùy chỉnh",
+      "previewMembers": "{{count}} thành viên",
+      "addChannel": "Thêm kênh",
+      "added": "Đã thêm",
+      "remove": "Xóa",
+      "custom": "Tùy chỉnh",
       "filterAll": "Tất cả",
       "filterBreaking": "Nóng",
       "filterConflict": "Xung đột",
@@ -1822,6 +1912,7 @@
       "etfs": "ETF",
       "netInflow": "DÒNG VÀO RÒNG",
       "netOutflow": "DÒNG RA RÒNG",
+      "netNeutral": "DÒNG TRUNG LẬP",
       "table": {
         "ticker": "Mã",
         "issuer": "Tổ chức Phát hành",
@@ -1904,15 +1995,11 @@
     },
     "liveNews": {
       "notLive": "{{name}} hiện không phát trực tiếp",
-      "cannotEmbed": "Không thể phát {{name}} tại đây — có thể bị hạn chế ở khu vực của bạn (lỗi {{code}})",
-      "botCheck": "YouTube yêu cầu đăng nhập để phát {{name}}",
       "signInToYouTube": "Đăng nhập YouTube",
       "openOnYouTube": "Mở trên YouTube",
       "manage": "Quản lý kênh",
       "addChannel": "Thêm kênh",
       "remove": "Xóa",
-      "youtubeHandle": "Handle YouTube (vd: @Channel)",
-      "youtubeHandleOrUrl": "Tên kênh hoặc URL YouTube",
       "displayName": "Tên hiển thị (tùy chọn)",
       "channelSettings": "Cài đặt kênh",
       "save": "Lưu",
@@ -1928,12 +2015,24 @@
       "regionMiddleEast": "Trung Đông",
       "regionAfrica": "Châu Phi",
       "regionOceania": "Châu Đại Dương",
-      "invalidHandle": "Nhập handle YouTube hợp lệ (ví dụ: @TênKênh)",
       "verifying": "Đang xác minh…",
       "hlsUrl": "URL luồng HLS (tùy chọn)",
       "invalidHlsUrl": "Nhập URL luồng HLS hợp lệ (.m3u8)",
       "playLiveFeed": "Phát luồng trực tiếp",
-      "readyStatus": "Sẵn sàng khi bạn sẵn sàng"
+      "readyStatus": "Sẵn sàng khi bạn sẵn sàng",
+      "embedBlocked": "YouTube không phát {{name}} bên trong các trang web khác ngay bây giờ",
+      "unavailable": "Không thể phát {{name}} ngay bây giờ",
+      "noStream": "Chưa có luồng trực tiếp nào được thiết lập cho {{name}}",
+      "needsChannelUrl": "Thêm {{name}} lại với URL kênh của nó (youtube.com/channel/UC…) hoặc URL video trực tiếp",
+      "connecting": "Đang kết nối với {{name}}…",
+      "recording": "Đang ghi hình",
+      "unverified": "Không thể xác nhận luồng này đang trực tiếp",
+      "playNextChannel": "Phát kênh tiếp theo",
+      "channelOrVideoUrl": "Kênh YouTube hoặc URL video",
+      "channelUrlHint": "Dán URL kênh (youtube.com/channel/UC…) hoặc URL video trực tiếp",
+      "youtubeChannel": "Kênh YouTube",
+      "insecureStream": "{{name}} sử dụng luồng không an toàn (http), trình duyệt sẽ chặn. Thêm lại với URL luồng an toàn (https)",
+      "httpsStreamHint": "Trình duyệt chặn các luồng không an toàn (http). Dán URL luồng an toàn (https)"
     },
     "map": {
       "showMap": "Hiển thị bản đồ",
@@ -1960,6 +2059,22 @@
       "metals": {
         "gold": "Gold",
         "silver": "Silver"
+      },
+      "divergence": {
+        "compositeValue": "Chỉ số áp lực vật lý: {{value}} / 100",
+        "fiveDayTrend": "Xu hướng phí năm ngày giao dịch",
+        "regimes": {
+          "normal": "Bình thường",
+          "elevated": "Nâng cao",
+          "stressed": "Căng thẳng",
+          "extreme": "Cực đoan"
+        },
+        "states": {
+          "insufficientHistory": "Khởi động: {{count}} / {{required}} điểm giao dịch",
+          "staleInput": "Điểm chuẩn vật lý đã cũ",
+          "missingInput": "Tín hiệu phân kỳ không có sẵn"
+        },
+        "twentyDayTrend": "Xu hướng phí bảo hiểm trong 20 ngày giao dịch"
       }
     },
     "crypto": {
@@ -2071,7 +2186,7 @@
       "infoTooltip": "<strong>Lịch kinh tế</strong> Các công bố kinh tế vĩ mô theo lịch: CPI, NFP, GDP, PMI và quyết định ngân hàng trung ương. Hiển thị dự báo so với thực tế so với trước đó. Sự kiện tác động cao được đánh dấu. Nguồn: nhà cung cấp dữ liệu kinh tế."
     },
     "fsi": {
-      "infoTooltip": "<strong>Chỉ báo căng thẳng tài chính</strong> Chỉ số căng thẳng tài chính của Fed Kansas City (KCFSI): đo lường căng thẳng trên thị trường tài chính Hoa Kỳ bằng 11 chỉ báo bao gồm chênh lệch lợi suất, biến động và tương quan chéo. Giá trị dương cho thấy căng thẳng trên mức trung bình. Nguồn: Federal Reserve Bank of Kansas City.",
+      "infoTooltip": "<strong>Chỉ báo căng thẳng tài chính</strong> Tỷ lệ WorldMonitor giữa tín dụng lợi suất cao và trái phiếu Kho bạc Mỹ dài hạn, được điều chỉnh theo biến động cổ phiếu và chênh lệch lợi suất cao: (HYG / TLT) / (VIX × HY spread / 100). Đây không phải là Chỉ số Căng thẳng Tài chính của Cục Dự trữ Liên bang Kansas City. Giá trị 1.5 hoặc cao hơn là căng thẳng thấp; dưới 0.3 là căng thẳng cao.",
       "title": "Chỉ Số Áp Lực Tài Chính",
       "usFsiValue": "GIÁ TRỊ FSI CỦA MỸ",
       "cissTitle": "EU CISS (Áp Lực Hệ Thống Vùng Euro)",
@@ -2111,6 +2226,26 @@
         "failedToLoad": "Không tải được"
       },
       "cissStale": "ECB chưa công bố giá trị mới — phép đo này có thể không còn hiện tại."
+    },
+    "supplyVulnerability": {
+      "title": "Mức dễ tổn thương hàng hóa",
+      "help": "Mức phơi nhiễm của quốc gia theo từng hàng hóa dựa trên độ tập trung nhà cung cấp, vận tải biển và vùng đệm chiến lược hiện có.",
+      "loading": "Đang tải mức dễ tổn thương hàng hóa…",
+      "unavailable": "Không có dữ liệu về mức dễ tổn thương hàng hóa",
+      "noCoverage": "Không đủ bằng chứng cho quốc gia này",
+      "unknown": "Không xác định",
+      "concentration": "Mức tập trung",
+      "transit": "Vận chuyển",
+      "buffer": "Dự trữ",
+      "sources": "Nguồn",
+      "methodology": "Phương pháp",
+      "hormuzTitle": "Mức phụ thuộc hàng hóa",
+      "dependentCountries": "Quốc gia phụ thuộc",
+      "dependentCommodities": "Hàng hóa phụ thuộc",
+      "stateOk": "Hiện tại",
+      "stateStale": "Đầu vào cũ",
+      "stateInsufficient": "Không đủ dữ liệu",
+      "proLocked": "Nâng cấp lên PRO để xem điểm số lỗ hổng hàng hóa"
     },
     "hormuzTracker": {
       "infoTooltip": "<strong>Bộ theo dõi thương mại Hormuz</strong> Theo dõi tàu AIS trực tiếp qua eo biển Hormuz, điểm nghẽn dầu quan trọng nhất thế giới. Giám sát số lượng tàu chở dầu, sự kiện gián đoạn và thay đổi dòng chảy hàng tuần. Khoảng 20% nguồn cung dầu toàn cầu đi qua đây hàng ngày.",
@@ -2192,7 +2327,7 @@
       }
     },
     "marketImplications": {
-      "infoTooltip": "<strong>Hàm ý thị trường AI</strong> Tín hiệu giao dịch được tạo bởi LLM từ tình trạng địa chính trị, hàng hóa và vĩ mô trực tiếp sau mỗi chu kỳ dự báo.<ul><li><strong>Hướng</strong>: LONG / SHORT / HEDGE với mức độ tin tưởng</li><li><strong>Khung thời gian</strong>: Horizon 1W, 2W, 1M, hoặc 3M</li><li><strong>Yếu tố thúc đẩy</strong>: Xúc tác chính đằng sau tín hiệu</li><li><strong>Rủi ro</strong>: Cảnh báo hoặc điều kiện làm mất hiệu lực</li></ul><em>Chỉ cho mục đích thông tin. Không phải lời khuyên đầu tư.</em>",
+      "infoTooltip": "<strong>Hàm ý thị trường AI</strong> Tín hiệu giao dịch được tạo bởi LLM từ tình trạng địa chính trị, hàng hóa và vĩ mô trực tiếp sau mỗi chu kỳ dự báo.<ul><li><strong>Hướng</strong>: LONG / SHORT / HEDGE</li><li><strong>Khung thời gian</strong>: Horizon 1W, 2W, 1M, hoặc 3M</li><li><strong>Yếu tố thúc đẩy</strong>: Xúc tác chính đằng sau tín hiệu</li><li><strong>Rủi ro</strong>: Cảnh báo hoặc điều kiện làm mất hiệu lực</li></ul><em>Chỉ cho mục đích thông tin. Không phải lời khuyên đầu tư.</em>",
       "title": "Ý Nghĩa Thị Trường AI",
       "directions": {
         "long": "LONG",
@@ -2204,10 +2339,64 @@
       "appliesToNext": "Áp dụng cho lần tạo lại AI tiếp theo",
       "signals_other": "{{count}} tín hiệu",
       "disclaimer": "Tín hiệu giao dịch do AI tạo ra cho mục đích thông tin. Không phải lời khuyên đầu tư. Luôn tự nghiên cứu của riêng bạn.",
-      "unavailable": "Ý nghĩa thị trường AI được tạo sau mỗi lần chạy dự báo. Vui lòng kiểm tra lại sớm."
+      "unavailable": "Ý nghĩa thị trường AI được tạo sau mỗi lần chạy dự báo. Vui lòng kiểm tra lại sớm.",
+      "unscored": "Các kịch bản tường thuật, không được đánh giá về độ chính xác."
     },
     "forecast": {
-      "infoTooltip": "<strong>Dự báo AI</strong> Ước tính xác suất do AI tạo ra cho các sự kiện địa chính trị và kinh tế:<ul><li>Phạm vi đa lĩnh vực: xung đột, thị trường, chuỗi cung ứng, an ninh mạng, chính trị</li><li>Mỗi dự báo hiển thị xác suất ước tính, mức độ tin cậy và thời gian chờ</li><li>Hiệu chỉnh theo so sánh đường cơ sở của thị trường dự đoán nếu có</li></ul>Dự báo cập nhật khi có tín hiệu thông tin mới. Lọc theo lĩnh vực bằng các tab ở trên."
+      "infoTooltip": "<strong>Dự báo AI</strong> Ước tính xác suất do AI tạo ra cho các sự kiện địa chính trị và kinh tế:<ul><li>Phạm vi đa lĩnh vực: xung đột, thị trường, chuỗi cung ứng, an ninh mạng, chính trị</li><li>Mỗi dự báo hiển thị xác suất ước tính, mức độ tin cậy và thời gian chờ</li><li>Hiệu chỉnh theo so sánh đường cơ sở của thị trường dự đoán nếu có</li></ul>Dự báo cập nhật khi có tín hiệu thông tin mới. Lọc theo lĩnh vực bằng các tab ở trên.",
+      "record": {
+        "label": "Thành tích",
+        "labelHint": "Các dự báo đã công bố được chấm điểm thế nào sau khi có kết quả, trong {{days}} ngày qua. Di chuột lên một con số để xem ý nghĩa.",
+        "unavailable": "Hiện không khả dụng",
+        "insufficient": "Chưa có đủ dự báo được chấm điểm",
+        "brier": "Điểm Brier {{score}} (n={{n}})",
+        "brierHint": "Điểm Brier trên {{n}} dự báo đã chấm: trung bình bình phương chênh lệch giữa xác suất dự báo và kết quả thực tế. 0 là hoàn hảo, 0,25 tương đương tung đồng xu, càng thấp càng tốt.",
+        "baseRate": "Tỷ lệ cơ sở {{score}} (n={{n}})",
+        "baseRateHint": "Điểm mà người luôn trả lời theo tỷ lệ \"có\" quan sát được sẽ đạt trên cùng {{n}} dự báo này ({{pct}}% có kết quả \"có\"). Vượt được nó nghĩa là các dự báo mang thêm thông tin.",
+        "void": "Vô hiệu {{pct}}% ({{count}} trên {{resolved}})",
+        "voidHint": "Dự báo đã có kết quả nhưng không thể chấm điểm, trong số {{resolved}} dự báo có kết quả trong kỳ.",
+        "stale": "Đã lỗi thời",
+        "staleHint": "Chấm điểm lần cuối {{date}}. Bộ chấm điểm chưa chạy lại từ đó, nên các con số này cũ hơn mức cần thiết.",
+        "fullRecord": "Thành tích đầy đủ"
+      },
+      "reliability": {
+        "measured": "{{domain}} n={{n}} · Brier {{score}} so với tỷ lệ cơ sở {{base}}",
+        "measuredHint": "Các dự báo {{domain}} đã công bố đạt điểm như thế nào trên {{n}} dự báo được xếp hạng trong {{days}} ngày qua. Tỷ lệ cơ sở là điểm sẽ đạt được nếu luôn trả lời tỷ lệ \"có\" được quan sát của miền. Điểm càng thấp càng tốt. Đây là kỷ lục của miền, không phải của dự báo này.",
+        "unmeasured": "Chưa được đo lường",
+        "unmeasuredHint": "Các dự báo {{domain}} có {{n}} kết quả được xếp loại trong {{days}} ngày qua. Một lĩnh vực cần {{min}} trước khi độ chính xác của nó được hiển thị."
+      },
+      "resolution": {
+        "last": "Lần trước: {{outcome}}",
+        "lastSr": "Kỳ trước của dự báo này đã kết thúc với {{outcome}}.",
+        "history": "Các kỳ gần đây, mới nhất trước: {{list}}",
+        "outcome": {
+          "yes": "CÓ",
+          "no": "KHÔNG",
+          "void": "VÔ HIỆU"
+        },
+        "void": {
+          "no_establishable_metric": "Nguồn dữ liệu không có số đo cho câu hỏi này",
+          "value_source_never_settled": "Nguồn dữ liệu chưa bao giờ công bố giá trị chính thức",
+          "count_source_window_not_retained": "Nguồn dữ liệu không còn lưu giữ kỳ của câu hỏi",
+          "unsupported_window": "Không thể kiểm tra câu hỏi theo nguồn dữ liệu của nó",
+          "unsupported_metric_key": "Không thể kiểm tra câu hỏi theo nguồn dữ liệu của nó",
+          "not_hard_spec": "Không thể kiểm tra câu hỏi theo nguồn dữ liệu của nó",
+          "missing_threshold": "Câu hỏi thiếu ngưỡng",
+          "missing_deadline": "Câu hỏi thiếu hạn chót",
+          "missing_generated_at": "Dự báo thiếu ngày bắt đầu",
+          "beyond_archive_horizon": "Kho lưu trữ tin tức không còn bao quát kỳ của câu hỏi",
+          "no_archive_evidence": "Kho lưu trữ tin tức không có thông tin về chủ đề",
+          "all_judges_void": "Cả hai người phân xử đều thấy bằng chứng không đủ",
+          "judge_disagreement": "Những người phân xử không đồng ý",
+          "judge_retry_exhausted": "Những người phân xử không đưa ra phán quyết",
+          "withheld_unpublished": "Loại dự báo này không còn được công bố",
+          "other": "Không thể xác định kết quả"
+        }
+      },
+      "horizons": {
+        "label": "Cũng được chấm điểm tại: {{list}}",
+        "hint": "Xác suất tiêu đề được đánh giá tại đường chân trời của chính dự báo. Phép chiếu tại mỗi đường chân trời này cũng được đánh giá, so với feed nguồn của nó, sử dụng giá trị được công bố lần đầu cho dự báo này. Các giá trị phép chiếu không được hiển thị vì giá trị hiện tại có thể khác với giá trị được đánh giá."
+      }
     },
     "escalationCorrelation": {
       "infoTooltip": "<strong>Trình theo dõi Tăng cường</strong> Phát hiện các tín hiệu địa chính trị hội tụ:<ul><li>Tương quan giữa chuyển động quân sự, sự kiện xung đột và đột biến tin tức</li><li>Điểm hội tụ theo mức độ nghiêm trọng (tới hạn/cao/trung bình/thấp)</li><li>Theo dõi xu hướng tăng cường hoặc giảm cường theo thời gian</li></ul>Nhấp vào một thẻ để phóng to khu vực trên bản đồ."
@@ -2501,7 +2690,14 @@
       "empty": "Không phát hiện sự hội tụ hoạt động",
       "signals_other": "{{count}} tín hiệu",
       "analyzing": "Đang phân tích...",
-      "viewOnMap": "Xem trên bản đồ"
+      "viewOnMap": "Xem trên bản đồ",
+      "waiting": "Đang chờ lần cập nhật dữ liệu tiếp theo. Bảng này tự động cập nhật.",
+      "offline": "Đang chờ kết nối. Bảng này tự động cập nhật khi bạn trực tuyến trở lại.",
+      "updated": "Đã cập nhật {{time}}",
+      "saved": "Lần cập nhật gần nhất đã biết {{time}} · Đang kiểm tra cập nhật",
+      "savedOffline": "Lần cập nhật gần nhất đã biết {{time}} · Ngoại tuyến",
+      "localSignals": "Dựa trên các tín hiệu đã tải trong bảng điều khiển",
+      "emptySaved": "Không có sự hội tụ trong lần cập nhật gần nhất đã biết."
     },
     "thermalEscalation": {
       "title": "Tăng cường nhiệt độ",
@@ -2646,6 +2842,67 @@
       "rubBase": "Ngân hàng Trung ương Nga — rúp cho 1 đơn vị",
       "rubPerUnit": "Rúp trên mỗi đơn vị",
       "sourceCbr": "Nguồn: Ngân hàng Trung ương Nga"
+    },
+    "passkeyOffer": {
+      "title": "Lưu khóa truy cập?",
+      "body": "Lần tới hãy đăng nhập bằng vân tay, khuôn mặt hoặc mã PIN của thiết bị — không cần nhớ mật khẩu.",
+      "accept": "Lưu khóa truy cập",
+      "dismiss": "Để sau",
+      "close": "Đóng",
+      "announce": "Lưu khóa truy cập để đăng nhập nhanh hơn lần tới.",
+      "busy": "Đang chờ thiết bị của bạn…",
+      "succeeded": "Khóa truy cập đã lưu. Bạn có thể sử dụng nó lần tới khi đăng nhập.",
+      "retryable": "Quá trình chưa hoàn tất. Bạn có thể thử lại.",
+      "failed": "Chúng tôi không thể lưu khóa truy cập trên thiết bị này."
+    },
+    "decisionBrief": {
+      "commodityTitle": "Bản tóm tắt quyết định về hàng hóa",
+      "commodity": "Hàng hóa / sản phẩm",
+      "blockedChokepoint": "Điểm nghẽn giả định bị phong tỏa",
+      "commodityCapture": "Ghi lại so sánh hàng hóa",
+      "title": "Bản tóm tắt quyết định",
+      "fuel": "Nhiên liệu",
+      "chokepoint": "Điểm nghẽn",
+      "baseline": "Gián đoạn cơ sở",
+      "comparison": "Gián đoạn so sánh",
+      "capture": "Lấy / làm mới cả hai",
+      "downloadHtml": "Tải bản tóm tắt HTML",
+      "downloadJson": "Tải bản tóm tắt JSON",
+      "back": "← Về bản tóm tắt quốc gia",
+      "select": "Chọn một gián đoạn năng lượng, rồi lấy cả hai kịch bản.",
+      "changed": "Lựa chọn đã thay đổi. Hãy lấy cả hai kịch bản trước khi xuất.",
+      "loading": "Đang lấy cả hai kịch bản…",
+      "captured": "Đã lấy. Kiểm tra ngày quan sát và các hạn chế trước khi tải xuống.",
+      "failed": "Không thể lấy các kịch bản. Kiểm tra quyền truy cập và thử lại. Không có kết quả để xuất.",
+      "locked": "Bản tóm tắt quyết định có trong Pro."
+    },
+    "liveMedia": {
+      "idleStatus": "Tạm dừng do không hoạt động",
+      "idleBody": "Video trực tiếp đã dừng sau {{duration}} không có hoạt động chuột, bàn phím hoặc chạm.",
+      "idleResume": "Tiếp tục",
+      "idleKeepPlaying": "Tiếp tục phát khi không hoạt động",
+      "idleSettingsHint": "Thay đổi bất kỳ lúc nào trong Cài đặt › Media.",
+      "idleKeepPlayingToast": "Video trực tiếp sẽ tiếp tục phát khi không hoạt động. Thay đổi trong Cài đặt › Media."
+    },
+    "corroboration": {
+      "singlePublisher": "Một nhà xuất bản duy nhất",
+      "singlePublisherHint": "Hiện tại chỉ có một nhà xuất bản đưa tin về điều này. Điều này mô tả phạm vi báo chí, không phải độ chính xác.",
+      "tier4Only": "Chỉ các nguồn cấp thấp",
+      "tier4OnlyHint": "Mọi cơ quan báo chí đưa tin về điều này đều là nguồn cấp 4 (các trang tổng hợp tin tức và blog). Điều này mô tả phạm vi báo chí, không phải độ chính xác.",
+      "rosterListed": "({{listed}} được liệt kê)",
+      "rosterFeeds": "Kênh tin đã thấy: {{labels}}",
+      "rosterLegend": "Các cấp xếp hạng nguồn; chúng không đánh giá tuyên bố này.",
+      "tierDocsLink": "Cách phân cấp",
+      "tierChip": "C{{tier}}",
+      "tierChipUndeclared": "C?",
+      "tierTitle1": "Cấp 1: Hãng thông tấn và cơ quan chính thức",
+      "tierTitle2": "Cấp 2: Các cơ quan báo chí lớn",
+      "tierTitle3": "Cấp 3: Nguồn chuyên ngành, khu vực và viện nghiên cứu chính sách",
+      "tierTitle4": "Cấp 4: Trang tổng hợp tin tức và blog",
+      "tierTitleUndeclared": "Chưa khai báo cấp: chưa được xem xét",
+      "rosterSummary": "Được đưa tin bởi {{publishers}}",
+      "rosterSummaryTier1": "Được đưa tin bởi {{publishers}}, trong đó {{tier1}} thuộc cấp 1",
+      "rosterPublishers_other": "{{count}} nhà xuất bản"
     }
   },
   "popups": {
@@ -2684,14 +2941,18 @@
     "protest": {
       "acledVerified": "ACLED (đã xác minh)",
       "gdelt": "GDELT",
+      "records": "bản ghi",
+      "mediaSignal": "Tín hiệu truyền thông chưa xác minh",
+      "relatedArticle": "Bài viết liên quan",
+      "mediaSignalDetail": "Địa điểm này được nhắc đến trong các bài viết về bất ổn. Sự kiện tại địa phương chưa được xác minh.",
       "riots": "Bạo loạn",
       "highSeverity": "Mức nghiêm trọng Cao"
     },
     "gpsJamming": {
       "title": "Nhiễu GPS/GNSS",
-      "navPerformance": "Nav Performance",
-      "samples": "ADS-B Samples",
-      "aircraft": "Aircraft",
+      "navPerformance": "Máy bay bị ảnh hưởng",
+      "samples": "Số máy bay bị ảnh hưởng",
+      "aircraft": "Tổng số máy bay quan sát được",
       "h3Hex": "H3 Hex"
     },
     "flight": {
@@ -3129,8 +3390,8 @@
   "signals": {
     "context": {
       "prediction_leads_news": {
-        "whyItMatters": "Thị trường dự đoán thường định giá thông tin trước khi trở thành tin tức — các nhà giao dịch có thể tiếp cận sớm các diễn biến.",
-        "actionableInsight": "Giám sát tin nóng trong 1-6 giờ tới có thể giải thích biến động thị trường.",
+        "whyItMatters": "Một thị trường dự đoán đã biến động trong khi mức độ đưa tin về chủ đề này vẫn thấp—thị trường có thể đang phản ứng với thông tin chưa được công bố.",
+        "actionableInsight": "Giám sát các tin tức mới nhất có thể giải thích được chuyển động thị trường.",
         "confidenceNote": "Độ tin cậy cao hơn nếu nhiều thị trường dự đoán di chuyển cùng hướng."
       },
       "news_leads_markets": {
@@ -3427,7 +3688,8 @@
   "auth": {
     "signIn": "Đăng nhập",
     "createAccount": "Tạo tài khoản",
-    "settings": "Cài đặt"
+    "settings": "Cài đặt",
+    "passkeyOffer": {}
   },
   "mcp": {
     "connectPanel": "Kết nối MCP",

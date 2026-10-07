@@ -79,7 +79,7 @@
     "loadingResilienceScore": "Loading resilience score…",
     "resilienceScoreUnavailable": "Resilience score unavailable.",
     "foodStocks": "Food stocks",
-    "foodStocksHelp": "USDA PSD commodity stocks-to-use by marketing year, with the world ratio alongside for context. FAOSTAT fills production only where PSD has no country coverage.",
+    "foodStocksHelp": "USDA PSD commodity stocks-to-use by marketing year, with the world ratio alongside for context. FAOSTAT Food Balances supplies production and domestic supply when PSD has no complete country balance.",
     "loadingFoodStocks": "Loading food stocks…",
     "foodStocksUnavailable": "Food stocks unavailable.",
     "foodStocksProLocked": "Upgrade to PRO for commodity stocks-to-use",
@@ -87,6 +87,9 @@
     "foodStocksMarketingYear": "Marketing year",
     "foodStocksRatio": "Stocks-to-use",
     "foodStocksWorld": "World",
+    "defenseIndustrialBase": {
+      "proLocked": "Upgrade to PRO for arms-supplier dependency and military capacity"
+    },
     "demographicsCapability": {
       "title": "Demographics & Workforce",
       "help": "Age structure, education pipeline, and industrial workforce capacity from UN WPP, UNESCO UIS and World Bank WDI, and ILOSTAT.",
@@ -112,6 +115,68 @@
       "source": "Sources: {{sources}}.",
       "retained": "{{stage}} data retained from the last successful refresh."
     },
+    "fiveFactorScorecard": {
+      "title": "Five-Factor Resilience Scorecard",
+      "help": "Frozen v1 evidence scores for food, energy, demographics, technology, and defense. Expand a row to inspect inputs, source provenance, and missing-data reasons.",
+      "loading": "Loading the five-factor scorecard…",
+      "unavailable": "Five-factor scorecard unavailable.",
+      "proLocked": "Upgrade to PRO for the five-factor resilience scorecard",
+      "insufficient": "Insufficient data",
+      "notAvailable": "Not available",
+      "noEvidence": "No evidence is available for this pillar.",
+      "score": "{{score}}/5",
+      "coverage": "{{coverage}}% coverage",
+      "methodologyVersion": "Methodology v{{version}}",
+      "methodologyLink": "View methodology",
+      "pillars": {
+        "food": "Food",
+        "energy": "Energy",
+        "demographics": "Demographics",
+        "technology": "Technology",
+        "defense": "Defense"
+      },
+      "reasons": {
+        "source-unavailable": "Source unavailable",
+        "country-unavailable": "Country unavailable",
+        "invalid-value": "Invalid source value",
+        "stale": "Evidence is stale",
+        "coverage-below-floor": "Coverage below the scoring floor",
+        "required-group-missing": "Required evidence group missing",
+        "missing-population": "Population unavailable",
+        "redistribution-blocked": "Source redistribution is not permitted",
+        "pillar-unavailable": "Pillar unavailable"
+      },
+      "inputs": {
+        "population": "Population",
+        "food_productionBalance": "Production balance",
+        "food_stocksToUse": "Stocks to use",
+        "food_waterSecurity": "Water security",
+        "food_importDiversity": "Import diversity",
+        "energy_productionBalance": "Production balance",
+        "energy_lowCarbonShare": "Low-carbon energy share",
+        "energy_gridEfficiency": "Grid efficiency",
+        "demographics_totalDependency": "Total dependency",
+        "demographics_oldAgeDependency": "Old-age dependency",
+        "demographics_workingAgeProjection": "Working-age projection",
+        "demographics_tertiaryEnrollment": "Tertiary enrollment",
+        "demographics_researchersPerMillion": "Researchers per million",
+        "demographics_stemGraduateShare": "STEM graduate share",
+        "demographics_trainedIndustrialShare": "Trained industrial workforce share",
+        "demographics_manufacturingEmploymentShare": "Manufacturing employment share",
+        "technology_internetUse": "Internet use",
+        "technology_mobileSubscriptions": "Mobile subscriptions",
+        "technology_fixedBroadband": "Fixed broadband",
+        "technology_rdSpend": "Research and development spending",
+        "technology_researchersPerMillion": "Researchers per million",
+        "technology_stemGraduateShare": "STEM graduate share",
+        "technology_electricityAccess": "Electricity access",
+        "defense_expenditureUsd": "Military expenditure",
+        "defense_expenditurePctGdp": "Military burden",
+        "defense_personnel": "Armed forces personnel",
+        "defense_industrialBalance": "Defense industrial balance",
+        "defense_supplierDiversity": "Arms supplier diversity"
+      }
+    },
     "commodities": {
       "wheat": "Wheat",
       "corn": "Corn",
@@ -129,7 +194,7 @@
     "predictionMarkets": "Prediction Markets",
     "loadingMarkets": "Loading prediction markets...",
     "infrastructure": "Infrastructure Exposure",
-    "briefUnavailable": "AI brief unavailable — configure GROQ_API_KEY in Settings.",
+    "briefUnavailable": "AI brief unavailable — configure OPENROUTER_API_KEY in Settings.",
     "cached": "Cached",
     "fresh": "Fresh",
     "noMarkets": "No active markets for this country.",
@@ -191,6 +256,7 @@
       "supplierRetained": "Supplier data retained from the last successful importer refresh.",
       "source": "Sources: World Bank and SIPRI Arms Transfers Database. TIV measures transfer volume, not financial value.",
       "sourceWorldBank": "Source: World Bank.",
+      "snapshotAssembled": "{{source}} snapshot assembled {{time}}",
       "unavailable": "Not available"
     },
     "economicIndicators": "Economic Indicators",
@@ -266,6 +332,7 @@
       "aisDisruptions": "AIS Disruptions",
       "satelliteFires": "Satellite Fires",
       "temporalAnomalies": "Temporal Anomalies",
+      "temporalUnavailable": "Temporal observations unavailable",
       "cyberThreats": "Cyber Threats",
       "earthquakes": "Earthquakes",
       "displaced": "Displaced",
@@ -275,6 +342,7 @@
       "doNotTravel": "Do Not Travel",
       "reconsiderTravel": "Reconsider Travel",
       "exerciseCaution": "Exercise Caution",
+      "normalPrecautions": "Normal Precautions",
       "advisory": "Advisory",
       "activeSirens": "Active Sirens",
       "sirens24h": "Sirens / 24h",
@@ -801,7 +869,7 @@
       "fresh": "Fresh",
       "noMarkets": "No prediction markets found",
       "predictionMarkets": "Prediction Markets",
-      "unavailable": "AI brief unavailable — configure GROQ_API_KEY in Settings."
+      "unavailable": "AI brief unavailable — configure OPENROUTER_API_KEY in Settings."
     },
     "countryBrief": {
       "identifying": "Identifying country...",
@@ -817,7 +885,7 @@
       "predictionMarkets": "Prediction Markets",
       "loadingMarkets": "Loading prediction markets...",
       "infrastructure": "Infrastructure Exposure",
-      "briefUnavailable": "AI brief unavailable — configure GROQ_API_KEY in Settings.",
+      "briefUnavailable": "AI brief unavailable — configure OPENROUTER_API_KEY in Settings.",
       "cached": "Cached",
       "fresh": "Fresh",
       "noMarkets": "No prediction markets found",
@@ -859,9 +927,12 @@
   "components": {
     "webcams": {
       "paused": "Webcams paused",
-      "pausedIdle": "Webcams paused — move mouse to resume",
       "play": "Play",
-      "previewStatus": "Live preview",
+      "previewStatus": "Ready to play",
+      "connecting": "Connecting…",
+      "unverified": "Can’t confirm this stream is live",
+      "offline": "{{city}} is offline right now",
+      "noFeeds": "No live webcams in this region right now",
       "regions": {
         "all": "ALL",
         "mideast": "MIDEAST",
@@ -1017,6 +1088,7 @@
       "stageUnavailable": "No published figures for this stage",
       "withheldNote": "W withheld",
       "productionCaption": "Country shares of actual production. The map deposits layer shows where resources sit; this table shows who mines or refines them.",
+      "productionProLocked": "Upgrade to PRO for mine and refinery country shares with concentration (HHI) by stage.",
       "risk": "Risk",
       "infoTooltip": "<strong>Supply Chain Monitor</strong> Global logistics and resource tracking:<ul><li><strong>Chokepoints</strong>: Maritime transit status, disruption scores, and vessel counts</li><li><strong>Shipping</strong>: Baltic Dry Index and freight rate trends</li><li><strong>Minerals</strong>: Critical mineral concentration risk (HHI) and top producers</li></ul>Click a chokepoint card to expand transit history chart."
     },
@@ -1123,7 +1195,7 @@
       "infoTooltip": "<strong>Stablecoins</strong> Peg health, market cap, and 24h volume for major USD-pegged tokens (USDT, USDC, DAI, BUSD). A broken peg signals systemic risk."
     },
     "marketImplications": {
-      "infoTooltip": "<strong>AI Market Implications</strong> LLM-generated trade signals derived from live geopolitical, commodity, and macro state after each forecast cycle.<ul><li><strong>Direction</strong>: LONG / SHORT / HEDGE with confidence rating</li><li><strong>Timeframe</strong>: 1W, 2W, 1M, or 3M horizon</li><li><strong>Driver</strong>: Key catalyst behind the signal</li><li><strong>Risk</strong>: Caveat or invalidation condition</li></ul><em>For informational purposes only. Not investment advice.</em>",
+      "infoTooltip": "<strong>AI Market Implications</strong> LLM-generated trade signals derived from live geopolitical, commodity, and macro state after each forecast cycle.<ul><li><strong>Direction</strong>: LONG / SHORT / HEDGE</li><li><strong>Timeframe</strong>: 1W, 2W, 1M, or 3M horizon</li><li><strong>Driver</strong>: Key catalyst behind the signal</li><li><strong>Risk</strong>: Caveat or invalidation condition</li></ul><em>For informational purposes only. Not investment advice.</em>",
       "title": "AI Market Implications",
       "directions": {
         "long": "LONG",
@@ -1136,6 +1208,7 @@
       "signals_one": "{{count}} signal",
       "signals_other": "{{count}} signals",
       "disclaimer": "AI-generated trade signals for informational purposes only. Not investment advice. Always do your own research.",
+      "unscored": "Narrative scenarios, not graded for accuracy.",
       "unavailable": "AI market implications are generated after each forecast run. Check back shortly."
     },
     "status": {
@@ -1152,10 +1225,18 @@
       "skipToEnd": "Skip to end"
     },
     "pizzint": {
+      "indexSource": "Index: World Monitor · venue data:",
+      "statusNormal": "NORMAL",
+      "statusNoData": "NO DATA",
+      "statusNoBaseline": "NO BASELINE",
+      "vsUsual": "vs usual",
       "title": "Pentagon Pizza Index",
       "defcon": "DEFCON {{level}}",
       "updated": "Updated {{timeAgo}}",
       "tensionsTitle": "Geopolitical Tensions",
+      "tensionsSource": "Tensions: World Monitor from GDELT events",
+      "insufficientData": "Insufficient data",
+      "pizzaUnavailable": "Pizza activity unavailable",
       "source": "Source:",
       "statusClosed": "CLOSED",
       "statusSpike": "SPIKE",
@@ -1167,11 +1248,11 @@
       "minutesAgo": "{{m}}m ago",
       "hoursAgo": "{{h}}h ago",
       "defconLabels": {
-        "1": "COCKED PISTOL - MAXIMUM READINESS",
-        "2": "FAST PACE - ARMED FORCES READY",
-        "3": "ROUND HOUSE - INCREASE FORCE READINESS",
-        "4": "DOUBLE TAKE - INCREASED INTELLIGENCE WATCH",
-        "5": "FADE OUT - LOWEST READINESS"
+        "1": "Maximum Activity",
+        "2": "High Activity",
+        "3": "Elevated Activity",
+        "4": "Above Normal",
+        "5": "Normal Activity"
       }
     },
     "strategicPosture": {
@@ -1252,9 +1333,6 @@
       "datacenter": "Datacenter",
       "base": "Base",
       "nuclear": "Nuclear"
-    },
-    "community": {
-      "joinDiscussion": "Help Shape What's Next"
     },
     "threatLabels": {
       "critical": "CRIT",
@@ -1495,7 +1573,7 @@
       "rankingStories": "Ranking important stories...",
       "analyzingSentiment": "Analyzing sentiment...",
       "generatingBrief": "Generating world brief...",
-      "infoTooltip": "<strong>AI-Powered Analysis</strong><br>• <strong>World Brief</strong>: AI summary (Groq/OpenRouter)<br>• <strong>Sentiment</strong>: News tone analysis<br>• <strong>Velocity</strong>: Fast-moving stories<br>• <strong>Focal Points</strong>: Correlates news entities with map signals (military, protests, outages)<br><em>Desktop only • Powered by Llama 3.3 + Focal Point Detection</em>",
+      "infoTooltip": "<strong>AI-Powered Analysis</strong><br>• <strong>World Brief</strong>: AI summary (OpenRouter)<br>• <strong>Sentiment</strong>: News tone analysis<br>• <strong>Velocity</strong>: Fast-moving stories<br>• <strong>Focal Points</strong>: Correlates news entities with map signals (military, protests, outages)<br><em>Desktop only • Powered by Llama 3.3 + Focal Point Detection</em>",
       "streamQualityLabel": "Video Quality",
       "streamQualityDesc": "Set quality for all live streams (lower saves bandwidth)",
       "globeRenderScaleOptions": {
@@ -1507,7 +1585,7 @@
       },
       "mapFlashLabel": "Live Event Pulse",
       "mapFlashDesc": "Flash locations on the map when breaking news arrives",
-      "aiFlowCloudLabel": "Cloud AI (Groq & OpenRouter)",
+      "aiFlowCloudLabel": "Cloud AI (OpenRouter)",
       "aiFlowCloudDesc": "Send headlines to cloud for AI summarization (recommended)",
       "aiFlowBrowserLabel": "Browser Local Model",
       "aiFlowBrowserDesc": "Run AI locally in your browser",
@@ -1536,6 +1614,9 @@
       "analysisFrameworksSaveToLibrary": "Save to Library",
       "streamAlwaysOnLabel": "Auto-play live streams on dashboard",
       "streamAlwaysOnDesc": "Starts Live News and Live Webcams automatically when visible. Leave off to load video only after you click Play.",
+      "streamIdleStopLabel": "Stop live video when idle",
+      "streamIdleStopDesc": "Stops Live News and Live Webcams after this long without activity and shows a notice in the panel.",
+      "streamIdleStopNever": "Never",
       "frameworkNote": "Applies to client-generated analysis only",
       "loadingServerInsights": "Loading server insights...",
       "usingCachedBrief": "Using cached brief...",
@@ -1838,6 +1919,27 @@
       "sortNewest": "Newest",
       "sortRelevance": "Relevance"
     },
+    "corroboration": {
+      "singlePublisher": "Single publisher",
+      "singlePublisherHint": "Only one publisher is reporting this so far. This describes coverage, not accuracy.",
+      "tier4Only": "Low-tier sources only",
+      "tier4OnlyHint": "Every outlet reporting this is a tier-4 source (aggregators and blogs). This describes coverage, not accuracy.",
+      "rosterPublishers_one": "{{count}} publisher",
+      "rosterPublishers_other": "{{count}} publishers",
+      "rosterSummary": "Reported by {{publishers}}",
+      "rosterSummaryTier1": "Reported by {{publishers}}, including {{tier1}} tier-1",
+      "rosterListed": "({{listed}} listed)",
+      "rosterFeeds": "Feeds seen: {{labels}}",
+      "rosterLegend": "Tiers rank sources; they do not judge this claim.",
+      "tierDocsLink": "How tiers are assigned",
+      "tierChip": "T{{tier}}",
+      "tierChipUndeclared": "T?",
+      "tierTitle1": "Tier 1: Wire services and official bodies",
+      "tierTitle2": "Tier 2: Major outlets",
+      "tierTitle3": "Tier 3: Specialist, regional and think-tank sources",
+      "tierTitle4": "Tier 4: Aggregators and blogs",
+      "tierTitleUndeclared": "Tier not declared: not yet reviewed"
+    },
     "mobileNav": {
       "panelCategories": "Panel categories"
     },
@@ -1897,6 +1999,16 @@
       "loading": "Connecting to Telegram relay...",
       "empty": "No messages available",
       "disabled": "Telegram relay not active",
+      "watchlistPlaceholder": "Add public channel by @username",
+      "resolving": "Resolving channel...",
+      "invalidUsername": "Use a public Telegram @username",
+      "resolveFailed": "Unable to resolve channel",
+      "watchlistLimit": "You can follow up to {{count}} custom channels",
+      "previewMembers": "{{count}} members",
+      "addChannel": "Add channel",
+      "added": "Added",
+      "remove": "Remove",
+      "custom": "Custom",
       "filterAll": "All",
       "filterBreaking": "Breaking",
       "filterConflict": "Conflict",
@@ -1970,6 +2082,7 @@
       "etfs": "ETFs",
       "netInflow": "NET INFLOW",
       "netOutflow": "NET OUTFLOW",
+      "netNeutral": "NET NEUTRAL",
       "table": {
         "ticker": "Ticker",
         "issuer": "Issuer",
@@ -1998,7 +2111,60 @@
       "infoTooltip": "<strong>BTC Regime</strong> Composite signal dashboard for Bitcoin positioning and risk appetite:<ul><li><strong>Liquidity</strong>: Net Fed liquidity proxy</li><li><strong>Flow</strong>: BTC vs QQQ 5-day returns</li><li><strong>Regime</strong>: QQQ vs XLP rotation (risk-on/off)</li><li><strong>BTC Trend</strong>: Price vs SMA50/200, Mayer Multiple</li><li><strong>Hash Rate</strong>: 30-day network hash change</li><li><strong>Fear & Greed</strong>: Market sentiment index</li></ul>This panel is for regime and positioning, not broad macro data."
     },
     "forecast": {
-      "infoTooltip": "<strong>AI Forecasts</strong> AI-generated probability estimates for geopolitical and economic events:<ul><li>Cross-domain coverage: conflict, markets, supply chain, cyber, political</li><li>Each forecast shows estimated probability, confidence level, and time horizon</li><li>Calibrated against prediction market baselines where available</li></ul>Forecasts update as new intelligence signals arrive. Filter by domain using the tabs above."
+      "infoTooltip": "<strong>AI Forecasts</strong> AI-generated probability estimates for geopolitical and economic events:<ul><li>Cross-domain coverage: conflict, markets, supply chain, cyber, political</li><li>Each forecast shows estimated probability, confidence level, and time horizon</li><li>Calibrated against prediction market baselines where available</li></ul>Forecasts update as new intelligence signals arrive. Filter by domain using the tabs above.",
+      "record": {
+        "label": "Track record",
+        "labelHint": "How the published forecasts scored once they resolved, over the last {{days}} days. Hover a number for what it means.",
+        "unavailable": "Unavailable right now",
+        "insufficient": "Not enough graded forecasts yet",
+        "brier": "Brier {{score}} (n={{n}})",
+        "brierHint": "Brier score over {{n}} graded forecasts: the average squared gap between the forecast probability and what happened. 0 is perfect, 0.25 is a coin flip, lower is better.",
+        "baseRate": "Base rate {{score}} (n={{n}})",
+        "baseRateHint": "What always answering the observed yes rate would have scored on the same {{n}} forecasts ({{pct}}% resolved yes). Beating it means the forecasts add information.",
+        "void": "Void {{pct}}% ({{count}} of {{resolved}})",
+        "voidHint": "Forecasts that resolved but could not be graded, out of {{resolved}} resolved in the window.",
+        "stale": "Out of date",
+        "staleHint": "Last graded {{date}}. The grader has not run since, so these numbers are older than they should be.",
+        "fullRecord": "Full record"
+      },
+      "reliability": {
+        "measured": "{{domain}} n={{n}} · Brier {{score}} vs base rate {{base}}",
+        "measuredHint": "How published {{domain}} forecasts have scored over {{n}} graded forecasts in the last {{days}} days. The base rate is what always answering the domain's observed yes rate would have scored. Lower is better. This is the domain's record, not this forecast's.",
+        "unmeasured": "Not yet measured",
+        "unmeasuredHint": "{{domain}} forecasts have {{n}} graded results in the last {{days}} days. A domain needs {{min}} before its accuracy is shown."
+      },
+      "resolution": {
+        "last": "Last: {{outcome}}",
+        "lastSr": "The previous window of this forecast resolved {{outcome}}.",
+        "history": "Recent windows, newest first: {{list}}",
+        "outcome": {
+          "yes": "YES",
+          "no": "NO",
+          "void": "VOID"
+        },
+        "void": {
+          "no_establishable_metric": "The feed had no reading for this question",
+          "value_source_never_settled": "The feed never published a settled value",
+          "count_source_window_not_retained": "The feed no longer held the question window",
+          "unsupported_window": "The question could not be checked against its feed",
+          "unsupported_metric_key": "The question could not be checked against its feed",
+          "not_hard_spec": "The question could not be checked against its feed",
+          "missing_threshold": "The question was missing a threshold",
+          "missing_deadline": "The question was missing a deadline",
+          "missing_generated_at": "The forecast was missing its start date",
+          "beyond_archive_horizon": "The news archive no longer covered the question window",
+          "no_archive_evidence": "The news archive had nothing on the subject",
+          "all_judges_void": "Both judges found the evidence insufficient",
+          "judge_disagreement": "The judges disagreed",
+          "judge_retry_exhausted": "The judges returned no verdict",
+          "withheld_unpublished": "This kind of forecast is no longer published",
+          "other": "Could not be resolved"
+        }
+      },
+      "horizons": {
+        "label": "Also scored at: {{list}}",
+        "hint": "The headline probability is graded at the forecast's own horizon. The projection at each of these horizons is graded too, against its source feed, using the value first published for this forecast. Projection values are not shown because the current value can differ from the graded one."
+      }
     },
     "escalationCorrelation": {
       "infoTooltip": "<strong>Escalation Monitor</strong> Detects converging geopolitical signals:<ul><li>Correlates military movements, conflict events, and news spikes</li><li>Scores convergence zones by severity (critical/high/medium/low)</li><li>Tracks escalation or de-escalation trends over time</li></ul>Click a card to zoom to the region on the map."
@@ -2041,6 +2207,22 @@
       "paper": "Paper",
       "premium": "Premium",
       "asOf": "As of {{date}}",
+      "divergence": {
+        "compositeValue": "Physical stress index: {{value}} / 100",
+        "fiveDayTrend": "Five-trading-day premium trend",
+        "twentyDayTrend": "Twenty-trading-day premium trend",
+        "regimes": {
+          "normal": "Normal",
+          "elevated": "Elevated",
+          "stressed": "Stressed",
+          "extreme": "Extreme"
+        },
+        "states": {
+          "insufficientHistory": "Warming up: {{count}} / {{required}} trading points",
+          "staleInput": "Physical benchmark is stale",
+          "missingInput": "Divergence signal unavailable"
+        }
+      },
       "metals": {
         "gold": "Gold",
         "silver": "Silver"
@@ -2159,10 +2341,25 @@
         "context": "Context established"
       }
     },
+    "liveMedia": {
+      "idleStatus": "Paused for inactivity",
+      "idleBody": "Live video stopped after {{duration}} without mouse, keyboard or touch activity.",
+      "idleResume": "Resume",
+      "idleKeepPlaying": "Keep playing when idle",
+      "idleSettingsHint": "Change this anytime in Settings › Media.",
+      "idleKeepPlayingToast": "Live video will keep playing when idle. Change in Settings › Media."
+    },
     "liveNews": {
       "notLive": "{{name}} is not currently live",
-      "cannotEmbed": "{{name}} can't be played here — it may be restricted in your region (error {{code}})",
-      "botCheck": "YouTube is requesting sign-in to play {{name}}",
+      "embedBlocked": "YouTube won’t play {{name}} inside other sites right now",
+      "unavailable": "{{name}} can’t be played right now",
+      "noStream": "No live stream is set up for {{name}} yet",
+      "needsChannelUrl": "Add {{name}} again with its channel URL (youtube.com/channel/UC…) or a live video URL",
+      "insecureStream": "{{name}} uses an insecure (http) stream, which browsers block. Add it again with a secure (https) stream URL",
+      "connecting": "Connecting to {{name}}…",
+      "recording": "Recording",
+      "unverified": "Can’t confirm this stream is live",
+      "playNextChannel": "Play next channel",
       "signInToYouTube": "Sign in to YouTube",
       "openOnYouTube": "Open on YouTube",
       "playLiveFeed": "Play live feed",
@@ -2170,8 +2367,10 @@
       "manage": "Manage channels",
       "addChannel": "Add channel",
       "remove": "Remove",
-      "youtubeHandle": "YouTube handle (e.g. @Channel)",
-      "youtubeHandleOrUrl": "YouTube handle or URL",
+      "channelOrVideoUrl": "YouTube channel or video URL",
+      "channelUrlHint": "Paste a channel URL (youtube.com/channel/UC…) or a live video URL",
+      "httpsStreamHint": "Browsers block insecure (http) streams. Paste a secure (https) stream URL",
+      "youtubeChannel": "YouTube channel",
       "displayName": "Display name (optional)",
       "channelSettings": "Channel Settings",
       "save": "Save",
@@ -2187,7 +2386,6 @@
       "regionMiddleEast": "Middle East",
       "regionAfrica": "Africa",
       "regionOceania": "Oceania",
-      "invalidHandle": "Enter a valid YouTube handle (e.g. @ChannelName)",
       "verifying": "Verifying…",
       "hlsUrl": "HLS Stream URL (optional)",
       "invalidHlsUrl": "Enter a valid HLS stream URL (.m3u8)"
@@ -2290,7 +2488,7 @@
       "infoTooltip": "<strong>Economic Calendar</strong> Scheduled macroeconomic releases: CPI, NFP, GDP, PMI, and central bank decisions. Shows forecast vs actual vs prior. High-impact events highlighted. Source: economic data providers."
     },
     "fsi": {
-      "infoTooltip": "<strong>Financial Stress Indicator</strong> Kansas City Fed Financial Stress Index (KCFSI): measures stress in US financial markets using 11 indicators including yield spreads, volatility, and cross-correlations. Positive values indicate above-average stress. Source: Federal Reserve Bank of Kansas City.",
+      "infoTooltip": "<strong>Financial Stress Indicator</strong> WorldMonitor ratio of high-yield credit to long Treasuries, adjusted for equity volatility and the high-yield spread: (HYG / TLT) / (VIX × HY spread / 100). This is not the Kansas City Fed Financial Stress Index. A reading of 1.5 or higher is low stress; below 0.3 is high stress.",
       "title": "Financial Stress Indicator",
       "usFsiValue": "US FSI VALUE",
       "cissTitle": "EU CISS (Euro Area Systemic Stress)",
@@ -2330,6 +2528,26 @@
         "unavailable": "FSI data unavailable",
         "failedToLoad": "Failed to load"
       }
+    },
+    "supplyVulnerability": {
+      "title": "Commodity Vulnerability",
+      "help": "Country exposure by commodity from supplier concentration, maritime transit, and available strategic buffers.",
+      "loading": "Loading commodity vulnerability…",
+      "unavailable": "Commodity vulnerability data unavailable",
+      "noCoverage": "Insufficient evidence for this country",
+      "unknown": "Unknown",
+      "concentration": "Concentration",
+      "transit": "Transit",
+      "buffer": "Buffer",
+      "sources": "Sources",
+      "methodology": "Methodology",
+      "hormuzTitle": "Commodity dependencies",
+      "dependentCountries": "Dependent countries",
+      "dependentCommodities": "Dependent commodities",
+      "stateOk": "Current",
+      "stateStale": "Stale input",
+      "stateInsufficient": "Insufficient data",
+      "proLocked": "Upgrade to PRO for commodity vulnerability scoring"
     },
     "hormuzTracker": {
       "infoTooltip": "<strong>Hormuz Trade Tracker</strong> Live AIS vessel tracking through the Strait of Hormuz, the world's most critical oil chokepoint. Monitors tanker counts, disruption events, and weekly flow changes. Approximately 20% of global oil supply transits here daily.",
@@ -2599,6 +2817,13 @@
     },
     "correlation": {
       "loading": "Waiting for data...",
+      "waiting": "Waiting for the next data update. This panel updates automatically.",
+      "offline": "Waiting for a connection. This panel updates automatically when you are back online.",
+      "updated": "Updated {{time}}",
+      "saved": "Last known update {{time}} · Checking for updates",
+      "savedOffline": "Last known update {{time}} · Offline",
+      "localSignals": "Based on loaded dashboard signals",
+      "emptySaved": "No convergence in the last known update.",
       "empty": "No active convergence detected",
       "signals_one": "{{count}} signal",
       "signals_other": "{{count}} signals",
@@ -2734,6 +2959,39 @@
       "rubBase": "Bank of Russia — RUB per 1 unit",
       "rubPerUnit": "RUB per unit",
       "sourceCbr": "Source: Bank of Russia"
+    },
+    "passkeyOffer": {
+      "title": "Save a passkey?",
+      "body": "Sign in next time with your fingerprint, face, or device PIN — no password to remember.",
+      "accept": "Save passkey",
+      "dismiss": "Not now",
+      "close": "Close",
+      "announce": "Save a passkey to sign in faster next time.",
+      "busy": "Waiting for your device…",
+      "succeeded": "Passkey saved. You can use it next time you sign in.",
+      "retryable": "That didn't finish. You can try again.",
+      "failed": "We couldn't save a passkey on this device."
+    },
+    "decisionBrief": {
+      "commodityTitle": "Commodity decision brief",
+      "commodity": "Commodity / product",
+      "blockedChokepoint": "Assumed blocked chokepoint",
+      "commodityCapture": "Capture commodity comparison",
+      "title": "Decision brief",
+      "fuel": "Fuel",
+      "chokepoint": "Chokepoint",
+      "baseline": "Baseline disruption",
+      "comparison": "Comparison disruption",
+      "capture": "Capture / refresh both",
+      "downloadHtml": "Download decision HTML",
+      "downloadJson": "Download decision JSON",
+      "back": "← Back to brief",
+      "select": "Select an energy disruption, then capture both scenarios.",
+      "changed": "Selection changed. Capture both scenarios before exporting.",
+      "loading": "Capturing both scenarios…",
+      "captured": "Captured. Review observation dates and constraints before downloading.",
+      "failed": "Could not capture the scenarios. Check your access and retry. No result is available to export.",
+      "locked": "Decision brief is available on Pro."
     }
   },
   "popups": {
@@ -2772,6 +3030,10 @@
     "protest": {
       "acledVerified": "ACLED (verified)",
       "gdelt": "GDELT",
+      "records": "records",
+      "mediaSignal": "Unverified media signal",
+      "relatedArticle": "Related article",
+      "mediaSignalDetail": "This location is mentioned in unrest-related articles. A local event is not verified.",
       "riots": "Riots",
       "highSeverity": "High Severity"
     },
@@ -3217,8 +3479,8 @@
   "signals": {
     "context": {
       "prediction_leads_news": {
-        "whyItMatters": "Prediction markets often price in information before it becomes news—traders may have early access to developments.",
-        "actionableInsight": "Monitor for breaking news in the next 1-6 hours that could explain the market move.",
+        "whyItMatters": "A prediction market moved while news coverage of the topic stayed low—the market may be reacting to information that has not been reported yet.",
+        "actionableInsight": "Monitor for breaking news that could explain the market move.",
         "confidenceNote": "Higher confidence if multiple prediction markets move in same direction."
       },
       "news_leads_markets": {

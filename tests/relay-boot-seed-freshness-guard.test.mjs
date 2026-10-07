@@ -205,9 +205,11 @@ const SEEDERS = [
   ['WsbTickers', "'seed-meta:intelligence:wsb-tickers'", 'WSB_TICKERS_INTERVAL_MS', 'seedWsbTickers'],
   ['ClimateNewsSeed', "'relay:heartbeat:climate-news'", 'CLIMATE_NEWS_SEED_INTERVAL_MS', 'seedClimateNews'],
   ['ChokepointFlows', "'relay:heartbeat:chokepoint-flows'", 'CHOKEPOINT_FLOWS_SEED_INTERVAL_MS', 'seedChokepointFlows'],
+  ['AuYieldFallback', "'seed-meta:economic:yield-curve-au'", 'AU_YIELD_CHECK_INTERVAL_MS', 'seedAuYieldCurve'],
   ['PizzINT', "'seed-meta:intelligence:pizzint'", 'PIZZINT_SEED_INTERVAL_MS', 'seedPizzint'],
   ['DodoPrices', "'seed-meta:product-catalog'", 'DODO_PRICE_SEED_INTERVAL_MS', 'seedDodoPrices'],
   ['Transit', "'seed-meta:supply_chain:chokepoint_transits'", 'CHOKEPOINT_TRANSIT_INTERVAL_MS', 'seedChokepointTransits'],
+  ['AisGaps', "'seed-meta:maritime:ais-gaps'", 'AIS_GAPS_SEED_INTERVAL_MS', 'seedAisGaps'],
   ['TransitSummary', "'seed-meta:supply_chain:transit-summaries'", 'TRANSIT_SUMMARY_INTERVAL_MS', 'seedTransitSummaries'],
   ['Cyber', "'seed-meta:cyber:threats'", 'CYBER_SEED_INTERVAL_MS', 'seedCyberThreats'],
 ];

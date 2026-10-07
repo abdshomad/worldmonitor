@@ -16,7 +16,7 @@
     "predictionMarkets": "ตลาดพยากรณ์",
     "loadingMarkets": "กำลังโหลดตลาดพยากรณ์...",
     "infrastructure": "โครงสร้างพื้นฐานที่เปิดเผย",
-    "briefUnavailable": "สรุป AI ไม่พร้อมใช้งาน — กรุณาตั้งค่า GROQ_API_KEY ในการตั้งค่า",
+    "briefUnavailable": "สรุป AI ไม่พร้อมใช้งาน — กรุณาตั้งค่า OPENROUTER_API_KEY ในการตั้งค่า",
     "cached": "แคชแล้ว",
     "fresh": "ใหม่",
     "noMarkets": "ไม่พบตลาดพยากรณ์",
@@ -76,6 +76,7 @@
       "suppliers": "Arms suppliers ({{start}}–{{end}})",
       "source": "Sources: World Bank and SIPRI Arms Transfers Database. TIV measures transfer volume, not financial value.",
       "sourceWorldBank": "Source: World Bank.",
+      "snapshotAssembled": "รวบรวมภาพรวมข้อมูล {{source}} เมื่อ {{time}}",
       "unavailable": "Not available",
       "coverage": "Mapped coverage",
       "supplierRetained": "Supplier data retained from the last successful importer refresh."
@@ -115,11 +116,13 @@
       "doNotTravel": "ห้ามเดินทาง",
       "reconsiderTravel": "ทบทวนการเดินทาง",
       "exerciseCaution": "ใช้ความระมัดระวัง",
+      "normalPrecautions": "มาตรการป้องกันตามปกติ",
       "advisory": "คำเตือน",
       "activeSirens": "ไซเรนทำงาน",
       "sirens24h": "ไซเรน / 24 ชม.",
       "aviationDisruptions": "การหยุดชะงักด้านการบิน",
-      "gpsJammingZones": "เขตรบกวน GPS"
+      "gpsJammingZones": "เขตรบกวน GPS",
+      "temporalUnavailable": "ข้อมูลการสังเกตการณ์ตามเวลาไม่พร้อมใช้งาน"
     },
     "fallback": {
       "instabilityIndex": "**ดัชนีความไม่มั่นคง: {{score}}/100** ({{level}}, {{trend}})",
@@ -190,7 +193,7 @@
       "decisionSignalsUnavailable": "ภาพรวมสัญญาณการตัดสินใจของจีนไม่พร้อมใช้งานในขณะนี้"
     },
     "foodStocks": "Food stocks",
-    "foodStocksHelp": "USDA PSD commodity stocks-to-use by marketing year, with the world ratio alongside for context. FAOSTAT fills production only where PSD has no country coverage.",
+    "foodStocksHelp": "USDA PSD commodity stocks-to-use by marketing year, with the world ratio alongside for context. FAOSTAT Food Balances supplies production and domestic supply when PSD has no complete country balance.",
     "loadingFoodStocks": "Loading food stocks…",
     "foodStocksUnavailable": "Food stocks unavailable.",
     "foodStocksProLocked": "Upgrade to PRO for commodity stocks-to-use",
@@ -230,6 +233,71 @@
       "manufacturingShare": "Manufacturing employment",
       "source": "Sources: {{sources}}.",
       "retained": "{{stage}} data retained from the last successful refresh."
+    },
+    "fiveFactorScorecard": {
+      "title": "คะแนนความยืดหยุ่น 5 ปัจจัย",
+      "help": "คะแนนหลักฐาน v1 ที่ถูกล็อกสำหรับอาหาร พลังงาน ประชากรศาสตร์ เทคโนโลยี และกลาโหม ขยายแถวเพื่อตรวจสอบข้อมูลนำเข้า แหล่งที่มาของข้อมูล และเหตุผลของข้อมูลที่ไม่ครบถ้วน",
+      "loading": "กำลังโหลดคะแนนความยืดหยุ่น 5 ปัจจัย…",
+      "unavailable": "คะแนนความยืดหยุ่น 5 ปัจจัยไม่พร้อมใช้งาน",
+      "proLocked": "อัปเกรดเป็น PRO เพื่อเข้าถึงคะแนนความยืดหยุ่น 5 ปัจจัย",
+      "insufficient": "ข้อมูลไม่เพียงพอ",
+      "notAvailable": "ไม่พร้อมใช้งาน",
+      "noEvidence": "ไม่มีหลักฐานสำหรับเสาหลักนี้",
+      "score": "{{score}}/5",
+      "coverage": "ครอบคลุม {{coverage}}%",
+      "methodologyVersion": "ระเบียบวิธี v{{version}}",
+      "methodologyLink": "ดูระเบียบวิธีวิจัย",
+      "pillars": {
+        "food": "อาหาร",
+        "energy": "พลังงาน",
+        "demographics": "ประชากรศาสตร์",
+        "technology": "เทคโนโลยี",
+        "defense": "กลาโหม"
+      },
+      "reasons": {
+        "source-unavailable": "แหล่งข้อมูลไม่พร้อมใช้งาน",
+        "country-unavailable": "ประเทศไม่พร้อมใช้งาน",
+        "invalid-value": "ค่าจากแหล่งข้อมูลไม่ถูกต้อง",
+        "stale": "หลักฐานล้าสมัย",
+        "coverage-below-floor": "ความครอบคลุมต่ำกว่าเกณฑ์ขั้นต่ำในการให้คะแนน",
+        "required-group-missing": "ขาดกลุ่มหลักฐานที่จำเป็น",
+        "missing-population": "ไม่มีข้อมูลประชากร",
+        "redistribution-blocked": "ไม่ได้รับอนุญาตให้กระจายแหล่งข้อมูลใหม่",
+        "pillar-unavailable": "ไม่มีข้อมูลเสาหลัก"
+      },
+      "inputs": {
+        "population": "Population",
+        "food_productionBalance": "สมดุลการผลิต",
+        "food_stocksToUse": "สต็อกที่จะใช้",
+        "food_waterSecurity": "ความมั่นคงด้านน้ำ",
+        "food_importDiversity": "ความหลากหลายของการนำเข้า",
+        "energy_productionBalance": "สมดุลการผลิต",
+        "energy_lowCarbonShare": "สัดส่วนพลังงานคาร์บอนต่ำ",
+        "energy_gridEfficiency": "ประสิทธิภาพโครงข่ายไฟฟ้า",
+        "demographics_totalDependency": "อัตราพึ่งพาโดยรวม",
+        "demographics_oldAgeDependency": "อัตราพึ่งพาผู้สูงอายุ",
+        "demographics_workingAgeProjection": "การคาดการณ์ประชากรวัยทำงาน",
+        "demographics_tertiaryEnrollment": "อัตราการเข้าเรียนระดับอุดมศึกษา",
+        "demographics_researchersPerMillion": "นักวิจัยต่อประชากร 1 ล้านคน",
+        "demographics_stemGraduateShare": "สัดส่วนผู้สำเร็จการศึกษาด้าน STEM",
+        "demographics_trainedIndustrialShare": "สัดส่วนแรงงานอุตสาหกรรมที่ผ่านการฝึกอบรม",
+        "demographics_manufacturingEmploymentShare": "สัดส่วนการจ้างงานในภาคการผลิต",
+        "technology_internetUse": "การใช้งานอินเทอร์เน็ต",
+        "technology_mobileSubscriptions": "การสมัครสมาชิกโทรศัพท์มือถือ",
+        "technology_fixedBroadband": "บรอดแบนด์แบบสาย",
+        "technology_rdSpend": "การใช้จ่ายด้านการวิจัยและพัฒนา",
+        "technology_researchersPerMillion": "นักวิจัยต่อประชากร 1 ล้านคน",
+        "technology_stemGraduateShare": "สัดส่วนผู้สำเร็จการศึกษาด้าน STEM",
+        "technology_electricityAccess": "การเข้าถึงไฟฟ้า",
+        "defense_expenditureUsd": "การใช้จ่ายทางทหาร",
+        "defense_expenditurePctGdp": "ภาระทางทหาร",
+        "defense_personnel": "กำลังพลของกองทัพ",
+        "defense_industrialBalance": "สมดุลอุตสาหกรรมป้องกันประเทศ",
+        "defense_supplierDiversity": "ความหลากหลายของผู้จัดหาอาวุธ"
+      }
+    },
+    "defenseIndustrialBase": {
+      "proLocked": "อัปเกรดเป็น PRO เพื่อดูการพึ่งพาผู้จัดจำหน่ายอาวุธและความสามารถทางการทหาร"
     }
   },
   "header": {
@@ -729,7 +797,7 @@
       "fresh": "ใหม่",
       "noMarkets": "ไม่พบตลาดพยากรณ์",
       "predictionMarkets": "ตลาดพยากรณ์",
-      "unavailable": "สรุป AI ไม่พร้อมใช้งาน — กรุณาตั้งค่า GROQ_API_KEY ในการตั้งค่า"
+      "unavailable": "สรุป AI ไม่พร้อมใช้งาน — กรุณาตั้งค่า OPENROUTER_API_KEY ในการตั้งค่า"
     },
     "countryBrief": {
       "identifying": "กำลังระบุประเทศ...",
@@ -745,7 +813,7 @@
       "predictionMarkets": "ตลาดพยากรณ์",
       "loadingMarkets": "กำลังโหลดตลาดพยากรณ์...",
       "infrastructure": "โครงสร้างพื้นฐานที่เปิดเผย",
-      "briefUnavailable": "สรุป AI ไม่พร้อมใช้งาน — กรุณาตั้งค่า GROQ_API_KEY ในการตั้งค่า",
+      "briefUnavailable": "สรุป AI ไม่พร้อมใช้งาน — กรุณาตั้งค่า OPENROUTER_API_KEY ในการตั้งค่า",
       "cached": "แคชแล้ว",
       "fresh": "ใหม่",
       "noMarkets": "ไม่พบตลาดพยากรณ์",
@@ -787,7 +855,6 @@
   "components": {
     "webcams": {
       "paused": "กล้องหยุดชั่วคราว",
-      "pausedIdle": "กล้องหยุดชั่วคราว — เลื่อนเมาส์เพื่อดำเนินต่อ",
       "regions": {
         "all": "ทั้งหมด",
         "mideast": "ตะวันออกกลาง",
@@ -797,7 +864,11 @@
         "space": "อวกาศ"
       },
       "play": "เล่น",
-      "previewStatus": "ตัวอย่างสด"
+      "previewStatus": "พร้อมที่จะเล่น",
+      "connecting": "กำลังเชื่อมต่อ…",
+      "unverified": "ไม่สามารถยืนยันว่าสตรีมนี้ออนไลน์ได้",
+      "offline": "{{city}} ออฟไลน์ในขณะนี้",
+      "noFeeds": "ไม่มีเว็บแคมสดในภูมิภาคนี้ในขณะนี้"
     },
     "positiveNewsFeed": {
       "noStories": "ยังไม่มีเรื่องราวในหมวดนี้"
@@ -914,7 +985,8 @@
       "refineryStage": "Refine",
       "stageUnavailable": "No published figures for this stage",
       "withheldNote": "W withheld",
-      "productionCaption": "Country shares of actual production. The map deposits layer shows where resources sit; this table shows who mines or refines them."
+      "productionCaption": "Country shares of actual production. The map deposits layer shows where resources sit; this table shows who mines or refines them.",
+      "productionProLocked": "อัปเกรดเป็น PRO เพื่อดูส่วนแบ่งประเทศของเหมืองและโรงกลั่น พร้อมความเข้มข้น (HHI) ตามขั้นตอน"
     },
     "tradePolicy": {
       "tariffs": "ภาษีศุลกากร",
@@ -1008,10 +1080,18 @@
       "skipToEnd": "Skip to end"
     },
     "pizzint": {
+      "indexSource": "ดัชนี: World Monitor · ข้อมูลสถานที่:",
+      "statusNormal": "ปกติ",
+      "statusNoData": "ไม่มีข้อมูล",
+      "statusNoBaseline": "ไม่มีค่าฐาน",
+      "vsUsual": "เทียบกับปกติ",
       "title": "ดัชนีพิซซ่าเพนตากอน",
       "defcon": "DEFCON {{level}}",
       "updated": "อัปเดต {{timeAgo}}",
       "tensionsTitle": "ความตึงเครียดภูมิรัฐศาสตร์",
+      "tensionsSource": "ความตึงเครียด: World Monitor คำนวณจากเหตุการณ์ของ GDELT",
+      "insufficientData": "ข้อมูลไม่เพียงพอ",
+      "pizzaUnavailable": "ไม่มีข้อมูลกิจกรรมของร้านพิซซ่า",
       "source": "แหล่งที่มา:",
       "statusClosed": "ปิด",
       "statusSpike": "พุ่งสูง",
@@ -1023,11 +1103,11 @@
       "minutesAgo": "{{m}}น. ที่แล้ว",
       "hoursAgo": "{{h}}ชม. ที่แล้ว",
       "defconLabels": {
-        "1": "COCKED PISTOL - ความพร้อมสูงสุด",
-        "2": "FAST PACE - กองกำลังพร้อมรบ",
-        "3": "ROUND HOUSE - เพิ่มความพร้อมรบ",
-        "4": "DOUBLE TAKE - เพิ่มการเฝ้าระวังข่าวกรอง",
-        "5": "FADE OUT - ความพร้อมต่ำสุด"
+        "1": "กิจกรรมสูงสุด",
+        "2": "กิจกรรมสูง",
+        "3": "กิจกรรมเพิ่มขึ้น",
+        "4": "สูงกว่าปกติ",
+        "5": "กิจกรรมปกติ"
       }
     },
     "strategicPosture": {
@@ -1108,9 +1188,6 @@
       "datacenter": "ศูนย์ข้อมูล",
       "base": "ฐานทัพ",
       "nuclear": "นิวเคลียร์"
-    },
-    "community": {
-      "joinDiscussion": "Help Shape What's Next"
     },
     "threatLabels": {
       "critical": "วิกฤต",
@@ -1351,7 +1428,7 @@
       "rankingStories": "กำลังจัดอันดับเรื่องราวสำคัญ...",
       "analyzingSentiment": "กำลังวิเคราะห์ความรู้สึก...",
       "generatingBrief": "กำลังสร้างสรุปสถานการณ์โลก...",
-      "infoTooltip": "<strong>การวิเคราะห์ด้วย AI</strong><br>• <strong>สรุปโลก</strong>: สรุปจาก AI (Groq/OpenRouter)<br>• <strong>ความรู้สึก</strong>: การวิเคราะห์น้ำเสียงข่าว<br>• <strong>ความเร็ว</strong>: เรื่องราวที่เคลื่อนไหวเร็ว<br>• <strong>จุดโฟกัส</strong>: เชื่อมโยงเอนทิตีข่าวกับสัญญาณแผนที่ (ทหาร, การประท้วง, การหยุดชะงัก)<br><em>เดสก์ท็อปเท่านั้น • ขับเคลื่อนด้วย Llama 3.3 + การตรวจจับจุดโฟกัส</em>",
+      "infoTooltip": "<strong>การวิเคราะห์ด้วย AI</strong><br>• <strong>สรุปโลก</strong>: สรุปจาก AI (OpenRouter)<br>• <strong>ความรู้สึก</strong>: การวิเคราะห์น้ำเสียงข่าว<br>• <strong>ความเร็ว</strong>: เรื่องราวที่เคลื่อนไหวเร็ว<br>• <strong>จุดโฟกัส</strong>: เชื่อมโยงเอนทิตีข่าวกับสัญญาณแผนที่ (ทหาร, การประท้วง, การหยุดชะงัก)<br><em>เดสก์ท็อปเท่านั้น • ขับเคลื่อนด้วย Llama 3.3 + การตรวจจับจุดโฟกัส</em>",
       "streamQualityLabel": "คุณภาพวิดีโอ",
       "streamQualityDesc": "ตั้งค่าคุณภาพสำหรับสตรีมสดทั้งหมด (ต่ำกว่าประหยัดแบนด์วิดท์)",
       "globeRenderScaleOptions": {
@@ -1363,7 +1440,7 @@
       },
       "mapFlashLabel": "Live Event Pulse",
       "mapFlashDesc": "Flash locations on the map when breaking news arrives",
-      "aiFlowCloudLabel": "Cloud AI (Groq & OpenRouter)",
+      "aiFlowCloudLabel": "Cloud AI (OpenRouter)",
       "aiFlowCloudDesc": "ส่งพาดหัวข่าวไปยังคลาวด์เพื่อสรุปด้วย AI (แนะนำ)",
       "aiFlowBrowserLabel": "โมเดลท้องถิ่นในเบราว์เซอร์",
       "aiFlowBrowserDesc": "เรียกใช้ AI ในเบราว์เซอร์ของคุณ",
@@ -1420,7 +1497,10 @@
       "provenanceTitle": "ความมาของการครอบคลุม: จำนวนเรื่องข่าวที่นำเข้าและแหล่งข่าวที่แตกต่างกันที่ใช้สำหรับสรุปนี้",
       "compiledFrom": "รวบรวมจาก {{stories}} เรื่องราวจาก {{sources}} แหล่งที่มา",
       "briefFreshness": "สร้างเมื่อ {{minutes}}m ที่แล้ว · แหล่งข้อมูลล่าสุด {{hours}}h เก่า",
-      "briefStoryDetails": "Story details ({{count}})"
+      "briefStoryDetails": "รายละเอียดข่าว ({{count}})",
+      "streamIdleStopLabel": "หยุดวิดีโอสดเมื่อไม่มีกิจกรรม",
+      "streamIdleStopDesc": "หยุด Live News และ Live Webcams หลังจากที่ไม่มีกิจกรรมนาน ๆ และแสดงประกาศในแผง",
+      "streamIdleStopNever": "ไม่เลย"
     },
     "settings": {
       "exportSettings": "ส่งออกการตั้งค่า",
@@ -1749,6 +1829,16 @@
       "loading": "กำลังเชื่อมต่อรีเลย์ Telegram...",
       "empty": "ไม่มีข้อความ",
       "disabled": "รีเลย์ Telegram ไม่ทำงาน",
+      "watchlistPlaceholder": "เพิ่มช่องสาธารณะด้วย @username",
+      "resolving": "กำลังค้นหาช่อง...",
+      "invalidUsername": "ใช้ @username สาธารณะของ Telegram",
+      "resolveFailed": "ไม่พบช่อง",
+      "watchlistLimit": "คุณติดตามช่องแบบกำหนดเองได้สูงสุด {{count}} ช่อง",
+      "previewMembers": "สมาชิก {{count}} คน",
+      "addChannel": "เพิ่มช่อง",
+      "added": "เพิ่มแล้ว",
+      "remove": "ลบ",
+      "custom": "กำหนดเอง",
       "filterAll": "ทั้งหมด",
       "filterBreaking": "ด่วน",
       "filterConflict": "ความขัดแย้ง",
@@ -1822,6 +1912,7 @@
       "etfs": "ETF",
       "netInflow": "กระแสเข้าสุทธิ",
       "netOutflow": "กระแสออกสุทธิ",
+      "netNeutral": "กระแสสุทธิเป็นกลาง",
       "table": {
         "ticker": "สัญลักษณ์",
         "issuer": "ผู้ออก",
@@ -1904,15 +1995,11 @@
     },
     "liveNews": {
       "notLive": "{{name}} ไม่ได้ถ่ายทอดสดอยู่ในขณะนี้",
-      "cannotEmbed": "ไม่สามารถเล่น {{name}} ที่นี่ได้ — อาจถูกจำกัดในภูมิภาคของคุณ (ข้อผิดพลาด {{code}})",
-      "botCheck": "YouTube กำลังขอให้ลงชื่อเข้าใช้เพื่อเล่น {{name}}",
       "signInToYouTube": "ลงชื่อเข้าใช้ YouTube",
       "openOnYouTube": "เปิดบน YouTube",
       "manage": "จัดการช่อง",
       "addChannel": "เพิ่มช่อง",
       "remove": "ลบ",
-      "youtubeHandle": "YouTube handle (เช่น @Channel)",
-      "youtubeHandleOrUrl": "แฮนเดิล YouTube หรือ URL",
       "displayName": "ชื่อที่แสดง (ไม่บังคับ)",
       "channelSettings": "การตั้งค่าช่อง",
       "save": "บันทึก",
@@ -1928,12 +2015,24 @@
       "regionMiddleEast": "ตะวันออกกลาง",
       "regionAfrica": "แอฟริกา",
       "regionOceania": "โอเชียเนีย",
-      "invalidHandle": "ป้อนแฮนเดิล YouTube ที่ถูกต้อง (เช่น @ชื่อช่อง)",
       "verifying": "กำลังตรวจสอบ…",
       "hlsUrl": "URL สตรีม HLS (ไม่บังคับ)",
       "invalidHlsUrl": "กรุณากรอก URL สตรีม HLS (.m3u8) ที่ถูกต้อง",
       "playLiveFeed": "เล่นฟีดสด",
-      "readyStatus": "พร้อมเมื่อคุณพร้อม"
+      "readyStatus": "พร้อมเมื่อคุณพร้อม",
+      "embedBlocked": "YouTube จะไม่เล่น {{name}} ภายในเว็บไซต์อื่นในตอนนี้",
+      "unavailable": "{{name}} ไม่สามารถเล่นได้ในตอนนี้",
+      "noStream": "ยังไม่มีการตั้งค่าการถ่ายทำสดสำหรับ {{name}}",
+      "needsChannelUrl": "เพิ่ม {{name}} อีกครั้งพร้อมกับ URL ช่องของมัน (youtube.com/channel/UC…) หรือ URL วิดีโอสดสำหรับ",
+      "insecureStream": "{{name}} ใช้สตรีมที่ไม่ปลอดภัย (http) ซึ่งเบราว์เซอร์จะบล็อก เพิ่มอีกครั้งพร้อมกับ URL สตรีมที่ปลอดภัย (https)",
+      "connecting": "กำลังเชื่อมต่อกับ {{name}}…",
+      "recording": "กำลังบันทึก",
+      "unverified": "ไม่สามารถยืนยันว่าสตรีมนี้ออนไลน์",
+      "playNextChannel": "เล่นช่องถัดไป",
+      "channelOrVideoUrl": "URL ช่อง YouTube หรือ URL วิดีโอ",
+      "channelUrlHint": "วางลิงก์ URL ช่อง (youtube.com/channel/UC…) หรือ URL วิดีโอสด",
+      "youtubeChannel": "ช่อง YouTube",
+      "httpsStreamHint": "เบราว์เซอร์จะบล็อกสตรีมที่ไม่ปลอดภัย (http) วาง URL สตรีมที่ปลอดภัย (https)"
     },
     "map": {
       "showMap": "แสดงแผนที่",
@@ -1960,6 +2059,22 @@
       "metals": {
         "gold": "Gold",
         "silver": "Silver"
+      },
+      "divergence": {
+        "compositeValue": "ดัชนีความเครียดทางกายภาพ: {{value}} / 100",
+        "fiveDayTrend": "แนวโน้มพรีเมียมห้าวันซื้อขาย",
+        "regimes": {
+          "normal": "ปกติ",
+          "elevated": "สูงขึ้น",
+          "stressed": "ความเครียด",
+          "extreme": "รุนแรง"
+        },
+        "states": {
+          "insufficientHistory": "วอร์มอัป: {{count}} / {{required}} จุดซื้อขาย",
+          "staleInput": "เกณฑ์มาตรฐานทางกายภาพล้าสมัย",
+          "missingInput": "สัญญาณความแตกต่างไม่พร้อมใช้งาน"
+        },
+        "twentyDayTrend": "แนวโน้มพรีเมียมในรอบ 20 วันการค้า"
       }
     },
     "crypto": {
@@ -2071,7 +2186,7 @@
       "infoTooltip": "<strong>ปฏิทินเศรษฐกิจ</strong> การเผยแพร่ข้อมูลเศรษฐกิจมหภาคตามกำหนด: CPI, NFP, GDP, PMI และการตัดสินใจของธนาคารกลาง แสดงคาดการณ์ เทียบกับจริง เทียบกับก่อนหน้า เหตุการณ์ที่มีผลกระทบสูงถูกเน้น แหล่งข้อมูล: ผู้ให้บริการข้อมูลเศรษฐกิจ"
     },
     "fsi": {
-      "infoTooltip": "<strong>ตัวบ่งชี้ความเครียดทางการเงิน</strong> ดัชนีความเครียดทางการเงินของ Fed แคนซัสซิตี (KCFSI): วัดความเครียดในตลาดการเงินสหรัฐฯ โดยใช้ตัวบ่งชี้ 11 ตัว รวมถึงสเปรดผลตอบแทน ความผันผวน และสหสัมพันธ์ข้าม ค่าบวกบ่งชี้ความเครียดเหนือค่าเฉลี่ย แหล่งข้อมูล: Federal Reserve Bank of Kansas City",
+      "infoTooltip": "<strong>ตัวบ่งชี้ความเครียดทางการเงิน</strong> อัตราส่วนของ WorldMonitor ระหว่างเครดิตผลตอบแทนสูงกับพันธบัตรรัฐบาลสหรัฐฯ ระยะยาว ซึ่งปรับด้วยความผันผวนของหุ้นและส่วนต่างผลตอบแทนสูง: (HYG / TLT) / (VIX × HY spread / 100) นี่ไม่ใช่ดัชนีความเครียดทางการเงินของธนาคารกลางสหรัฐฯ สาขาแคนซัสซิตี ค่า 1.5 หรือสูงกว่าหมายถึงความเครียดต่ำ; ต่ำกว่า 0.3 หมายถึงความเครียดสูง",
       "title": "ตัวชี้วัดความเครียดทางการเงิน",
       "usFsiValue": "ค่า FSI ของสหรัฐฯ",
       "cissTitle": "EU CISS (ความเครียดระบบในพื้นที่ยูโร)",
@@ -2111,6 +2226,26 @@
         "failedToLoad": "การโหลดล้มเหลว"
       },
       "cissStale": "ECB ยังไม่ได้เผยแพร่ค่าที่ใหม่กว่า — การอ่านค่านี้อาจล้าสมัยแล้ว"
+    },
+    "supplyVulnerability": {
+      "title": "ความเปราะบางด้านสินค้าโภคภัณฑ์",
+      "help": "ความเสี่ยงของประเทศแยกตามสินค้า จากการกระจุกตัวของผู้จัดหา การขนส่งทางทะเล และเงินสำรองเชิงยุทธศาสตร์ที่มีอยู่",
+      "loading": "กำลังโหลดความเปราะบางด้านสินค้าโภคภัณฑ์…",
+      "unavailable": "ไม่มีข้อมูลความเปราะบางด้านสินค้าโภคภัณฑ์",
+      "noCoverage": "หลักฐานสำหรับประเทศนี้ไม่เพียงพอ",
+      "unknown": "ไม่ทราบ",
+      "concentration": "การกระจุกตัว",
+      "transit": "การขนส่ง",
+      "buffer": "เงินสำรอง",
+      "sources": "แหล่งข้อมูล",
+      "methodology": "ระเบียบวิธี",
+      "hormuzTitle": "การพึ่งพาสินค้าโภคภัณฑ์",
+      "dependentCountries": "ประเทศที่พึ่งพา",
+      "dependentCommodities": "สินค้าโภคภัณฑ์ที่พึ่งพา",
+      "stateOk": "ปัจจุบัน",
+      "stateStale": "ข้อมูลนำเข้าล้าสมัย",
+      "stateInsufficient": "ข้อมูลไม่เพียงพอ",
+      "proLocked": "อัปเกรดเป็น PRO เพื่อดูคะแนนความเสี่ยงสินค้าโภคนัย"
     },
     "hormuzTracker": {
       "infoTooltip": "<strong>ตัวติดตามการค้าฮอร์มุซ</strong> การติดตามเรือ AIS แบบสดผ่านช่องแคบฮอร์มุซ จุดคอขวดน้ำมันที่สำคัญที่สุดของโลก ตรวจสอบจำนวนเรือบรรทุกน้ำมัน เหตุการณ์หยุดชะงัก และการเปลี่ยนแปลงการไหลรายสัปดาห์ อุปทานน้ำมันโลกประมาณ 20% ผ่านที่นี่ทุกวัน",
@@ -2192,7 +2327,7 @@
       }
     },
     "marketImplications": {
-      "infoTooltip": "<strong>ผลกระทบต่อตลาด AI</strong> สัญญาณการค้าที่สร้างโดย LLM มาจากสภาวะทางภูมิศาสตร์การเมือง สินค้าโภคนำ และแมโครแบบเรียลไทม์หลังจากแต่ละรอบการพยากรณ์<ul><li><strong>ทิศทาง</strong>: LONG / SHORT / HEDGE พร้อมอัตราความเชื่อมั่น</li><li><strong>ระยะเวลา</strong>: ขอบเขตเวลา 1W, 2W, 1M หรือ 3M</li><li><strong>ตัวขับเคลื่อน</strong>: ตัวเร่งหลักที่อยู่เบื้องหลังสัญญาณ</li><li><strong>ความเสี่ยง</strong>: คำเตือนหรือเงื่อนไขการเพิกถอน</li></ul><em>สำหรับวัตถุประสงค์ข้อมูลเท่านั้น ไม่ใช่คำแนะนำการลงทุน</em>",
+      "infoTooltip": "<strong>ผลกระทบต่อตลาด AI</strong> สัญญาณการค้าที่สร้างโดย LLM มาจากสภาวะทางภูมิศาสตร์การเมือง สินค้าโภคนำ และแมโครแบบเรียลไทม์หลังจากแต่ละรอบการพยากรณ์<ul><li><strong>ทิศทาง</strong>: LONG / SHORT / HEDGE</li><li><strong>ระยะเวลา</strong>: ขอบเขตเวลา 1W, 2W, 1M หรือ 3M</li><li><strong>ตัวขับเคลื่อน</strong>: ตัวเร่งหลักที่อยู่เบื้องหลังสัญญาณ</li><li><strong>ความเสี่ยง</strong>: คำเตือนหรือเงื่อนไขการเพิกถอน</li></ul><em>สำหรับวัตถุประสงค์ข้อมูลเท่านั้น ไม่ใช่คำแนะนำการลงทุน</em>",
       "title": "ผลกระทบต่อตลาด AI",
       "directions": {
         "long": "LONG",
@@ -2204,10 +2339,64 @@
       "appliesToNext": "ใช้กับการสร้างสัญญาณ AI ครั้งถัดไป",
       "signals_other": "{{count}} สัญญาณ",
       "disclaimer": "สัญญาณการซื้อขายที่สร้างโดย AI เพื่อวัตถุประสงค์ข้อมูลเท่านั้น ไม่ใช่คำแนะนำการลงทุน ทำการศึกษาวิจัยของคุณเองเสมอ",
-      "unavailable": "ผลกระทบต่อตลาด AI จะสร้างขึ้นหลังจากแต่ละครั้งที่รันการพยากรณ์ กรุณาตรวจสอบอีกครั้งในไม่ช่วงเวลา"
+      "unavailable": "ผลกระทบต่อตลาด AI จะสร้างขึ้นหลังจากแต่ละครั้งที่รันการพยากรณ์ กรุณาตรวจสอบอีกครั้งในไม่ช่วงเวลา",
+      "unscored": "สถานการณ์จำลองเชิงบรรยาย ไม่ได้ประเมินความแม่นยำ"
     },
     "forecast": {
-      "infoTooltip": "<strong>AI Forecasts</strong> การประมาณความน่าจะเป็นที่สร้างโดย AI สำหรับเหตุการณ์ทางภูมิศาสตร์การเมืองและเศรษฐกิจ:<ul><li>ครอบคลุมข้ามโดเมน: ความขัดแย้ง ตลาด ห่วงโซ่อุปทาน ไซเบอร์ และการเมือง</li><li>การพยากรณ์แต่ละรายการแสดงความน่าจะเป็นโดยประมาณ ระดับความเชื่อมั่น และขอบเขตเวลา</li><li>ปรับแต่งตามเส้นฐานของตลาดการทำนายเมื่อมี</li></ul>การพยากรณ์จะอัปเดตเมื่อสัญญาณข่าวกรองใหม่มาถึง ใช้ตัวกรองตามโดเมนโดยใช้แท็บด้านบน"
+      "infoTooltip": "<strong>AI Forecasts</strong> การประมาณความน่าจะเป็นที่สร้างโดย AI สำหรับเหตุการณ์ทางภูมิศาสตร์การเมืองและเศรษฐกิจ:<ul><li>ครอบคลุมข้ามโดเมน: ความขัดแย้ง ตลาด ห่วงโซ่อุปทาน ไซเบอร์ และการเมือง</li><li>การพยากรณ์แต่ละรายการแสดงความน่าจะเป็นโดยประมาณ ระดับความเชื่อมั่น และขอบเขตเวลา</li><li>ปรับแต่งตามเส้นฐานของตลาดการทำนายเมื่อมี</li></ul>การพยากรณ์จะอัปเดตเมื่อสัญญาณข่าวกรองใหม่มาถึง ใช้ตัวกรองตามโดเมนโดยใช้แท็บด้านบน",
+      "record": {
+        "label": "ผลงานที่ผ่านมา",
+        "labelHint": "การคาดการณ์ที่เผยแพร่ได้คะแนนอย่างไรหลังทราบผล ในช่วง {{days}} วันที่ผ่านมา วางเมาส์บนตัวเลขเพื่อดูความหมาย",
+        "unavailable": "ไม่พร้อมใช้งานในขณะนี้",
+        "insufficient": "ยังมีการคาดการณ์ที่ให้คะแนนแล้วไม่เพียงพอ",
+        "brier": "คะแนน Brier {{score}} (n={{n}})",
+        "brierHint": "คะแนน Brier จากการคาดการณ์ที่ให้คะแนนแล้ว {{n}} รายการ: ค่าเฉลี่ยของกำลังสองของส่วนต่างระหว่างความน่าจะเป็นที่คาดการณ์กับสิ่งที่เกิดขึ้นจริง 0 คือสมบูรณ์แบบ 0.25 เท่ากับการโยนเหรียญ ยิ่งต่ำยิ่งดี",
+        "baseRate": "อัตราพื้นฐาน {{score}} (n={{n}})",
+        "baseRateHint": "คะแนนที่จะได้หากตอบด้วยสัดส่วน \"ใช่\" ที่สังเกตได้ทุกครั้งกับการคาดการณ์ {{n}} รายการเดียวกัน ({{pct}}% ทราบผลเป็น \"ใช่\") หากทำได้ดีกว่าแสดงว่าการคาดการณ์ให้ข้อมูลเพิ่ม",
+        "void": "โมฆะ {{pct}}% ({{count}} จาก {{resolved}})",
+        "voidHint": "การคาดการณ์ที่ทราบผลแล้วแต่ให้คะแนนไม่ได้ จากทั้งหมด {{resolved}} รายการที่ทราบผลในช่วงเวลานี้",
+        "stale": "ข้อมูลล้าสมัย",
+        "staleHint": "ให้คะแนนครั้งล่าสุดเมื่อ {{date}} ระบบให้คะแนนยังไม่ได้ทำงานตั้งแต่นั้น ตัวเลขเหล่านี้จึงเก่ากว่าที่ควรจะเป็น",
+        "fullRecord": "ผลงานทั้งหมด"
+      },
+      "reliability": {
+        "measured": "{{domain}} n={{n}} · Brier {{score}} เทียบกับอัตราพื้นฐาน {{base}}",
+        "measuredHint": "ผลประเมิน {{domain}} ที่เผยแพร่มาได้จากการให้คะแนนพยากรณ์ {{n}} รายการในช่วง {{days}} วันที่ผ่านมา อัตราพื้นฐานคือคะแนนที่จะได้หากตอบใช่ตามอัตราที่สังเกตในโดเมนนี้เสมอ คะแนนที่ต่ำกว่าจะดีกว่า นี่คือบันทึกของโดเมน ไม่ใช่พยากรณ์นี้",
+        "unmeasured": "ยังไม่ได้วัด",
+        "unmeasuredHint": "การพยากรณ์ {{domain}} มีผลลัพธ์ที่ให้คะแนน {{n}} รายการในช่วง {{days}} วันที่ผ่านมา โดเมนต้องการ {{min}} รายการก่อนที่จะแสดงความแม่นยำของมัน"
+      },
+      "resolution": {
+        "last": "ล่าสุด: {{outcome}}",
+        "lastSr": "หน้าต่างก่อนหน้าของการพยากรณ์นี้ได้ข้อสรุปเป็น {{outcome}}",
+        "history": "หน้าต่างที่ผ่านมา จากใหม่ที่สุดก่อน: {{list}}",
+        "outcome": {
+          "yes": "ใช่",
+          "no": "ไม่",
+          "void": "ยกเลิก"
+        },
+        "void": {
+          "no_establishable_metric": "ฟีดไม่มีข้อมูลสำหรับคำถามนี้",
+          "value_source_never_settled": "ฟีดไม่เคยเผยแพร่ค่าที่ยืนยันแล้ว",
+          "count_source_window_not_retained": "ฟีดไม่ได้เก็บรักษาหน้าต่างคำถามนี้อีกต่อไป",
+          "unsupported_window": "ไม่สามารถตรวจสอบคำถามกับฟีดของมันได้",
+          "unsupported_metric_key": "ไม่สามารถตรวจสอบคำถามกับฟีดของมันได้",
+          "not_hard_spec": "ไม่สามารถตรวจสอบคำถามกับฟีดของมันได้",
+          "missing_threshold": "คำถามไม่มีเกณฑ์",
+          "missing_deadline": "คำถามไม่มีกำหนดเวลา",
+          "missing_generated_at": "การพยากรณ์ไม่มีวันที่เริ่มต้น",
+          "beyond_archive_horizon": "คลังข่าวไม่ครอบคลุมหน้าต่างคำถามนี้อีกต่อไป",
+          "no_archive_evidence": "คลังข่าวไม่มีข้อมูลเกี่ยวกับเรื่องนี้",
+          "all_judges_void": "ผู้ตัดสินทั้งสองพบว่าหลักฐานไม่เพียงพอ",
+          "judge_disagreement": "ผู้ตัดสินมีความเห็นไม่ตรงกัน",
+          "judge_retry_exhausted": "ผู้ตัดสินไม่ได้ให้คำตัดสิน",
+          "withheld_unpublished": "การพยากรณ์ประเภทนี้ไม่มีการเผยแพร่อีกต่อไป",
+          "other": "ไม่สามารถตัดสินผลได้"
+        }
+      },
+      "horizons": {
+        "label": "ได้รับการให้คะแนนด้วย: {{list}}",
+        "hint": "ความน่าจะเป็นของหัวข้อได้รับการให้คะแนนตามขอบเขตเวลาของการพยากรณ์เอง การคาดการณ์ในแต่ละขอบเขตเวลาเหล่านี้ได้รับการให้คะแนนด้วยเช่นกัน เมื่อเทียบกับแหล่งข้อมูลของมัน โดยใช้ค่าที่เผยแพร่ครั้งแรกสำหรับการพยากรณ์นี้ ค่าการคาดการณ์ไม่ได้แสดงเพราะค่าปัจจุบันอาจแตกต่างจากค่าที่ได้รับการให้คะแนน"
+      }
     },
     "escalationCorrelation": {
       "infoTooltip": "<strong>Escalation Monitor</strong> ตรวจจับสัญญาณทางภูมิศาสตร์การเมืองที่บรรจบกัน:<ul><li>สหสัมพันธ์การเคลื่อนไหวทางทหาร เหตุการณ์ความขัดแย้ง และการกระชากข่าว</li><li>คะแนนพื้นที่บรรจบกันตามความรุนแรง (วิกฤติ/สูง/กลาง/ต่ำ)</li><li>ติดตามแนวโน้มการเพิ่มลดระดับหรือการลดลง</li></ul>คลิกการ์ดเพื่อซูมไปยังภูมิภาคบนแผนที่"
@@ -2501,7 +2690,14 @@
       "empty": "ไม่พบการบรรจบกันที่ใช้งานอยู่",
       "signals_other": "{{count}} สัญญาณ",
       "analyzing": "กำลังวิเคราะห์...",
-      "viewOnMap": "ดูบนแผนที่"
+      "viewOnMap": "ดูบนแผนที่",
+      "waiting": "กำลังรอการอัปเดตข้อมูลครั้งถัดไป แผงนี้จะอัปเดตโดยอัตโนมัติ",
+      "offline": "กำลังรอการเชื่อมต่อ แผงนี้จะอัปเดตโดยอัตโนมัติเมื่อคุณกลับมาออนไลน์",
+      "updated": "อัปเดต {{time}}",
+      "saved": "การอัปเดตล่าสุดที่ทราบ {{time}} · กำลังตรวจสอบการอัปเดต",
+      "savedOffline": "การอัปเดตล่าสุดที่ทราบ {{time}} · ออฟไลน์",
+      "localSignals": "อ้างอิงจากสัญญาณที่โหลดในแดชบอร์ด",
+      "emptySaved": "ไม่พบการบรรจบกันในการอัปเดตล่าสุดที่ทราบ"
     },
     "thermalEscalation": {
       "title": "Thermal Escalation",
@@ -2646,6 +2842,67 @@
       "rubBase": "ธนาคารกลางรัสเซีย — รูเบิลต่อ 1 หน่วย",
       "rubPerUnit": "รูเบิลต่อหน่วย",
       "sourceCbr": "แหล่งที่มา: ธนาคารกลางรัสเซีย"
+    },
+    "passkeyOffer": {
+      "title": "บันทึกพาสคีย์ใช่ไหม?",
+      "body": "ลงชื่อเข้าครั้งต่อไปด้วยลายนิ้วมือ ใบหน้า หรือ PIN ของอุปกรณ์ — ไม่มีรหัสผ่านให้จำ",
+      "accept": "บันทึกพาสคีย์",
+      "dismiss": "ไม่ใช่ตอนนี้",
+      "close": "ปิด",
+      "announce": "บันทึกพาสคีย์เพื่อลงชื่อเข้าได้เร็วขึ้นครั้งต่อไป",
+      "busy": "กำลังรอการยืนยันจากอุปกรณ์ของคุณ…",
+      "succeeded": "บันทึกพาสคีย์แล้ว คุณสามารถใช้ได้ในครั้งต่อไปที่คุณลงชื่อเข้า",
+      "retryable": "ไม่เสร็จสิ้น คุณสามารถลองใหม่ได้",
+      "failed": "เราไม่สามารถบันทึกพาสคีย์บนอุปกรณ์นี้ได้"
+    },
+    "decisionBrief": {
+      "commodityTitle": "สรุปการตัดสินใจด้านสินค้าโภคภัณฑ์",
+      "commodity": "สินค้าโภคภัณฑ์ / ผลิตภัณฑ์",
+      "blockedChokepoint": "จุดคอขวดที่สมมติว่าถูกปิดกั้น",
+      "commodityCapture": "บันทึกการเปรียบเทียบสินค้าโภคภัณฑ์",
+      "title": "สรุปเพื่อการตัดสินใจ",
+      "fuel": "เชื้อเพลิง",
+      "chokepoint": "จุดคอขวด",
+      "baseline": "การหยุดชะงักพื้นฐาน",
+      "comparison": "การหยุดชะงักที่เปรียบเทียบ",
+      "capture": "ดึง / รีเฟรชทั้งสอง",
+      "downloadHtml": "ดาวน์โหลดสรุป HTML",
+      "downloadJson": "ดาวน์โหลดสรุป JSON",
+      "back": "← กลับไปยังสรุปประเทศ",
+      "select": "เลือกการหยุดชะงักของพลังงาน แล้วดึงข้อมูลทั้งสองสถานการณ์",
+      "changed": "เปลี่ยนตัวเลือกแล้ว โปรดดึงทั้งสองสถานการณ์ก่อนส่งออก",
+      "loading": "กำลังดึงทั้งสองสถานการณ์…",
+      "captured": "ดึงข้อมูลแล้ว ตรวจสอบวันที่สังเกตและข้อจำกัดก่อนดาวน์โหลด",
+      "failed": "ไม่สามารถดึงสถานการณ์ได้ ตรวจสอบสิทธิ์การเข้าถึงแล้วลองอีกครั้ง ไม่มีผลลัพธ์ให้ส่งออก",
+      "locked": "สรุปเพื่อการตัดสินใจพร้อมใช้งานใน Pro"
+    },
+    "liveMedia": {
+      "idleStatus": "หยุดชั่วคราวเนื่องจากไม่มีกิจกรรม",
+      "idleBody": "วิดีโอสดหยุดหลังจาก {{duration}} โดยไม่มีกิจกรรมเมาส์ แป้นพิมพ์ หรือสัมผัส",
+      "idleResume": "เล่นต่อ",
+      "idleKeepPlaying": "เล่นต่อเมื่อไม่มีกิจกรรม",
+      "idleSettingsHint": "เปลี่ยนได้ตลอดเวลาในการตั้งค่า › Media",
+      "idleKeepPlayingToast": "วิดีโอสดจะเล่นต่อเมื่อไม่มีกิจกรรม เปลี่ยนในการตั้งค่า › Media"
+    },
+    "corroboration": {
+      "singlePublisher": "สำนักพิมพ์เดียว",
+      "singlePublisherHint": "มีเพียงสำนักพิมพ์เดียวที่รายงานข้อมูลนี้ในขณะนี้ สิ่งนี้อธิบายถึงความครอบคลุมของข่าว ไม่ใช่ความแม่นยำ",
+      "tier4Only": "แหล่งข้อมูลระดับต่ำเท่านั้น",
+      "tier4OnlyHint": "ทุกหน่วยข่าวที่รายงานเรื่องนี้เป็นแหล่งข้อมูลระดับ 4 (เว็บไซต์รวมข้อมูลและบล็อก) สิ่งนี้อธิบายถึงความครอบคลุมของข่าว ไม่ใช่ความแม่นยำ",
+      "rosterListed": "({{listed}} ในรายการ)",
+      "rosterFeeds": "ฟีดที่พบ: {{labels}}",
+      "rosterLegend": "ระดับแสดงอันดับแหล่งข่าว ไม่ใช่การตัดสินข้อมูลข่าวสารนี้",
+      "tierDocsLink": "วิธีการกำหนดระดับ",
+      "tierChip": "T{{tier}}",
+      "tierChipUndeclared": "T?",
+      "tierTitle1": "ระดับ 1: สำนักข่าวและหน่วยงานทางการ",
+      "tierTitle2": "ระดับ 2: สื่อหลัก",
+      "tierTitle3": "ระดับ 3: แหล่งข่าวเฉพาะด้าน ระดับภูมิภาค และสถาบันคลังสมอง",
+      "tierTitle4": "ระดับ 4: เว็บรวบรวมข่าวและบล็อก",
+      "tierTitleUndeclared": "ระดับไม่ได้รับการระบุ: ยังไม่ได้ตรวจสอบ",
+      "rosterSummary": "รายงานโดย {{publishers}}",
+      "rosterSummaryTier1": "รายงานโดย {{publishers}} รวมถึงระดับ 1 จำนวน {{tier1}} แห่ง",
+      "rosterPublishers_other": "{{count}} สำนักข่าว"
     }
   },
   "popups": {
@@ -2684,14 +2941,18 @@
     "protest": {
       "acledVerified": "ACLED (ยืนยันแล้ว)",
       "gdelt": "GDELT",
+      "records": "รายการ",
+      "mediaSignal": "สัญญาณจากสื่อที่ยังไม่ยืนยัน",
+      "relatedArticle": "บทความที่เกี่ยวข้อง",
+      "mediaSignalDetail": "สถานที่นี้ถูกกล่าวถึงในบทความเกี่ยวกับความไม่สงบ ยังไม่มีการยืนยันเหตุการณ์ในพื้นที่",
       "riots": "จลาจล",
       "highSeverity": "ความรุนแรงสูง"
     },
     "gpsJamming": {
-      "title": "การรบกวน GPS/GNSS",
-      "navPerformance": "Nav Performance",
-      "samples": "ADS-B Samples",
-      "aircraft": "Aircraft",
+      "title": "การรบกวนสัญญาณ GPS/GNSS",
+      "navPerformance": "อากาศยานที่ได้รับผลกระทบ",
+      "samples": "จำนวนอากาศยานที่ได้รับผลกระทบ",
+      "aircraft": "จำนวนอากาศยานที่ตรวจพบทั้งหมด",
       "h3Hex": "H3 Hex"
     },
     "flight": {
@@ -3129,8 +3390,8 @@
   "signals": {
     "context": {
       "prediction_leads_news": {
-        "whyItMatters": "ตลาดพยากรณ์มักรับรู้ข้อมูลก่อนที่จะกลายเป็นข่าว — ผู้ซื้อขายอาจเข้าถึงข้อมูลได้ก่อน",
-        "actionableInsight": "เฝ้าติดตามข่าวด่วนใน 1-6 ชั่วโมงข้างหน้าที่อาจอธิบายการเคลื่อนไหวของตลาด",
+        "whyItMatters": "ตลาดการทำนายเคลื่อนไหวขณะที่การรายงานข่าวเกี่ยวกับหัวข้อนั้นยังคงน้อย—ตลาดอาจมีปฏิกิริยาต่อข้อมูลที่ยังไม่ได้รายงาน",
+        "actionableInsight": "ติดตามข่าวด่วนที่อาจอธิบายการเคลื่อนไหวของตลาด",
         "confidenceNote": "ความเชื่อมั่นสูงขึ้นหากหลายตลาดพยากรณ์เคลื่อนไหวในทิศทางเดียวกัน"
       },
       "news_leads_markets": {
@@ -3427,7 +3688,8 @@
   "auth": {
     "signIn": "ลงชื่อเข้าใช้",
     "createAccount": "สร้างบัญชี",
-    "settings": "การตั้งค่า"
+    "settings": "การตั้งค่า",
+    "passkeyOffer": {}
   },
   "mcp": {
     "connectPanel": "เชื่อมต่อ MCP",

@@ -11,6 +11,7 @@ export interface ListMarketQuotesResponse {
   skipReason: string;
   rateLimited: boolean;
   unavailableSymbols: MarketQuoteUnavailable[];
+  asOf: string;
 }
 
 export interface MarketQuote {
@@ -94,6 +95,70 @@ export interface FxSnapshot {
   rate: number;
   source: string;
   asOf: string;
+}
+
+export interface GetPhysicalDivergenceIndexRequest {
+  metals: string[];
+}
+
+export interface GetPhysicalDivergenceIndexResponse {
+  readings: PhysicalDivergenceReading[];
+  composite?: PhysicalStressComposite;
+  evaluatedAt: number;
+  methodologyVersion: string;
+}
+
+export interface PhysicalDivergenceReading {
+  metal: string;
+  state: PhysicalDivergenceState;
+  reason: string;
+  regime: PhysicalPremiumRegime;
+  index?: number;
+  premiumPct?: number;
+  premiumUsdPerOz?: number;
+  percentile?: number;
+  robustZ?: number;
+  delta5d?: number;
+  delta20d?: number;
+  trend5d: PhysicalPremiumTrend;
+  trend20d: PhysicalPremiumTrend;
+  historyPoints: number;
+  historyWindowStart: string;
+  historyWindowEnd: string;
+  physicalAsOf: string;
+  paperAsOf: number;
+  historyKey: string;
+  methodologyVersion: string;
+  provenance?: PhysicalDivergenceProvenance;
+}
+
+export interface PhysicalDivergenceProvenance {
+  physicalSource: string;
+  physicalSymbol: string;
+  physicalAsOf: string;
+  paperSource: string;
+  paperSymbol: string;
+  paperAsOf: number;
+  fxSource: string;
+  fxPair: string;
+  fxAsOf: number;
+  historyKey: string;
+  historyWindowPoints: number;
+  methodologyVersion: string;
+}
+
+export interface PhysicalStressComposite {
+  state: PhysicalDivergenceState;
+  reason: string;
+  index?: number;
+  weights: PhysicalStressWeight[];
+  methodologyVersion: string;
+}
+
+export interface PhysicalStressWeight {
+  metal: string;
+  weight: number;
+  methodologyVersion: string;
 }
 
 export interface GetSectorSummaryRequest {
@@ -193,6 +258,25 @@ export interface GetCountryStockIndexResponse {
   weekChangePercent: number;
   currency: string;
   fetchedAt: string;
+}
+
+export interface GetPriceHistoryRequest {
+  symbols: string;
+  range: string;
+}
+
+export interface GetPriceHistoryResponse {
+  range: string;
+  series: PriceSeries[];
+  unavailable: string[];
+}
+
+export interface PriceSeries {
+  symbol: string;
+  name: string;
+  currency: string;
+  timestamps: number[];
+  closes: number[];
 }
 
 export interface ListGulfQuotesRequest {
@@ -512,6 +596,7 @@ export interface ListEarningsCalendarResponse {
   toDate: string;
   total: number;
   unavailable: boolean;
+  asOf: string;
 }
 
 export interface EarningsEntry {
@@ -742,6 +827,12 @@ export type HeadlineAlignmentRule = "HEADLINE_ALIGNMENT_RULE_UNSPECIFIED" | "HEA
 
 export type MarketQuoteUnavailableReason = "MARKET_QUOTE_UNAVAILABLE_REASON_UNSPECIFIED" | "MARKET_QUOTE_UNAVAILABLE_REASON_NOT_FOUND" | "MARKET_QUOTE_UNAVAILABLE_REASON_PROVIDER_ERROR" | "MARKET_QUOTE_UNAVAILABLE_REASON_PROVIDER_RATE_LIMITED" | "MARKET_QUOTE_UNAVAILABLE_REASON_PROVIDER_NOT_CONFIGURED" | "MARKET_QUOTE_UNAVAILABLE_REASON_REQUEST_LIMIT_EXCEEDED" | "MARKET_QUOTE_UNAVAILABLE_REASON_UPSTREAM_BUDGET_EXHAUSTED" | "MARKET_QUOTE_UNAVAILABLE_REASON_SEED_UNAVAILABLE";
 
+export type PhysicalDivergenceState = "PHYSICAL_DIVERGENCE_STATE_UNSPECIFIED" | "PHYSICAL_DIVERGENCE_STATE_OK" | "PHYSICAL_DIVERGENCE_STATE_INSUFFICIENT_HISTORY" | "PHYSICAL_DIVERGENCE_STATE_STALE_INPUT" | "PHYSICAL_DIVERGENCE_STATE_MISSING_INPUT";
+
+export type PhysicalPremiumRegime = "PHYSICAL_PREMIUM_REGIME_UNSPECIFIED" | "PHYSICAL_PREMIUM_REGIME_NORMAL" | "PHYSICAL_PREMIUM_REGIME_ELEVATED" | "PHYSICAL_PREMIUM_REGIME_STRESSED" | "PHYSICAL_PREMIUM_REGIME_EXTREME";
+
+export type PhysicalPremiumTrend = "PHYSICAL_PREMIUM_TREND_UNSPECIFIED" | "PHYSICAL_PREMIUM_TREND_WIDENING" | "PHYSICAL_PREMIUM_TREND_STABLE" | "PHYSICAL_PREMIUM_TREND_NARROWING";
+
 export interface FieldViolation {
   field: string;
   description: string;
@@ -890,6 +981,31 @@ export class MarketServiceClient {
     return await resp.json() as GetPhysicalPremiumsResponse;
   }
 
+  async getPhysicalDivergenceIndex(req: GetPhysicalDivergenceIndexRequest, options?: MarketServiceCallOptions): Promise<GetPhysicalDivergenceIndexResponse> {
+    let path = "/api/market/v1/get-physical-divergence-index";
+    const params = new URLSearchParams();
+    if (req.metals && req.metals.length > 0) req.metals.forEach(v => params.append("metals", v));
+    const url = this.baseURL + path + (params.toString() ? "?" + params.toString() : "");
+
+    const headers: Record<string, string> = {
+      "Content-Type": "application/json",
+      ...this.defaultHeaders,
+      ...options?.headers,
+    };
+
+    const resp = await this.fetchFn(url, {
+      method: "GET",
+      headers,
+      signal: options?.signal,
+    });
+
+    if (!resp.ok) {
+      return this.handleError(resp);
+    }
+
+    return await resp.json() as GetPhysicalDivergenceIndexResponse;
+  }
+
   async getSectorSummary(req: GetSectorSummaryRequest, options?: MarketServiceCallOptions): Promise<GetSectorSummaryResponse> {
     let path = "/api/market/v1/get-sector-summary";
     const params = new URLSearchParams();
@@ -986,6 +1102,32 @@ export class MarketServiceClient {
     }
 
     return await resp.json() as GetCountryStockIndexResponse;
+  }
+
+  async getPriceHistory(req: GetPriceHistoryRequest, options?: MarketServiceCallOptions): Promise<GetPriceHistoryResponse> {
+    let path = "/api/market/v1/get-price-history";
+    const params = new URLSearchParams();
+    if (req.symbols != null && req.symbols !== "") params.set("symbols", String(req.symbols));
+    if (req.range != null && req.range !== "") params.set("range", String(req.range));
+    const url = this.baseURL + path + (params.toString() ? "?" + params.toString() : "");
+
+    const headers: Record<string, string> = {
+      "Content-Type": "application/json",
+      ...this.defaultHeaders,
+      ...options?.headers,
+    };
+
+    const resp = await this.fetchFn(url, {
+      method: "GET",
+      headers,
+      signal: options?.signal,
+    });
+
+    if (!resp.ok) {
+      return this.handleError(resp);
+    }
+
+    return await resp.json() as GetPriceHistoryResponse;
   }
 
   async listGulfQuotes(_req: ListGulfQuotesRequest, options?: MarketServiceCallOptions): Promise<ListGulfQuotesResponse> {
